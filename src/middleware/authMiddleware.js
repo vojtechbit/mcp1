@@ -39,7 +39,18 @@ async function verifyToken(req, res, next) {
     // Validate token with Google userinfo endpoint
     console.log('🔐 Validating user token...');
     
-    const oauth2 = google.oauth2({ version: 'v2', auth: token });
+    // Create OAuth2 client with the access token
+    const { OAuth2 } = google.auth;
+    const oauth2Client = new OAuth2(
+      process.env.GOOGLE_CLIENT_ID,
+      process.env.GOOGLE_CLIENT_SECRET,
+      process.env.REDIRECT_URI
+    );
+    
+    // Set the access token
+    oauth2Client.setCredentials({ access_token: token });
+    
+    const oauth2 = google.oauth2({ version: 'v2', auth: oauth2Client });
     
     let userInfo;
     try {
