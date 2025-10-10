@@ -90,14 +90,20 @@ async function handleCallback(req, res) {
 
     // Get user info from access token
     const { google } = await import('googleapis');
-    const oauth2 = google.oauth2({ version: 'v2', auth: tokens.access_token });
+    const { oauth2Client } = await import('../config/oauth.js');
+    
+    // Set credentials on oauth2Client
+    oauth2Client.setCredentials(tokens);
+    
+    const oauth2 = google.oauth2({ version: 'v2', auth: oauth2Client });
     const userInfoResponse = await oauth2.userinfo.get();
     const userInfo = userInfoResponse.data;
 
     console.log('✅ User info retrieved:', userInfo.email);
 
     // Calculate token expiry
-    const expiryDate = new Date(Date.now() + (tokens.expiry_date || 3600 * 1000));
+    // Google returns expiry_date as seconds until expiration
+    const expiryDate = new Date(Date.now() + ((tokens.expiry_date || 3600) * 1000));
 
     // Save user to database with encrypted tokens
     await saveUser({

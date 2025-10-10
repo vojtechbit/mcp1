@@ -1,6 +1,29 @@
 import { google } from 'googleapis';
 import { refreshAccessToken } from '../config/oauth.js';
 import { getUserByGoogleSub, updateTokens, updateLastUsed } from './databaseService.js';
+import dotenv from 'dotenv';
+
+dotenv.config();
+
+/**
+ * Create authenticated Google API client
+ * Creates a NEW OAuth2 client instance for each request to avoid conflicts
+ */
+async function getAuthenticatedClient(googleSub) {
+  const accessToken = await getValidAccessToken(googleSub);
+  
+  // Create NEW OAuth2 client instance for this request
+  const { OAuth2 } = google.auth;
+  const client = new OAuth2(
+    process.env.GOOGLE_CLIENT_ID,
+    process.env.GOOGLE_CLIENT_SECRET,
+    process.env.REDIRECT_URI
+  );
+  
+  client.setCredentials({ access_token: accessToken });
+  
+  return client;
+}
 
 /**
  * Get valid access token (auto-refresh if expired)
@@ -25,7 +48,8 @@ async function getValidAccessToken(googleSub) {
       console.log('🔄 Access token expired, refreshing...');
       
       const newTokens = await refreshAccessToken(user.refreshToken);
-      const expiryDate = new Date(Date.now() + (newTokens.expiry_date || 3600 * 1000));
+      // Google returns expiry_date as seconds until expiration
+      const expiryDate = new Date(Date.now() + ((newTokens.expiry_date || 3600) * 1000));
       
       await updateTokens(googleSub, {
         accessToken: newTokens.access_token,
@@ -54,26 +78,48 @@ async function getValidAccessToken(googleSub) {
 
 /**
  * Send an email
+ * @param {string} googleSub - User's Google ID
+ * @param {object} options - Email options
+ * @param {string} options.to - Recipient email
+ * @param {string} options.subject - Email subject
+ * @param {string} options.body - Email body
+ * @param {string} [options.cc] - CC recipients
+ * @param {string} [options.bcc] - BCC recipients
+ * @param {boolean} [options.includeMcp1Attribution=false] - Add MCP1 branding at end (default: false)
  */
-async function sendEmail(googleSub, { to, subject, body, cc, bcc }) {
+async function sendEmail(googleSub, { to, subject, body, cc, bcc, includeMcp1Attribution = false }) {
   try {
-    const accessToken = await getValidAccessToken(googleSub);
-    const gmail = google.gmail({ version: 'v1', auth: accessToken });
+    const authClient = await getAuthenticatedClient(googleSub);
+    const gmail = google.gmail({ version: 'v1', auth: authClient });
 
+    // Add optional MCP1 attribution/branding
+    const attribution = includeMcp1Attribution 
+      ? '\n\n---\nPosláno z MCP1 OAuth Proxy Server'
+      : '';
+    
+    const fullBody = body + attribution;
+
+    // RFC 2047 encoding for Subject with UTF-8 characters
+    const encodedSubject = `=?UTF-8?B?${Buffer.from(subject, 'utf8').toString('base64')}?=`;
+    
     const messageParts = [
-      `To: ${to}`,
-      `Subject: ${subject}`,
       'Content-Type: text/plain; charset="UTF-8"',
       'MIME-Version: 1.0',
-      '',
-      body
+      'Content-Transfer-Encoding: 7bit',
+      `To: ${to}`,
+      `Subject: ${encodedSubject}`,
     ];
 
-    if (cc) messageParts.splice(1, 0, `Cc: ${cc}`);
-    if (bcc) messageParts.splice(cc ? 2 : 1, 0, `Bcc: ${bcc}`);
+    if (cc) messageParts.push(`Cc: ${cc}`);
+    if (bcc) messageParts.push(`Bcc: ${bcc}`);
+    
+    messageParts.push('');  // Empty line before body
+    messageParts.push(fullBody);
 
-    const message = messageParts.join('\n');
-    const encodedMessage = Buffer.from(message)
+    const message = messageParts.join('\r\n');
+    
+    // Base64url encode the entire message
+    const encodedMessage = Buffer.from(message, 'utf8')
       .toString('base64')
       .replace(/\+/g, '-')
       .replace(/\//g, '_')
@@ -353,15 +399,26 @@ async function markAsRead(googleSub, messageId, read = true) {
 
 /**
  * Create a calendar event (with optional attendees)
+ * @param {string} googleSub - User's Google ID
+ * @param {object} eventData - Event details
+ * @param {boolean} [eventData.includeMcp1Attribution=true] - Add MCP1 branding to description (default: true)
  */
 async function createCalendarEvent(googleSub, eventData) {
   try {
-    const accessToken = await getValidAccessToken(googleSub);
-    const calendar = google.calendar({ version: 'v3', auth: accessToken });
+    const authClient = await getAuthenticatedClient(googleSub);
+    const calendar = google.calendar({ version: 'v3', auth: authClient });
+
+    // Add MCP1 attribution/branding to description (default: true)
+    const includeMcp1Attribution = eventData.includeMcp1Attribution !== false; // Default true
+    const attribution = includeMcp1Attribution
+      ? '\n\n---\nVytvořeno: MCP1 OAuth Proxy Server'
+      : '';
+    
+    const fullDescription = (eventData.description || '') + attribution;
 
     const event = {
       summary: eventData.summary,
-      description: eventData.description,
+      description: fullDescription,
       start: {
         dateTime: eventData.start,
         timeZone: eventData.timeZone || 'UTC'
@@ -410,8 +467,8 @@ async function createCalendarEvent(googleSub, eventData) {
  */
 async function getCalendarEvent(googleSub, eventId) {
   try {
-    const accessToken = await getValidAccessToken(googleSub);
-    const calendar = google.calendar({ version: 'v3', auth: accessToken });
+    const authClient = await getAuthenticatedClient(googleSub);
+    const calendar = google.calendar({ version: 'v3', auth: authClient });
 
     const result = await calendar.events.get({
       calendarId: 'primary',
@@ -436,8 +493,8 @@ async function getCalendarEvent(googleSub, eventId) {
  */
 async function listCalendarEvents(googleSub, { timeMin, timeMax, maxResults = 10, query }) {
   try {
-    const accessToken = await getValidAccessToken(googleSub);
-    const calendar = google.calendar({ version: 'v3', auth: accessToken });
+    const authClient = await getAuthenticatedClient(googleSub);
+    const calendar = google.calendar({ version: 'v3', auth: authClient });
 
     const params = {
       calendarId: 'primary',
@@ -469,8 +526,8 @@ async function listCalendarEvents(googleSub, { timeMin, timeMax, maxResults = 10
  */
 async function updateCalendarEvent(googleSub, eventId, updates) {
   try {
-    const accessToken = await getValidAccessToken(googleSub);
-    const calendar = google.calendar({ version: 'v3', auth: accessToken });
+    const authClient = await getAuthenticatedClient(googleSub);
+    const calendar = google.calendar({ version: 'v3', auth: authClient });
 
     const existing = await calendar.events.get({
       calendarId: 'primary',
@@ -506,8 +563,8 @@ async function updateCalendarEvent(googleSub, eventId, updates) {
  */
 async function deleteCalendarEvent(googleSub, eventId) {
   try {
-    const accessToken = await getValidAccessToken(googleSub);
-    const calendar = google.calendar({ version: 'v3', auth: accessToken });
+    const authClient = await getAuthenticatedClient(googleSub);
+    const calendar = google.calendar({ version: 'v3', auth: authClient });
 
     await calendar.events.delete({
       calendarId: 'primary',
