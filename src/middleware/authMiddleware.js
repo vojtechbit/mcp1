@@ -1,5 +1,6 @@
 import { google } from 'googleapis';
 import dotenv from 'dotenv';
+import { findUserByProxyToken } from '../services/proxyTokenService.js';
 
 dotenv.config();
 
@@ -36,8 +37,40 @@ async function verifyToken(req, res, next) {
       });
     }
 
-    // Validate token with Google userinfo endpoint
-    console.log('🔐 Validating user token...');
+    // STRATEGY 1: Try to find user by proxy token (ChatGPT flow)
+    console.log('🔐 Checking if token is a proxy token...');
+    const googleSubFromProxy = await findUserByProxyToken(token);
+    
+    if (googleSubFromProxy) {
+      // Token is a valid proxy token - get user info from database
+      console.log('✅ Valid proxy token found');
+      
+      const { getUserByGoogleSub } = await import('../services/databaseService.js');
+      const user = await getUserByGoogleSub(googleSubFromProxy);
+      
+      if (!user) {
+        console.error('❌ [AUTH_ERROR] User not found in database for proxy token');
+        return res.status(401).json({
+          error: 'Unauthorized',
+          message: 'User not found'
+        });
+      }
+      
+      // Attach user info to request
+      req.user = {
+        googleSub: user.googleSub,
+        email: user.email,
+        name: user.email.split('@')[0], // Extract name from email
+        picture: null,
+        tokenType: 'proxy' // Mark that this is a proxy token
+      };
+      
+      console.log(`✅ User authenticated via proxy token: ${user.email}`);
+      return next();
+    }
+    
+    // STRATEGY 2: Fallback to Google token validation (direct access flow)
+    console.log('🔐 Token is not a proxy token, validating with Google...');
     
     // Create OAuth2 client with the access token
     const { OAuth2 } = google.auth;
@@ -95,10 +128,11 @@ async function verifyToken(req, res, next) {
       googleSub,
       email,
       name: userInfo.name,
-      picture: userInfo.picture
+      picture: userInfo.picture,
+      tokenType: 'google' // Mark that this is a direct Google token
     };
 
-    console.log(`✅ User authenticated: ${email} (${googleSub})`);
+    console.log(`✅ User authenticated via Google token: ${email} (${googleSub})`)
     
     // Continue to next middleware/controller
     next();

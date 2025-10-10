@@ -6,6 +6,7 @@ import dotenv from 'dotenv';
 import { connectToDatabase } from './config/database.js';
 import authRoutes from './routes/authRoutes.js';
 import apiRoutes from './routes/apiRoutes.js';
+import oauthProxyRoutes from './routes/oauthProxyRoutes.js';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler.js';
 
 // Load environment variables
@@ -84,7 +85,10 @@ app.get('/', (req, res) => {
   });
 });
 
-// Auth routes
+// OAuth Proxy routes (for ChatGPT Custom GPT)
+app.use('/oauth', oauthProxyRoutes);
+
+// Auth routes (legacy/direct access)
 app.use('/auth', authRoutes);
 
 // API routes (protected)
