@@ -32,6 +32,12 @@ async function searchContacts(req, res) {
 
   } catch (error) {
     console.error('❌ Failed to search contacts');
+    console.error('Error details:', {
+      message: error.message,
+      code: error.code,
+      statusCode: error.response?.status,
+      data: error.response?.data
+    });
     
     // Special handling for missing sheet
     if (error.message.includes('not found')) {
@@ -42,7 +48,16 @@ async function searchContacts(req, res) {
       });
     }
 
-    res.status(500).json({
+    // Check if it's an auth error
+    if (error.code === 'AUTH_REQUIRED' || error.statusCode === 401) {
+      return res.status(401).json({
+        error: 'Authentication required',
+        message: 'Your session has expired. Please log in again.',
+        code: 'AUTH_REQUIRED'
+      });
+    }
+
+    res.status(error.statusCode || 500).json({
       error: 'Contact search failed',
       message: error.message
     });
@@ -55,7 +70,7 @@ async function searchContacts(req, res) {
  */
 async function listContacts(req, res) {
   try {
-    console.log('📋 Listing all contacts');
+    console.log('📋 Listing all contacts...');
 
     const contacts = await contactsService.listAllContacts(req.user.googleSub);
 
@@ -67,6 +82,12 @@ async function listContacts(req, res) {
 
   } catch (error) {
     console.error('❌ Failed to list contacts');
+    console.error('Error details:', {
+      message: error.message,
+      code: error.code,
+      statusCode: error.response?.status,
+      data: error.response?.data
+    });
 
     // Special handling for missing sheet
     if (error.message.includes('not found')) {
@@ -77,7 +98,16 @@ async function listContacts(req, res) {
       });
     }
 
-    res.status(500).json({
+    // Check if it's an auth error
+    if (error.code === 'AUTH_REQUIRED' || error.statusCode === 401) {
+      return res.status(401).json({
+        error: 'Authentication required',
+        message: 'Your session has expired. Please log in again.',
+        code: 'AUTH_REQUIRED'
+      });
+    }
+
+    res.status(error.statusCode || 500).json({
       error: 'Contact list failed',
       message: error.message
     });
@@ -101,6 +131,7 @@ async function addContact(req, res) {
     }
 
     console.log(`➕ Adding contact: ${name} (${email})`);
+    if (notes) console.log(`   Notes: ${notes}`);
 
     const contact = await contactsService.addContact(req.user.googleSub, {
       name, email, notes
@@ -114,17 +145,32 @@ async function addContact(req, res) {
 
   } catch (error) {
     console.error('❌ Failed to add contact');
+    console.error('Error details:', {
+      message: error.message,
+      code: error.code,
+      statusCode: error.response?.status,
+      data: error.response?.data
+    });
 
     // Special handling for missing sheet
     if (error.message.includes('not found')) {
       return res.status(404).json({
         error: 'Contact sheet not found',
         message: error.message,
-        instructions: 'Please create a Google Sheet named "MCP1 Contacts" with columns: Name | Email | Type | Notes'
+        instructions: 'Please create a Google Sheet named "MCP1 Contacts" with columns: Name | Email | Notes'
       });
     }
 
-    res.status(500).json({
+    // Check if it's an auth error
+    if (error.code === 'AUTH_REQUIRED' || error.statusCode === 401) {
+      return res.status(401).json({
+        error: 'Authentication required',
+        message: 'Your session has expired. Please log in again.',
+        code: 'AUTH_REQUIRED'
+      });
+    }
+
+    res.status(error.statusCode || 500).json({
       error: 'Contact add failed',
       message: error.message
     });

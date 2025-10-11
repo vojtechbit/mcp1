@@ -11,7 +11,7 @@ import * as tasksService from '../services/tasksService.js';
  */
 async function listTasks(req, res) {
   try {
-    console.log('📋 Listing all tasks');
+    console.log('📋 Listing all tasks...');
 
     const tasks = await tasksService.listAllTasks(req.user.googleSub);
 
@@ -23,7 +23,14 @@ async function listTasks(req, res) {
 
   } catch (error) {
     console.error('❌ Failed to list tasks');
-    res.status(500).json({
+    console.error('Error details:', {
+      message: error.message,
+      code: error.code,
+      statusCode: error.response?.status,
+      data: error.response?.data
+    });
+    
+    res.status(error.statusCode || 500).json({
       error: 'Tasks list failed',
       message: error.message
     });
@@ -47,9 +54,13 @@ async function createTask(req, res) {
     }
 
     console.log(`➕ Creating task: ${title}`);
+    if (notes) console.log(`   Notes: ${notes}`);
+    if (due) console.log(`   Due: ${due}`);
 
     const task = await tasksService.createTask(req.user.googleSub, {
-      title, notes, due
+      title, 
+      notes, 
+      due
     });
 
     res.json({
@@ -60,7 +71,23 @@ async function createTask(req, res) {
 
   } catch (error) {
     console.error('❌ Failed to create task');
-    res.status(500).json({
+    console.error('Error details:', {
+      message: error.message,
+      code: error.code,
+      statusCode: error.response?.status,
+      data: error.response?.data
+    });
+    
+    // Check if it's an auth error
+    if (error.code === 'AUTH_REQUIRED' || error.statusCode === 401) {
+      return res.status(401).json({
+        error: 'Authentication required',
+        message: 'Your session has expired. Please log in again.',
+        code: 'AUTH_REQUIRED'
+      });
+    }
+    
+    res.status(error.statusCode || 500).json({
       error: 'Task creation failed',
       message: error.message
     });
@@ -77,7 +104,15 @@ async function updateTask(req, res) {
     const { taskListId, taskId } = req.params;
     const updates = req.body;
 
-    console.log(`✏️ Updating task ${taskId} in list ${taskListId}`);
+    if (Object.keys(updates).length === 0) {
+      return res.status(400).json({
+        error: 'Bad Request',
+        message: 'No update fields provided'
+      });
+    }
+
+    console.log(`✏️  Updating task ${taskId} in list ${taskListId}`);
+    console.log('   Updates:', updates);
 
     const task = await tasksService.updateTask(
       req.user.googleSub,
@@ -94,7 +129,14 @@ async function updateTask(req, res) {
 
   } catch (error) {
     console.error('❌ Failed to update task');
-    res.status(500).json({
+    console.error('Error details:', {
+      message: error.message,
+      code: error.code,
+      statusCode: error.response?.status,
+      data: error.response?.data
+    });
+    
+    res.status(error.statusCode || 500).json({
       error: 'Task update failed',
       message: error.message
     });
@@ -120,7 +162,14 @@ async function deleteTask(req, res) {
 
   } catch (error) {
     console.error('❌ Failed to delete task');
-    res.status(500).json({
+    console.error('Error details:', {
+      message: error.message,
+      code: error.code,
+      statusCode: error.response?.status,
+      data: error.response?.data
+    });
+    
+    res.status(error.statusCode || 500).json({
       error: 'Task deletion failed',
       message: error.message
     });
