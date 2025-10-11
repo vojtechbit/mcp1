@@ -255,20 +255,25 @@ async function replyToEmail(googleSub, messageId, { body }) {
     const originalSubject = headers.find(h => h.name === 'Subject')?.value;
     const originalMessageId = headers.find(h => h.name === 'Message-ID')?.value;
 
+    // RFC 2047 encoding for Subject with UTF-8 characters
+    const replySubject = originalSubject?.replace(/^Re: /, '') || '';
+    const encodedSubject = `=?UTF-8?B?${Buffer.from(`Re: ${replySubject}`, 'utf8').toString('base64')}?=`;
+
     // Create reply
     const messageParts = [
-      `To: ${originalFrom}`,
-      `Subject: Re: ${originalSubject?.replace(/^Re: /, '')}`,
-      `In-Reply-To: ${originalMessageId}`,
-      `References: ${originalMessageId}`,
       'Content-Type: text/plain; charset="UTF-8"',
       'MIME-Version: 1.0',
+      'Content-Transfer-Encoding: 7bit',
+      `To: ${originalFrom}`,
+      `Subject: ${encodedSubject}`,
+      `In-Reply-To: ${originalMessageId}`,
+      `References: ${originalMessageId}`,
       '',
       body
     ];
 
-    const message = messageParts.join('\n');
-    const encodedMessage = Buffer.from(message)
+    const message = messageParts.join('\r\n');
+    const encodedMessage = Buffer.from(message, 'utf8')
       .toString('base64')
       .replace(/\+/g, '-')
       .replace(/\//g, '_')
@@ -304,16 +309,21 @@ async function createDraft(googleSub, { to, subject, body }) {
     const authClient = await getAuthenticatedClient(googleSub);
     const gmail = google.gmail({ version: 'v1', auth: authClient });
 
+    // RFC 2047 encoding for Subject with UTF-8 characters
+    const encodedSubject = `=?UTF-8?B?${Buffer.from(subject, 'utf8').toString('base64')}?=`;
+
     const messageParts = [
-      `To: ${to}`,
-      `Subject: ${subject}`,
       'Content-Type: text/plain; charset="UTF-8"',
+      'MIME-Version: 1.0',
+      'Content-Transfer-Encoding: 7bit',
+      `To: ${to}`,
+      `Subject: ${encodedSubject}`,
       '',
       body
     ];
 
-    const message = messageParts.join('\n');
-    const encodedMessage = Buffer.from(message)
+    const message = messageParts.join('\r\n');
+    const encodedMessage = Buffer.from(message, 'utf8')
       .toString('base64')
       .replace(/\+/g, '-')
       .replace(/\//g, '_')
