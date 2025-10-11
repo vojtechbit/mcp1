@@ -26,6 +26,27 @@ async function getAuthenticatedClient(googleSub) {
 }
 
 /**
+ * Wrapper to handle Google API errors (especially 401 auth errors)
+ */
+async function handleGoogleApiCall(apiCall, errorContext = {}) {
+  try {
+    return await apiCall();
+  } catch (error) {
+    // Check if it's a 401 authentication error
+    if (error.code === 401 || error.message?.includes('Login Required') || error.message?.includes('Invalid Credentials')) {
+      console.error('❌ Google API returned 401 - authentication required');
+      const authError = new Error('Authentication required - please log in again');
+      authError.code = 'AUTH_REQUIRED';
+      authError.statusCode = 401;
+      throw authError;
+    }
+    
+    // Re-throw other errors with context
+    throw error;
+  }
+}
+
+/**
  * Get valid access token (auto-refresh if expired)
  */
 async function getValidAccessToken(googleSub) {
@@ -47,18 +68,27 @@ async function getValidAccessToken(googleSub) {
     if (now >= (expiry.getTime() - bufferTime)) {
       console.log('🔄 Access token expired, refreshing...');
       
-      const newTokens = await refreshAccessToken(user.refreshToken);
-      // Google returns expiry_date as seconds until expiration
-      const expiryDate = new Date(Date.now() + ((newTokens.expiry_date || 3600) * 1000));
-      
-      await updateTokens(googleSub, {
-        accessToken: newTokens.access_token,
-        refreshToken: newTokens.refresh_token || user.refreshToken,
-        expiryDate
-      });
+      try {
+        const newTokens = await refreshAccessToken(user.refreshToken);
+        // Google returns expiry_date as seconds until expiration
+        const expiryDate = new Date(Date.now() + ((newTokens.expiry_date || 3600) * 1000));
+        
+        await updateTokens(googleSub, {
+          accessToken: newTokens.access_token,
+          refreshToken: newTokens.refresh_token || user.refreshToken,
+          expiryDate
+        });
 
-      console.log('✅ Access token refreshed successfully');
-      return newTokens.access_token;
+        console.log('✅ Access token refreshed successfully');
+        return newTokens.access_token;
+      } catch (refreshError) {
+        console.error('❌ Token refresh failed - user needs to re-authenticate');
+        // Create special error that controllers can catch
+        const authError = new Error('Authentication required - please log in again');
+        authError.code = 'AUTH_REQUIRED';
+        authError.statusCode = 401;
+        throw authError;
+      }
     }
 
     return user.accessToken;

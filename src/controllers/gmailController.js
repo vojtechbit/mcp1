@@ -176,6 +176,16 @@ async function createDraft(req, res) {
 
   } catch (error) {
     console.error('❌ Failed to create draft');
+    
+    // Check if it's an auth error
+    if (error.code === 'AUTH_REQUIRED' || error.statusCode === 401) {
+      return res.status(401).json({
+        error: 'Authentication required',
+        message: 'Your session has expired or you need to grant additional permissions. Please log in again.',
+        code: 'AUTH_REQUIRED'
+      });
+    }
+    
     res.status(500).json({
       error: 'Draft creation failed',
       message: error.message
