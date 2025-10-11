@@ -1,341 +1,531 @@
 {
   "openapi": "3.1.0",
   "info": {
-    "title": "Gmail & Calendar OAuth API",
-    "description": "API for managing Gmail and Google Calendar through authenticated OAuth proxy",
+    "title": "Gmail & Calendar Assistant API",
+    "description": "OAuth proxy API for Custom GPT",
     "version": "1.0.0"
   },
   "servers": [
-    {
-      "url": "https://mcp1-oauth-server.onrender.com"
-    }
+    { "url": "https://mcp1-oauth-server.onrender.com", "description": "Primary API server" }
   ],
   "paths": {
+    "/api/auth/status": {
+      "get": {
+        "operationId": "getAuthStatus",
+        "summary": "Check authentication status",
+        "responses": {
+          "200": { "description": "Auth status", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/AuthStatus" } } } }
+        }
+      }
+    },
+
     "/api/gmail/send": {
       "post": {
         "operationId": "sendEmail",
-        "summary": "Send an email",
-        "description": "Send an email from the authenticated user's Gmail account",
+        "summary": "Send email",
         "requestBody": {
           "required": true,
           "content": {
             "application/json": {
               "schema": {
-                "type": "object",
-                "required": ["to", "subject", "body"],
-                "properties": {
-                  "to": {
-                    "type": "string",
-                    "description": "Recipient email address"
-                  },
-                  "subject": {
-                    "type": "string",
-                    "description": "Email subject"
-                  },
-                  "body": {
-                    "type": "string",
-                    "description": "Email body content"
-                  },
-                  "cc": {
-                    "type": "string",
-                    "description": "CC recipients (optional)"
-                  },
-                  "bcc": {
-                    "type": "string",
-                    "description": "BCC recipients (optional)"
-                  },
-                  "includeMcp1Attribution": {
-                    "type": "boolean",
-                    "description": "Include MCP1 attribution footer (default: false)",
-                    "default": false
-                  }
-                }
+                "$ref": "#/components/schemas/SendEmailRequest"
               }
             }
           }
         },
         "responses": {
-          "200": {
-            "description": "Email sent successfully",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean"
-                    },
-                    "messageId": {
-                      "type": "string"
-                    }
-                  }
-                }
-              }
-            }
-          }
+          "200": { "description": "Email sent", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/EmailSendResponse" } } } }
         }
       }
     },
-    "/api/gmail/messages": {
+
+    "/api/gmail/draft": {
+      "post": {
+        "operationId": "createDraft",
+        "summary": "Create email draft",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/SendEmailRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Draft created", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/DraftResponse" } } } }
+        }
+      }
+    },
+
+    "/api/gmail/search": {
       "get": {
         "operationId": "searchEmails",
         "summary": "Search emails",
-        "description": "Search through the user's emails with optional query",
         "parameters": [
-          {
-            "name": "q",
-            "in": "query",
-            "description": "Gmail search query (e.g., 'from:example@gmail.com', 'subject:meeting')",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "maxResults",
-            "in": "query",
-            "description": "Maximum number of results (default: 10)",
-            "schema": {
-              "type": "integer",
-              "default": 10
-            }
-          }
+          { "name": "query", "in": "query", "required": true, "schema": { "type": "string" } },
+          { "name": "maxResults", "in": "query", "schema": { "type": "integer", "default": 10 } },
+          { "name": "pageToken", "in": "query", "schema": { "type": "string", "description": "Gmail API page token" } }
         ],
         "responses": {
-          "200": {
-            "description": "Emails retrieved successfully"
-          }
+          "200": { "description": "Search results", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/SearchEmailsResponse" } } } }
         }
       }
     },
-    "/api/calendar/events": {
+
+    "/api/gmail/read/{messageId}": {
       "get": {
-        "operationId": "listCalendarEvents",
-        "summary": "List calendar events",
-        "description": "List upcoming events from the user's Google Calendar",
+        "operationId": "readEmail",
+        "summary": "Read email",
         "parameters": [
-          {
-            "name": "timeMin",
-            "in": "query",
-            "description": "Start time (ISO 8601 format)",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "timeMax",
-            "in": "query",
-            "description": "End time (ISO 8601 format)",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "maxResults",
-            "in": "query",
-            "description": "Maximum number of results (default: 10)",
-            "schema": {
-              "type": "integer",
-              "default": 10
-            }
-          },
-          {
-            "name": "query",
-            "in": "query",
-            "description": "Search query for event titles",
-            "schema": {
-              "type": "string"
-            }
-          }
+          { "name": "messageId", "in": "path", "required": true, "schema": { "type": "string" } }
         ],
         "responses": {
-          "200": {
-            "description": "Events retrieved successfully"
-          }
+          "200": { "description": "Email data", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/EmailData" } } } }
         }
-      },
+      }
+    },
+
+    "/api/gmail/reply/{messageId}": {
       "post": {
-        "operationId": "createCalendarEvent",
-        "summary": "Create a calendar event",
-        "description": "Create a new event in the user's Google Calendar",
+        "operationId": "replyToEmail",
+        "summary": "Reply to email",
+        "parameters": [
+          { "name": "messageId", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
         "requestBody": {
           "required": true,
           "content": {
             "application/json": {
-              "schema": {
-                "type": "object",
-                "required": ["summary", "start", "end"],
-                "properties": {
-                  "summary": {
-                    "type": "string",
-                    "description": "Event title"
-                  },
-                  "description": {
-                    "type": "string",
-                    "description": "Event description"
-                  },
-                  "location": {
-                    "type": "string",
-                    "description": "Event location"
-                  },
-                  "start": {
-                    "type": "string",
-                    "description": "Start time (ISO 8601 format)"
-                  },
-                  "end": {
-                    "type": "string",
-                    "description": "End time (ISO 8601 format)"
-                  },
-                  "timeZone": {
-                    "type": "string",
-                    "description": "Timezone (default: UTC)",
-                    "default": "UTC"
-                  },
-                  "attendees": {
-                    "type": "array",
-                    "description": "List of attendee emails",
-                    "items": {
-                      "type": "string"
-                    }
-                  },
-                  "includeMcp1Attribution": {
-                    "type": "boolean",
-                    "description": "Include MCP1 attribution in description (default: true)",
-                    "default": true
-                  }
-                }
-              }
+              "schema": { "$ref": "#/components/schemas/ReplyRequest" }
             }
           }
         },
         "responses": {
-          "200": {
-            "description": "Event created successfully"
-          }
+          "200": { "description": "Reply sent", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ReplyResponse" } } } }
         }
       }
     },
-    "/api/calendar/events/{eventId}": {
-      "get": {
-        "operationId": "getCalendarEvent",
-        "summary": "Get a calendar event",
-        "description": "Get details of a specific calendar event",
+
+    "/api/gmail/{messageId}": {
+      "delete": {
+        "operationId": "deleteEmail",
+        "summary": "Delete (trash) email",
         "parameters": [
-          {
-            "name": "eventId",
-            "in": "path",
-            "required": true,
-            "description": "Event ID",
-            "schema": {
-              "type": "string"
-            }
-          }
+          { "name": "messageId", "in": "path", "required": true, "schema": { "type": "string" } }
         ],
         "responses": {
-          "200": {
-            "description": "Event retrieved successfully"
+          "200": { "description": "Email deleted", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/DeleteEmailResponse" } } } }
+        }
+      }
+    },
+
+    "/api/calendar/events": {
+      "post": {
+        "operationId": "createEvent",
+        "summary": "Create calendar event",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/EventCreateRequest" }
+            }
           }
+        },
+        "responses": {
+          "200": { "description": "Event created", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/EventCreateResponse" } } } }
+        }
+      },
+      "get": {
+        "operationId": "listEvents",
+        "summary": "List events",
+        "parameters": [
+          { "name": "timeMin", "in": "query", "schema": { "type": "string", "description": "ISO 8601 datetime" } },
+          { "name": "timeMax", "in": "query", "schema": { "type": "string", "description": "ISO 8601 datetime" } },
+          { "name": "pageToken", "in": "query", "schema": { "type": "string", "description": "Google Calendar API page token" } }
+        ],
+        "responses": {
+          "200": { "description": "Events list", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/EventListResponse" } } } }
+        }
+      }
+    },
+
+    "/api/calendar/events/{eventId}": {
+      "get": {
+        "operationId": "getEvent",
+        "summary": "Get calendar event",
+        "parameters": [
+          { "name": "eventId", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "200": { "description": "Event detail", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Event" } } } }
         }
       },
       "patch": {
-        "operationId": "updateCalendarEvent",
-        "summary": "Update a calendar event",
-        "description": "Update an existing calendar event",
+        "operationId": "updateEvent",
+        "summary": "Update calendar event",
         "parameters": [
-          {
-            "name": "eventId",
-            "in": "path",
-            "required": true,
-            "description": "Event ID",
-            "schema": {
-              "type": "string"
-            }
-          }
+          { "name": "eventId", "in": "path", "required": true, "schema": { "type": "string" } }
         ],
         "requestBody": {
           "required": true,
           "content": {
             "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "summary": {
-                    "type": "string",
-                    "description": "Event title"
-                  },
-                  "description": {
-                    "type": "string",
-                    "description": "Event description"
-                  },
-                  "location": {
-                    "type": "string",
-                    "description": "Event location"
-                  },
-                  "start": {
-                    "type": "string",
-                    "description": "Start time (ISO 8601 format)"
-                  },
-                  "end": {
-                    "type": "string",
-                    "description": "End time (ISO 8601 format)"
-                  }
-                }
-              }
+              "schema": { "$ref": "#/components/schemas/EventUpdateRequest" }
             }
           }
         },
         "responses": {
-          "200": {
-            "description": "Event updated successfully"
-          }
+          "200": { "description": "Event updated", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/EventUpdateResponse" } } } }
         }
       },
       "delete": {
-        "operationId": "deleteCalendarEvent",
-        "summary": "Delete a calendar event",
-        "description": "Delete a calendar event",
+        "operationId": "deleteEvent",
+        "summary": "Delete event",
         "parameters": [
-          {
-            "name": "eventId",
-            "in": "path",
-            "required": true,
-            "description": "Event ID",
-            "schema": {
-              "type": "string"
-            }
-          }
+          { "name": "eventId", "in": "path", "required": true, "schema": { "type": "string" } }
         ],
         "responses": {
-          "200": {
-            "description": "Event deleted successfully"
+          "200": { "description": "Event deleted", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/EventDeleteResponse" } } } }
+        }
+      }
+    },
+
+    "/api/contacts/search": {
+      "get": {
+        "operationId": "searchContacts",
+        "summary": "Search contacts",
+        "parameters": [
+          { "name": "query", "in": "query", "required": true, "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "200": { "description": "Contacts search results", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ContactsListResponse" } } } }
+        }
+      }
+    },
+
+    "/api/contacts": {
+      "get": {
+        "operationId": "listContacts",
+        "summary": "List all contacts",
+        "responses": {
+          "200": { "description": "Contacts list", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ContactsListResponse" } } } }
+        }
+      },
+      "post": {
+        "operationId": "addContact",
+        "summary": "Add contact",
+        "description": "Add a new contact. Only requires name and email. Notes field is optional for additional information.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/ContactCreateRequest" }
+            }
           }
+        },
+        "responses": {
+          "200": { "description": "Contact created", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ContactCreateResponse" } } } }
+        }
+      }
+    },
+
+    "/api/tasks": {
+      "get": {
+        "operationId": "listTasks",
+        "summary": "List all tasks",
+        "responses": {
+          "200": { "description": "Tasks list", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/TasksListResponse" } } } }
+        }
+      },
+      "post": {
+        "operationId": "createTask",
+        "summary": "Create task",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/TaskCreateRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Task created", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/TaskCreateResponse" } } } }
+        }
+      }
+    },
+
+    "/api/tasks/{taskListId}/{taskId}": {
+      "patch": {
+        "operationId": "updateTask",
+        "summary": "Update task",
+        "parameters": [
+          { "name": "taskListId", "in": "path", "required": true, "schema": { "type": "string" } },
+          { "name": "taskId", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/TaskUpdateRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Task updated", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/TaskUpdateResponse" } } } }
+        }
+      },
+      "delete": {
+        "operationId": "deleteTask",
+        "summary": "Delete task",
+        "parameters": [
+          { "name": "taskListId", "in": "path", "required": true, "schema": { "type": "string" } },
+          { "name": "taskId", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "200": { "description": "Task deleted", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/TaskDeleteResponse" } } } }
         }
       }
     }
   },
+
   "components": {
+    "schemas": {
+      "AuthStatus": {
+        "type": "object",
+        "properties": {
+          "authenticated": { "type": "boolean" },
+          "scopes": { "type": "array", "items": { "type": "string" } }
+        }
+      },
+
+      "SendEmailRequest": {
+        "type": "object",
+        "required": ["to", "subject", "body"],
+        "properties": {
+          "to": { "type": "string" },
+          "subject": { "type": "string" },
+          "body": { "type": "string" },
+          "cc": { "type": "string" },
+          "bcc": { "type": "string" }
+        }
+      },
+      "EmailSendResponse": {
+        "type": "object",
+        "properties": {
+          "success": { "type": "boolean" },
+          "messageId": { "type": "string" },
+          "threadId": { "type": "string" }
+        }
+      },
+      "DraftResponse": {
+        "type": "object",
+        "properties": {
+          "success": { "type": "boolean" },
+          "draftId": { "type": "string" }
+        }
+      },
+      "SearchEmailsResponse": {
+        "type": "object",
+        "properties": {
+          "messages": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": { "type": "string" },
+                "threadId": { "type": "string" },
+                "snippet": { "type": "string" }
+              }
+            }
+          },
+          "nextPageToken": { "type": "string" }
+        }
+      },
+      "EmailData": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "threadId": { "type": "string" },
+          "payload": { "type": "object" },
+          "snippet": { "type": "string" }
+        }
+      },
+      "ReplyRequest": {
+        "type": "object",
+        "required": ["body"],
+        "properties": { "body": { "type": "string" } }
+      },
+      "ReplyResponse": {
+        "type": "object",
+        "properties": {
+          "success": { "type": "boolean" },
+          "messageId": { "type": "string" }
+        }
+      },
+      "DeleteEmailResponse": {
+        "type": "object",
+        "properties": { "success": { "type": "boolean" } }
+      },
+
+      "Event": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "summary": { "type": "string" },
+          "description": { "type": "string" },
+          "location": { "type": "string" },
+          "start": { "type": "string", "description": "ISO 8601 datetime" },
+          "end": { "type": "string", "description": "ISO 8601 datetime" },
+          "attendees": { "type": "array", "items": { "type": "string" } },
+          "timeZone": { "type": "string" },
+          "htmlLink": { "type": "string" }
+        }
+      },
+      "EventCreateRequest": {
+        "type": "object",
+        "required": ["summary", "start", "end"],
+        "properties": {
+          "summary": { "type": "string" },
+          "start": { "type": "string", "description": "ISO 8601 datetime" },
+          "end": { "type": "string", "description": "ISO 8601 datetime" },
+          "description": { "type": "string" },
+          "location": { "type": "string" },
+          "attendees": { "type": "array", "items": { "type": "string" } },
+          "timeZone": { "type": "string" },
+          "reminders": { "type": "object" }
+        }
+      },
+      "EventUpdateRequest": {
+        "type": "object",
+        "properties": {
+          "summary": { "type": "string" },
+          "start": { "type": "string", "description": "ISO 8601 datetime" },
+          "end": { "type": "string", "description": "ISO 8601 datetime" },
+          "description": { "type": "string" },
+          "location": { "type": "string" },
+          "attendees": { "type": "array", "items": { "type": "string" } },
+          "timeZone": { "type": "string" },
+          "reminders": { "type": "object" }
+        }
+      },
+      "EventCreateResponse": {
+        "type": "object",
+        "properties": {
+          "success": { "type": "boolean" },
+          "eventId": { "type": "string" },
+          "htmlLink": { "type": "string" }
+        }
+      },
+      "EventUpdateResponse": {
+        "type": "object",
+        "properties": {
+          "success": { "type": "boolean" },
+          "eventId": { "type": "string" }
+        }
+      },
+      "EventDeleteResponse": {
+        "type": "object",
+        "properties": { "success": { "type": "boolean" } }
+      },
+      "EventListResponse": {
+        "type": "object",
+        "properties": {
+          "items": { "type": "array", "items": { "$ref": "#/components/schemas/Event" } },
+          "nextPageToken": { "type": "string" }
+        }
+      },
+
+      "Contact": {
+        "type": "object",
+        "description": "A contact with name, email, and optional notes",
+        "properties": {
+          "name": { "type": "string", "description": "Contact's full name" },
+          "email": { "type": "string", "description": "Contact's email address" },
+          "notes": { "type": "string", "description": "Optional notes about the contact (e.g., 'work', 'personal', 'client')" }
+        },
+        "required": ["name", "email"]
+      },
+      "ContactsListResponse": {
+        "type": "object",
+        "properties": {
+          "success": { "type": "boolean" },
+          "count": { "type": "integer" },
+          "contacts": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/Contact" }
+          }
+        }
+      },
+      "ContactCreateRequest": {
+        "type": "object",
+        "description": "Create a new contact. Only name and email are required. Notes field is optional.",
+        "required": ["name", "email"],
+        "properties": {
+          "name": { "type": "string", "description": "Contact's full name" },
+          "email": { "type": "string", "description": "Contact's email address" },
+          "notes": { "type": "string", "description": "Optional notes (e.g., 'work', 'personal', 'client')" }
+        }
+      },
+      "ContactCreateResponse": {
+        "type": "object",
+        "properties": {
+          "success": { "type": "boolean" },
+          "contact": { "$ref": "#/components/schemas/Contact" }
+        }
+      },
+
+      "TasksListResponse": {
+        "type": "object",
+        "properties": {
+          "tasks": {
+            "type": "array",
+            "items": { "type": "object", "properties": { "id": { "type": "string" }, "title": { "type": "string" }, "status": { "type": "string" } } }
+          }
+        }
+      },
+      "TaskCreateRequest": {
+        "type": "object",
+        "required": ["title"],
+        "properties": { "title": { "type": "string" }, "notes": { "type": "string" }, "due": { "type": "string", "description": "ISO 8601 date or datetime" } }
+      },
+      "TaskCreateResponse": {
+        "type": "object",
+        "properties": { "success": { "type": "boolean" }, "taskId": { "type": "string" } }
+      },
+      "TaskUpdateRequest": {
+        "type": "object",
+        "properties": { "status": { "type": "string", "enum": ["needsAction", "completed"] } }
+      },
+      "TaskUpdateResponse": {
+        "type": "object",
+        "properties": { "success": { "type": "boolean" }, "taskId": { "type": "string" } }
+      },
+      "TaskDeleteResponse": {
+        "type": "object",
+        "properties": { "success": { "type": "boolean" } }
+      }
+    },
+
     "securitySchemes": {
-      "OAuth2": {
+      "oauth2": {
         "type": "oauth2",
         "flows": {
           "authorizationCode": {
-            "authorizationUrl": "https://accounts.google.com/o/oauth2/v2/auth",
-            "tokenUrl": "https://oauth2.googleapis.com/token",
+            "authorizationUrl": "https://mcp1-oauth-server.onrender.com/oauth/authorize",
+            "tokenUrl": "https://mcp1-oauth-server.onrender.com/oauth/token",
             "scopes": {
-              "https://www.googleapis.com/auth/gmail.send": "Send emails",
-              "https://www.googleapis.com/auth/gmail.readonly": "Read emails",
-              "https://www.googleapis.com/auth/gmail.modify": "Modify emails",
-              "https://www.googleapis.com/auth/calendar": "Manage calendar",
-              "https://www.googleapis.com/auth/userinfo.email": "View email address",
-              "https://www.googleapis.com/auth/userinfo.profile": "View profile"
+              "gmail": "Access Gmail features",
+              "calendar": "Access Calendar features",
+              "contacts": "Access Contacts features",
+              "tasks": "Access Tasks features"
             }
           }
         }
       }
     }
   },
+
   "security": [
-    {
-      "OAuth2": []
-    }
+    { "oauth2": ["gmail", "calendar", "contacts", "tasks"] }
   ]
 }
