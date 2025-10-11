@@ -2,6 +2,8 @@ import express from 'express';
 import { verifyToken } from '../middleware/authMiddleware.js';
 import * as gmailController from '../controllers/gmailController.js';
 import * as calendarController from '../controllers/calendarController.js';
+import * as contactsController from '../controllers/contactsController.js';
+import * as tasksController from '../controllers/tasksController.js';
 import { getAuthStatus } from '../controllers/authStatusController.js';
 
 const router = express.Router();
@@ -61,5 +63,30 @@ router.patch('/calendar/events/:eventId', calendarController.updateEvent);
 
 // Delete event
 router.delete('/calendar/events/:eventId', calendarController.deleteEvent);
+
+// ==================== CONTACTS ROUTES ====================
+
+// Search contacts
+router.get('/contacts/search', contactsController.searchContacts);
+
+// List all contacts
+router.get('/contacts', contactsController.listContacts);
+
+// Add new contact
+router.post('/contacts', contactsController.addContact);
+
+// ==================== TASKS ROUTES ====================
+
+// List all tasks
+router.get('/tasks', tasksController.listTasks);
+
+// Create new task
+router.post('/tasks', tasksController.createTask);
+
+// Update task (mark as completed, etc.)
+router.patch('/tasks/:taskListId/:taskId', tasksController.updateTask);
+
+// Delete task
+router.delete('/tasks/:taskListId/:taskId', tasksController.deleteTask);
 
 export default router;

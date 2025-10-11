@@ -26,7 +26,14 @@ async function sendEmail(req, res) {
     res.json({
       success: true,
       messageId: result.id,
-      message: 'Email sent successfully'
+      message: 'Email sent successfully',
+      preview: {
+        to: to,
+        subject: subject,
+        body: body,
+        cc: cc || null,
+        bcc: bcc || null
+      }
     });
 
   } catch (error) {

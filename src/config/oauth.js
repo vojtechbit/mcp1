@@ -16,10 +16,13 @@ if (!GOOGLE_CLIENT_ID || !GOOGLE_CLIENT_SECRET || !REDIRECT_URI) {
   process.exit(1);
 }
 
-// Full Gmail and Calendar scopes
+// Full Gmail, Calendar, Drive, and Sheets scopes
 const SCOPES = [
   'https://mail.google.com/', // Full Gmail access
   'https://www.googleapis.com/auth/calendar', // Full Calendar access
+  'https://www.googleapis.com/auth/drive.file', // Drive access (for finding sheets)
+  'https://www.googleapis.com/auth/spreadsheets', // Sheets access (for contacts)
+  'https://www.googleapis.com/auth/tasks', // Tasks access
   'openid',
   'email',
   'profile'
