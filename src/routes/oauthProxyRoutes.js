@@ -3,6 +3,14 @@ import { authorize, callback, token } from '../controllers/oauthProxyController.
 
 const router = express.Router();
 
+// Debug middleware - log all OAuth requests
+router.use((req, res, next) => {
+  console.log(`🔵 [OAUTH_ROUTE] ${req.method} ${req.path}`);
+  console.log('Query:', req.query);
+  console.log('Body:', req.body);
+  next();
+});
+
 /**
  * OAuth Proxy Routes
  * These endpoints implement OAuth flow for ChatGPT Custom GPT
@@ -17,8 +25,20 @@ router.get('/authorize', authorize);
 router.get('/callback', callback);
 
 // Token exchange endpoint - ChatGPT calls this to get access token
-// POST /oauth/token
+// POST /oauth/token (OAuth 2.0 standard)
 // Body: { grant_type, code, client_id, client_secret, redirect_uri }
 router.post('/token', token);
+
+// Also support GET for debugging (some OAuth clients might use GET)
+router.get('/token', (req, res) => {
+  console.log('⚠️  WARNING: GET request to /oauth/token - should be POST!');
+  console.log('Query params:', req.query);
+  res.status(405).json({
+    error: 'method_not_allowed',
+    error_description: 'Token endpoint only accepts POST requests',
+    received_method: 'GET',
+    expected_method: 'POST'
+  });
+});
 
 export default router;
