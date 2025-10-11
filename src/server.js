@@ -7,6 +7,7 @@ import { connectToDatabase } from './config/database.js';
 import authRoutes from './routes/authRoutes.js';
 import apiRoutes from './routes/apiRoutes.js';
 import oauthProxyRoutes from './routes/oauthProxyRoutes.js';
+import privacyRoutes from './routes/privacyRoutes.js';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler.js';
 
 // Load environment variables
@@ -87,6 +88,9 @@ app.get('/', (req, res) => {
 
 // OAuth Proxy routes (for ChatGPT Custom GPT)
 app.use('/oauth', oauthProxyRoutes);
+
+// Privacy Policy (required for public GPT)
+app.use('/', privacyRoutes);
 
 // Auth routes (legacy/direct access)
 app.use('/auth', authRoutes);

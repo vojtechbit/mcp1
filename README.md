@@ -1,38 +1,69 @@
-# Gmail & Calendar OAuth Server for Custom GPT
+# Gmail & Calendar OAuth Server pro Custom GPT
 
-🚀 **Production-ready OAuth proxy server** that enables ChatGPT Custom GPT Actions to interact with Gmail and Google Calendar APIs on behalf of authenticated users.
+🚀 OAuth proxy server pro ChatGPT Custom GPT - umožňuje asistentovi přistupovat k Gmail a Google Calendar.
 
-✅ **Multi-user support** - Each user has their own encrypted tokens  
-✅ **Secure OAuth flow** - Full OAuth 2.0 implementation with ChatGPT  
-✅ **Long-lived tokens** - 30-day access without re-authentication  
-✅ **Auto token refresh** - Google tokens refresh automatically  
-✅ **Production tested** - Running on Render.com with MongoDB Atlas
+## Co to umí
 
-## Features
+### Gmail:
+- Posílat, číst, hledat emaily
+- Odpovídat, vytvářet drafty
+- Mazat, označovat hvězdičkou, mark as read
 
-### Gmail Actions (Full Functionality)
-- Send, read, search emails
-- Manage drafts (create, edit, delete)
-- Reply and forward
-- Manage labels
-- Star/unstar, mark read/unread
-- Delete/trash/untrash
-- Get attachments
+### Calendar:
+- Vytvářet, upravovat, mazat události
+- Listovat události, hledat v kalendáři
+- Pozvat účastníky na schůzky
 
-### Calendar Actions (Full Functionality)
-- Create, read, update, delete events
-- List calendars and events
-- Manage attendees and reminders
-- Search events
-- Free/busy queries
+## Quick Start
 
-## 🎯 Quick Start
-
-### For Custom GPT Setup:
-**→ See [CUSTOM_GPT_SETUP.md](CUSTOM_GPT_SETUP.md) for complete OAuth configuration guide**
-
-### For Development:
-
-#### 1. Install dependencies
+### 1. Nainstaluj
 ```bash
 npm install
+```
+
+### 2. Nastav .env
+```bash
+cp .env.example .env
+# Vyplň Google OAuth credentials + MongoDB URI
+# Vygeneruj secrets:
+node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+```
+
+### 3. Deploy na Render
+```bash
+git push origin main
+# Přidej environment variables na Render.com
+```
+
+### 4. Nastav Custom GPT
+- **Instructions:** Zkopíruj z `GPT_CONFIG.md`
+- **OAuth:** Viz `CUSTOM_GPT_SETUP.md`
+- **Privacy:** `https://mcp1-oauth-server.onrender.com/privacy-policy`
+
+## Testování
+
+```bash
+node test-oauth-proxy.js
+```
+
+## Bezpečnost
+
+✅ AES-256-GCM encryption  
+✅ OAuth 2.0  
+✅ Rate limiting (100 req/15min)  
+✅ TLS 1.3  
+✅ Audit logs (90 dní)  
+
+## Soubory
+
+- `GPT_CONFIG.md` - Instructions pro Custom GPT
+- `CUSTOM_GPT_SETUP.md` - Setup guide
+- `test-oauth-proxy.js` - Testing
+
+## Privacy
+
+Privacy policy: https://mcp1-oauth-server.onrender.com/privacy-policy
+
+---
+
+**Built with ❤️ for seamless Gmail & Calendar through ChatGPT**
