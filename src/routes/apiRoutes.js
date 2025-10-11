@@ -2,6 +2,7 @@ import express from 'express';
 import { verifyToken } from '../middleware/authMiddleware.js';
 import * as gmailController from '../controllers/gmailController.js';
 import * as calendarController from '../controllers/calendarController.js';
+import { getAuthStatus } from '../controllers/authStatusController.js';
 
 const router = express.Router();
 
@@ -12,6 +13,11 @@ const router = express.Router();
 
 // Apply authentication middleware to all API routes
 router.use(verifyToken);
+
+// ==================== AUTH STATUS ====================
+
+// Check authentication status (for "přihlásit se" requests)
+router.get('/auth/status', getAuthStatus);
 
 // ==================== GMAIL ROUTES ====================
 
