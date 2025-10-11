@@ -18,6 +18,9 @@ const PORT = process.env.PORT || 3000;
 
 // ==================== MIDDLEWARE ====================
 
+// Trust proxy (required for Render.com behind reverse proxy)
+app.set('trust proxy', 1);
+
 // Security headers
 app.use(helmet());
 
