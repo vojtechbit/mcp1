@@ -179,8 +179,8 @@ async function sendEmail(googleSub, { to, subject, body, cc, bcc, includeMcp1Att
  */
 async function readEmail(googleSub, messageId) {
   try {
-    const accessToken = await getValidAccessToken(googleSub);
-    const gmail = google.gmail({ version: 'v1', auth: accessToken });
+    const authClient = await getAuthenticatedClient(googleSub);
+    const gmail = google.gmail({ version: 'v1', auth: authClient });
 
     const result = await gmail.users.messages.get({
       userId: 'me',
@@ -207,8 +207,8 @@ async function readEmail(googleSub, messageId) {
  */
 async function searchEmails(googleSub, { query, maxResults = 10, pageToken }) {
   try {
-    const accessToken = await getValidAccessToken(googleSub);
-    const gmail = google.gmail({ version: 'v1', auth: accessToken });
+    const authClient = await getAuthenticatedClient(googleSub);
+    const gmail = google.gmail({ version: 'v1', auth: authClient });
 
     const params = {
       userId: 'me',
@@ -239,8 +239,8 @@ async function searchEmails(googleSub, { query, maxResults = 10, pageToken }) {
  */
 async function replyToEmail(googleSub, messageId, { body }) {
   try {
-    const accessToken = await getValidAccessToken(googleSub);
-    const gmail = google.gmail({ version: 'v1', auth: accessToken });
+    const authClient = await getAuthenticatedClient(googleSub);
+    const gmail = google.gmail({ version: 'v1', auth: authClient });
 
     // Get original message to extract headers
     const original = await gmail.users.messages.get({
@@ -301,8 +301,8 @@ async function replyToEmail(googleSub, messageId, { body }) {
  */
 async function createDraft(googleSub, { to, subject, body }) {
   try {
-    const accessToken = await getValidAccessToken(googleSub);
-    const gmail = google.gmail({ version: 'v1', auth: accessToken });
+    const authClient = await getAuthenticatedClient(googleSub);
+    const gmail = google.gmail({ version: 'v1', auth: authClient });
 
     const messageParts = [
       `To: ${to}`,
@@ -344,8 +344,8 @@ async function createDraft(googleSub, { to, subject, body }) {
  */
 async function deleteEmail(googleSub, messageId) {
   try {
-    const accessToken = await getValidAccessToken(googleSub);
-    const gmail = google.gmail({ version: 'v1', auth: accessToken });
+    const authClient = await getAuthenticatedClient(googleSub);
+    const gmail = google.gmail({ version: 'v1', auth: authClient });
 
     await gmail.users.messages.trash({
       userId: 'me',
@@ -370,8 +370,8 @@ async function deleteEmail(googleSub, messageId) {
  */
 async function toggleStar(googleSub, messageId, star = true) {
   try {
-    const accessToken = await getValidAccessToken(googleSub);
-    const gmail = google.gmail({ version: 'v1', auth: accessToken });
+    const authClient = await getAuthenticatedClient(googleSub);
+    const gmail = google.gmail({ version: 'v1', auth: authClient });
 
     await gmail.users.messages.modify({
       userId: 'me',
@@ -400,8 +400,8 @@ async function toggleStar(googleSub, messageId, star = true) {
  */
 async function markAsRead(googleSub, messageId, read = true) {
   try {
-    const accessToken = await getValidAccessToken(googleSub);
-    const gmail = google.gmail({ version: 'v1', auth: accessToken });
+    const authClient = await getAuthenticatedClient(googleSub);
+    const gmail = google.gmail({ version: 'v1', auth: authClient });
 
     await gmail.users.messages.modify({
       userId: 'me',
