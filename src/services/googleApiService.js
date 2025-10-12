@@ -65,7 +65,7 @@ async function getValidAccessToken(googleSub, forceRefresh = false) {
 
     const now = new Date();
     const expiry = new Date(user.tokenExpiry);
-    const bufferTime = 5 * 60 * 1000;
+    const bufferTime = 5 * 60 * 1000; // 5 minutes (tokens refreshed on startup)
     const isExpired = now >= (expiry.getTime() - bufferTime);
 
     if (forceRefresh || isExpired) {

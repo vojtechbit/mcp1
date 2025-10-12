@@ -4,6 +4,7 @@ import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 import dotenv from 'dotenv';
 import { connectToDatabase } from './config/database.js';
+import { refreshAllTokensOnStartup, startBackgroundRefresh } from './services/backgroundRefreshService.js';
 import authRoutes from './routes/authRoutes.js';
 import apiRoutes from './routes/apiRoutes.js';
 import oauthProxyRoutes from './routes/oauthProxyRoutes.js';
@@ -120,6 +121,9 @@ async function startServer() {
     await connectToDatabase();
     console.log('✅ MongoDB connected successfully');
 
+    // Refresh all tokens on startup (perfect for cold starts)
+    await refreshAllTokensOnStartup();
+
     // Start Express server
     app.listen(PORT, () => {
       console.log('\n' + '='.repeat(60));
@@ -135,6 +139,15 @@ async function startServer() {
       console.log('📅 Calendar API: Ready');
       console.log('🛡️  Security: Enabled');
       console.log('⚡ Rate limiting: Active');
+      
+      // Start background token refresh (optional)
+      if (process.env.ENABLE_BACKGROUND_REFRESH === 'true') {
+        console.log('🔄 Background refresh: Enabled (every 30min)');
+        startBackgroundRefresh();
+      } else {
+        console.log('⚪ Background refresh: Disabled (startup refresh active)');
+      }
+      
       console.log('='.repeat(60) + '\n');
     });
 
