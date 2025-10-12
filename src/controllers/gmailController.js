@@ -94,11 +94,17 @@ async function searchEmails(req, res) {
       pageToken
     });
 
+    // Get actual count instead of estimate
+    const actualCount = result.messages ? result.messages.length : 0;
+    
     res.json({
       success: true,
       results: result.messages || [],
-      resultSizeEstimate: result.resultSizeEstimate,
-      nextPageToken: result.nextPageToken
+      count: actualCount, // Actual number of results returned
+      resultSizeEstimate: result.resultSizeEstimate, // Gmail's estimate (often inaccurate)
+      nextPageToken: result.nextPageToken,
+      note: actualCount > 0 && actualCount !== result.resultSizeEstimate ? 
+        'Note: resultSizeEstimate is Gmail\'s estimate and may not match actual count. Use "count" for accurate number.' : null
     });
 
   } catch (error) {

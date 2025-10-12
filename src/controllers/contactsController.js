@@ -152,6 +152,17 @@ async function addContact(req, res) {
       data: error.response?.data
     });
 
+    // Special handling for duplicate contact
+    if (error.code === 'CONTACT_EXISTS') {
+      return res.status(409).json({
+        error: 'Contact already exists',
+        message: error.message,
+        code: 'CONTACT_EXISTS',
+        existingContact: error.existingContact,
+        suggestion: 'Use the update contact endpoint to modify the existing contact, or provide a different email address.'
+      });
+    }
+
     // Special handling for missing sheet
     if (error.message.includes('not found')) {
       return res.status(404).json({

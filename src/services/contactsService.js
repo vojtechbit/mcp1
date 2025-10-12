@@ -363,6 +363,7 @@ async function listAllContacts(googleSub) {
 
 /**
  * Add new contact to Google Sheet
+ * Checks if email already exists and returns conflict info if so
  */
 async function addContact(googleSub, contactData) {
   try {
@@ -373,7 +374,34 @@ async function addContact(googleSub, contactData) {
 
     console.log(`➕ Adding contact: ${name} (${email})`);
 
-    // Append new row
+    // Check if email already exists
+    const response = await sheets.spreadsheets.values.get({
+      spreadsheetId,
+      range: 'A2:C1000',
+    });
+
+    const rows = response.data.values || [];
+    
+    // Find existing contact with same email
+    const existingContact = rows.find(row => {
+      const rowEmail = (row[1] || '').toLowerCase().trim();
+      return rowEmail === email.toLowerCase().trim();
+    });
+
+    if (existingContact) {
+      console.log(`⚠️  Contact with email ${email} already exists`);
+      const error = new Error(`Contact with email ${email} already exists`);
+      error.code = 'CONTACT_EXISTS';
+      error.statusCode = 409; // Conflict
+      error.existingContact = {
+        name: existingContact[0] || '',
+        email: existingContact[1] || '',
+        notes: existingContact[2] || ''
+      };
+      throw error;
+    }
+
+    // Append new row if email doesn't exist
     await sheets.spreadsheets.values.append({
       spreadsheetId,
       range: 'A:C',
@@ -387,6 +415,11 @@ async function addContact(googleSub, contactData) {
     return { name, email, notes: notes || '' };
 
   } catch (error) {
+    // If it's our CONTACT_EXISTS error, re-throw it
+    if (error.code === 'CONTACT_EXISTS') {
+      throw error;
+    }
+    
     console.error('❌ [SHEETS_ERROR] Failed to add contact');
     console.error('Details:', {
       contactData,
