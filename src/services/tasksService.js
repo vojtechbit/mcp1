@@ -196,8 +196,21 @@ async function createTask(googleSub, taskData) {
     }
 
     if (taskData.due) {
-      // Ensure due date is in RFC 3339 format
-      requestBody.due = taskData.due;
+      // Convert due date to RFC 3339 format (required by Tasks API)
+      // Tasks API requires full timestamp but only uses the date part
+      let dueDate = taskData.due;
+      
+      // If just date (YYYY-MM-DD), convert to RFC 3339
+      if (/^\d{4}-\d{2}-\d{2}$/.test(dueDate)) {
+        dueDate = `${dueDate}T00:00:00.000Z`;
+      }
+      // If datetime without timezone, add UTC timezone
+      else if (!dueDate.endsWith('Z') && !dueDate.includes('+')) {
+        dueDate = `${dueDate}.000Z`;
+      }
+      
+      requestBody.due = dueDate;
+      console.log(`📅 Due date converted to RFC 3339: ${dueDate}`);
     }
 
     console.log('📝 Creating task with data:', requestBody);

@@ -75,6 +75,9 @@ router.get('/contacts', contactsController.listContacts);
 // Add new contact
 router.post('/contacts', contactsController.addContact);
 
+// Update contact (by name+email)
+router.put('/contacts', contactsController.updateContact);
+
 // ==================== TASKS ROUTES ====================
 
 // List all tasks

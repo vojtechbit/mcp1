@@ -168,17 +168,113 @@ async function findContactsSheet(googleSub) {
 }
 
 /**
+ * Create a new contacts sheet with proper headers
+ * Returns spreadsheet ID
+ */
+async function createContactsSheet(googleSub) {
+  try {
+    const sheets = await getSheetsClient(googleSub);
+
+    console.log(`📝 Creating new sheet: "${CONTACTS_SHEET_NAME}"`);
+
+    // Create new spreadsheet
+    const createResponse = await sheets.spreadsheets.create({
+      requestBody: {
+        properties: {
+          title: CONTACTS_SHEET_NAME
+        },
+        sheets: [
+          {
+            properties: {
+              title: 'Sheet1',
+              gridProperties: {
+                rowCount: 1000,
+                columnCount: 3
+              }
+            }
+          }
+        ]
+      }
+    });
+
+    const spreadsheetId = createResponse.data.spreadsheetId;
+    console.log(`✅ Sheet created with ID: ${spreadsheetId}`);
+
+    // Add header row
+    await sheets.spreadsheets.values.update({
+      spreadsheetId,
+      range: 'A1:C1',
+      valueInputOption: 'RAW',
+      requestBody: {
+        values: [['Name', 'Email', 'Notes']]
+      }
+    });
+
+    // Make header row bold
+    await sheets.spreadsheets.batchUpdate({
+      spreadsheetId,
+      requestBody: {
+        requests: [
+          {
+            repeatCell: {
+              range: {
+                sheetId: 0,
+                startRowIndex: 0,
+                endRowIndex: 1
+              },
+              cell: {
+                userEnteredFormat: {
+                  textFormat: {
+                    bold: true
+                  }
+                }
+              },
+              fields: 'userEnteredFormat.textFormat.bold'
+            }
+          }
+        ]
+      }
+    });
+
+    console.log(`✅ Header row added: Name | Email | Notes`);
+    return spreadsheetId;
+
+  } catch (error) {
+    console.error('❌ [SHEETS_ERROR] Failed to create contacts sheet');
+    console.error('Details:', {
+      sheetName: CONTACTS_SHEET_NAME,
+      errorMessage: error.message,
+      statusCode: error.response?.status,
+      errorData: error.response?.data,
+      timestamp: new Date().toISOString()
+    });
+    throw error;
+  }
+}
+
+/**
+ * Get or create contacts sheet
+ * Returns spreadsheet ID (creates new one if not found)
+ */
+async function getOrCreateContactsSheet(googleSub) {
+  let spreadsheetId = await findContactsSheet(googleSub);
+  
+  if (!spreadsheetId) {
+    console.log('📝 Sheet not found, creating new one...');
+    spreadsheetId = await createContactsSheet(googleSub);
+  }
+  
+  return spreadsheetId;
+}
+
+/**
  * Search contacts in Google Sheet
  * Returns array of matching contacts
  */
 async function searchContacts(googleSub, searchQuery) {
   try {
     const sheets = await getSheetsClient(googleSub);
-    const spreadsheetId = await findContactsSheet(googleSub);
-
-    if (!spreadsheetId) {
-      throw new Error(`Contact sheet "${CONTACTS_SHEET_NAME}" not found. Please create it first.`);
-    }
+    const spreadsheetId = await getOrCreateContactsSheet(googleSub);
 
     console.log(`🔍 Searching contacts for query: "${searchQuery}"`);
 
@@ -232,11 +328,7 @@ async function searchContacts(googleSub, searchQuery) {
 async function listAllContacts(googleSub) {
   try {
     const sheets = await getSheetsClient(googleSub);
-    const spreadsheetId = await findContactsSheet(googleSub);
-
-    if (!spreadsheetId) {
-      throw new Error(`Contact sheet "${CONTACTS_SHEET_NAME}" not found. Please create it first.`);
-    }
+    const spreadsheetId = await getOrCreateContactsSheet(googleSub);
 
     console.log('📋 Listing all contacts...');
 
@@ -275,11 +367,7 @@ async function listAllContacts(googleSub) {
 async function addContact(googleSub, contactData) {
   try {
     const sheets = await getSheetsClient(googleSub);
-    const spreadsheetId = await findContactsSheet(googleSub);
-
-    if (!spreadsheetId) {
-      throw new Error(`Contact sheet "${CONTACTS_SHEET_NAME}" not found. Please create it first.`);
-    }
+    const spreadsheetId = await getOrCreateContactsSheet(googleSub);
 
     const { name, email, notes } = contactData;
 
@@ -311,8 +399,76 @@ async function addContact(googleSub, contactData) {
   }
 }
 
+/**
+ * Update existing contact (finds by name+email and updates notes)
+ * If contact doesn't exist, adds it as new
+ */
+async function updateContact(googleSub, contactData) {
+  try {
+    const sheets = await getSheetsClient(googleSub);
+    const spreadsheetId = await getOrCreateContactsSheet(googleSub);
+
+    const { name, email, notes } = contactData;
+
+    console.log(`✏️  Updating contact: ${name} (${email})`);
+
+    // Read all contacts to find existing one
+    const response = await sheets.spreadsheets.values.get({
+      spreadsheetId,
+      range: 'A2:C1000',
+    });
+
+    const rows = response.data.values || [];
+
+    // Find row with matching name AND email
+    let rowIndex = -1;
+    for (let i = 0; i < rows.length; i++) {
+      const rowName = (rows[i][0] || '').toLowerCase();
+      const rowEmail = (rows[i][1] || '').toLowerCase();
+      
+      if (rowName === name.toLowerCase() && rowEmail === email.toLowerCase()) {
+        rowIndex = i + 2; // +2 because: +1 for header row, +1 for 0-based to 1-based
+        break;
+      }
+    }
+
+    if (rowIndex === -1) {
+      // Contact not found, add as new
+      console.log('⚠️  Contact not found, adding as new');
+      return await addContact(googleSub, contactData);
+    }
+
+    // Update existing row
+    console.log(`🔄 Updating row ${rowIndex}`);
+    
+    await sheets.spreadsheets.values.update({
+      spreadsheetId,
+      range: `A${rowIndex}:C${rowIndex}`,
+      valueInputOption: 'RAW',
+      requestBody: {
+        values: [[name, email, notes || '']]
+      }
+    });
+
+    console.log(`✅ Contact updated successfully`);
+    return { name, email, notes: notes || '' };
+
+  } catch (error) {
+    console.error('❌ [SHEETS_ERROR] Failed to update contact');
+    console.error('Details:', {
+      contactData,
+      errorMessage: error.message,
+      statusCode: error.response?.status,
+      errorData: error.response?.data,
+      timestamp: new Date().toISOString()
+    });
+    throw error;
+  }
+}
+
 export {
   searchContacts,
   listAllContacts,
-  addContact
+  addContact,
+  updateContact
 };

@@ -141,7 +141,7 @@
         "parameters": [
           { "name": "timeMin", "in": "query", "schema": { "type": "string", "description": "ISO 8601 datetime" } },
           { "name": "timeMax", "in": "query", "schema": { "type": "string", "description": "ISO 8601 datetime" } },
-          { "name": "pageToken", "in": "query", "schema": { "type": "string", "description": "Google Calendar API page token" } }
+          { "name": "maxResults", "in": "query", "schema": { "type": "integer", "default": 10 } }
         ],
         "responses": {
           "200": { "description": "Events list", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/EventListResponse" } } } }
@@ -225,6 +225,22 @@
         },
         "responses": {
           "200": { "description": "Contact created", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ContactCreateResponse" } } } }
+        }
+      },
+      "put": {
+        "operationId": "updateContact",
+        "summary": "Update contact",
+        "description": "Update an existing contact's notes. Finds contact by name and email, then updates the notes field. If contact doesn't exist, creates it.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/ContactCreateRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Contact updated", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ContactCreateResponse" } } } }
         }
       }
     },
@@ -477,28 +493,76 @@
       "TasksListResponse": {
         "type": "object",
         "properties": {
+          "success": { "type": "boolean" },
+          "count": { "type": "integer" },
           "tasks": {
             "type": "array",
-            "items": { "type": "object", "properties": { "id": { "type": "string" }, "title": { "type": "string" }, "status": { "type": "string" } } }
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": { "type": "string" },
+                "title": { "type": "string" },
+                "notes": { "type": "string" },
+                "due": { "type": "string", "description": "RFC 3339 timestamp" },
+                "status": { "type": "string", "enum": ["needsAction", "completed"] },
+                "taskList": { "type": "string" },
+                "taskListId": { "type": "string" }
+              }
+            }
           }
         }
       },
       "TaskCreateRequest": {
         "type": "object",
         "required": ["title"],
-        "properties": { "title": { "type": "string" }, "notes": { "type": "string" }, "due": { "type": "string", "description": "ISO 8601 date or datetime" } }
+        "properties": {
+          "title": { "type": "string", "description": "Task title" },
+          "notes": { "type": "string", "description": "Optional task notes/description" },
+          "due": { "type": "string", "description": "Due date in YYYY-MM-DD format or ISO 8601 datetime. Will be converted to RFC 3339." }
+        }
       },
       "TaskCreateResponse": {
         "type": "object",
-        "properties": { "success": { "type": "boolean" }, "taskId": { "type": "string" } }
+        "properties": {
+          "success": { "type": "boolean" },
+          "task": {
+            "type": "object",
+            "properties": {
+              "id": { "type": "string" },
+              "title": { "type": "string" },
+              "notes": { "type": "string" },
+              "due": { "type": "string" },
+              "status": { "type": "string" },
+              "taskList": { "type": "string" },
+              "taskListId": { "type": "string" }
+            }
+          }
+        }
       },
       "TaskUpdateRequest": {
         "type": "object",
-        "properties": { "status": { "type": "string", "enum": ["needsAction", "completed"] } }
+        "properties": {
+          "status": { "type": "string", "enum": ["needsAction", "completed"], "description": "Task status" },
+          "title": { "type": "string", "description": "Task title" },
+          "notes": { "type": "string", "description": "Task notes" },
+          "due": { "type": "string", "description": "Due date (YYYY-MM-DD or ISO 8601)" }
+        }
       },
       "TaskUpdateResponse": {
         "type": "object",
-        "properties": { "success": { "type": "boolean" }, "taskId": { "type": "string" } }
+        "properties": {
+          "success": { "type": "boolean" },
+          "task": {
+            "type": "object",
+            "properties": {
+              "id": { "type": "string" },
+              "title": { "type": "string" },
+              "notes": { "type": "string" },
+              "due": { "type": "string" },
+              "status": { "type": "string" }
+            }
+          }
+        }
       },
       "TaskDeleteResponse": {
         "type": "object",

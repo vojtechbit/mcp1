@@ -177,8 +177,63 @@ async function addContact(req, res) {
   }
 }
 
+/**
+ * Update contact (finds by name+email and updates notes)
+ * PUT /api/contacts
+ * Body: { name, email, notes }
+ */
+async function updateContact(req, res) {
+  try {
+    const { name, email, notes } = req.body;
+
+    if (!name || !email) {
+      return res.status(400).json({
+        error: 'Bad Request',
+        message: 'Missing required fields: name, email'
+      });
+    }
+
+    console.log(`✏️  Updating contact: ${name} (${email})`);
+    if (notes) console.log(`   New notes: ${notes}`);
+
+    const contact = await contactsService.updateContact(req.user.googleSub, {
+      name, email, notes
+    });
+
+    res.json({
+      success: true,
+      message: 'Contact updated successfully',
+      contact: contact
+    });
+
+  } catch (error) {
+    console.error('❌ Failed to update contact');
+    console.error('Error details:', {
+      message: error.message,
+      code: error.code,
+      statusCode: error.response?.status,
+      data: error.response?.data
+    });
+
+    // Check if it's an auth error
+    if (error.code === 'AUTH_REQUIRED' || error.statusCode === 401) {
+      return res.status(401).json({
+        error: 'Authentication required',
+        message: 'Your session has expired. Please log in again.',
+        code: 'AUTH_REQUIRED'
+      });
+    }
+
+    res.status(error.statusCode || 500).json({
+      error: 'Contact update failed',
+      message: error.message
+    });
+  }
+}
+
 export {
   searchContacts,
   listContacts,
-  addContact
+  addContact,
+  updateContact
 };
