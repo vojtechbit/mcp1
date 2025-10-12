@@ -8,6 +8,7 @@ import authRoutes from './routes/authRoutes.js';
 import apiRoutes from './routes/apiRoutes.js';
 import oauthProxyRoutes from './routes/oauthProxyRoutes.js';
 import privacyRoutes from './routes/privacyRoutes.js';
+import debugRoutes from './routes/debugRoutes.js';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler.js';
 
 // Load environment variables
@@ -100,6 +101,9 @@ app.use('/auth', authRoutes);
 
 // API routes (protected)
 app.use('/api', apiRoutes);
+
+// Debug routes (protected)
+app.use('/api/debug', debugRoutes);
 
 // 404 handler (must be after all routes)
 app.use(notFoundHandler);

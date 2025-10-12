@@ -8,9 +8,10 @@ dotenv.config();
 /**
  * Create authenticated Google API client
  * Creates a NEW OAuth2 client instance for each request to avoid conflicts
+ * @param {boolean} forceRefresh - Force token refresh before creating client
  */
-async function getAuthenticatedClient(googleSub) {
-  const accessToken = await getValidAccessToken(googleSub);
+async function getAuthenticatedClient(googleSub, forceRefresh = false) {
+  const accessToken = await getValidAccessToken(googleSub, forceRefresh);
   
   // Create NEW OAuth2 client instance for this request
   const { OAuth2 } = google.auth;
@@ -48,8 +49,9 @@ async function handleGoogleApiCall(apiCall, errorContext = {}) {
 
 /**
  * Get valid access token (auto-refresh if expired)
+ * @param {boolean} forceRefresh - Force token refresh even if not expired
  */
-async function getValidAccessToken(googleSub) {
+async function getValidAccessToken(googleSub, forceRefresh = false) {
   try {
     const user = await getUserByGoogleSub(googleSub);
     
@@ -64,9 +66,14 @@ async function getValidAccessToken(googleSub) {
     const now = new Date();
     const expiry = new Date(user.tokenExpiry);
     const bufferTime = 5 * 60 * 1000;
+    const isExpired = now >= (expiry.getTime() - bufferTime);
 
-    if (now >= (expiry.getTime() - bufferTime)) {
-      console.log('🔄 Access token expired, refreshing...');
+    if (forceRefresh || isExpired) {
+      if (forceRefresh) {
+        console.log('🔄 Forcing token refresh due to 401 error...');
+      } else {
+        console.log('🔄 Access token expired, refreshing...');
+      }
       
       try {
         const newTokens = await refreshAccessToken(user.refreshToken);
@@ -83,6 +90,11 @@ async function getValidAccessToken(googleSub) {
         return newTokens.access_token;
       } catch (refreshError) {
         console.error('❌ Token refresh failed - user needs to re-authenticate');
+        console.error('Refresh error details:', {
+          message: refreshError.message,
+          code: refreshError.code,
+          status: refreshError.response?.status
+        });
         // Create special error that controllers can catch
         const authError = new Error('Authentication required - please log in again');
         authError.code = 'AUTH_REQUIRED';
@@ -176,8 +188,9 @@ async function sendEmail(googleSub, { to, subject, body, cc, bcc, includeMcp1Att
 
 /**
  * Read a specific email
+ * Automatically retries with token refresh on 401 error
  */
-async function readEmail(googleSub, messageId) {
+async function readEmail(googleSub, messageId, retryCount = 0) {
   try {
     const authClient = await getAuthenticatedClient(googleSub);
     const gmail = google.gmail({ version: 'v1', auth: authClient });
@@ -191,11 +204,24 @@ async function readEmail(googleSub, messageId) {
     console.log('✅ Email read successfully:', messageId);
     return result.data;
   } catch (error) {
+    // If 401 and first attempt, try refreshing token and retry
+    if ((error.code === 401 || error.response?.status === 401 || error.message?.includes('Invalid Credentials')) && retryCount === 0) {
+      console.log('⚠️ 401 error detected, attempting token refresh and retry...');
+      try {
+        await getAuthenticatedClient(googleSub, true);
+        return await readEmail(googleSub, messageId, retryCount + 1);
+      } catch (retryError) {
+        console.error('❌ Token refresh and retry failed');
+      }
+    }
+
     console.error('❌ [GMAIL_ERROR] Failed to read email');
     console.error('Details:', {
       messageId,
       errorMessage: error.message,
       statusCode: error.response?.status,
+      errorCode: error.code,
+      retryCount,
       timestamp: new Date().toISOString()
     });
     throw error;
@@ -204,8 +230,9 @@ async function readEmail(googleSub, messageId) {
 
 /**
  * Search emails with query
+ * Automatically retries with token refresh on 401 error
  */
-async function searchEmails(googleSub, { query, maxResults = 10, pageToken }) {
+async function searchEmails(googleSub, { query, maxResults = 10, pageToken }, retryCount = 0) {
   try {
     const authClient = await getAuthenticatedClient(googleSub);
     const gmail = google.gmail({ version: 'v1', auth: authClient });
@@ -223,11 +250,27 @@ async function searchEmails(googleSub, { query, maxResults = 10, pageToken }) {
     console.log('✅ Email search completed:', result.data.resultSizeEstimate);
     return result.data;
   } catch (error) {
+    // If 401 and first attempt, try refreshing token and retry
+    if ((error.code === 401 || error.response?.status === 401 || error.message?.includes('Invalid Credentials')) && retryCount === 0) {
+      console.log('⚠️ 401 error detected, attempting token refresh and retry...');
+      try {
+        // Force refresh the token
+        await getAuthenticatedClient(googleSub, true);
+        // Retry the search
+        return await searchEmails(googleSub, { query, maxResults, pageToken }, retryCount + 1);
+      } catch (retryError) {
+        console.error('❌ Token refresh and retry failed');
+        // Fall through to regular error handling
+      }
+    }
+
     console.error('❌ [GMAIL_ERROR] Failed to search emails');
     console.error('Details:', {
       query,
       errorMessage: error.message,
       statusCode: error.response?.status,
+      errorCode: error.code,
+      retryCount,
       timestamp: new Date().toISOString()
     });
     throw error;
