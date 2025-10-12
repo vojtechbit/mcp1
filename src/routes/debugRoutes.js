@@ -1,6 +1,6 @@
 import express from 'express';
 import { getUserByGoogleSub } from '../services/databaseService.js';
-import { authenticateUser } from '../middleware/authMiddleware.js';
+import { verifyToken } from '../middleware/authMiddleware.js';
 
 const router = express.Router();
 
@@ -8,7 +8,7 @@ const router = express.Router();
  * Debug endpoint - Check token status
  * GET /api/debug/token-status
  */
-router.get('/token-status', authenticateUser, async (req, res) => {
+router.get('/token-status', verifyToken, async (req, res) => {
   try {
     const user = await getUserByGoogleSub(req.user.googleSub);
 
