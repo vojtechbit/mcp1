@@ -38,6 +38,17 @@ async function sendEmail(req, res) {
 
   } catch (error) {
     console.error('❌ Failed to send email');
+    
+    // Check if it's an auth error that requires re-authentication
+    if (error.code === 'AUTH_REQUIRED' || error.code === 'REFRESH_TOKEN_INVALID' || error.statusCode === 401) {
+      return res.status(401).json({
+        error: 'Authentication required',
+        message: error.message || 'Your session has expired. Please log in again.',
+        code: error.code || 'AUTH_REQUIRED',
+        requiresReauth: true
+      });
+    }
+    
     res.status(500).json({
       error: 'Email send failed',
       message: error.message
@@ -87,6 +98,16 @@ async function readEmail(req, res) {
 
   } catch (error) {
     console.error('❌ Failed to read email');
+    
+    if (error.code === 'AUTH_REQUIRED' || error.code === 'REFRESH_TOKEN_INVALID' || error.statusCode === 401) {
+      return res.status(401).json({
+        error: 'Authentication required',
+        message: error.message || 'Your session has expired. Please log in again.',
+        code: error.code || 'AUTH_REQUIRED',
+        requiresReauth: true
+      });
+    }
+    
     res.status(500).json({
       error: 'Email read failed',
       message: error.message
@@ -124,6 +145,16 @@ async function getEmailSnippet(req, res) {
 
   } catch (error) {
     console.error('❌ Failed to get email snippet');
+    
+    if (error.code === 'AUTH_REQUIRED' || error.code === 'REFRESH_TOKEN_INVALID' || error.statusCode === 401) {
+      return res.status(401).json({
+        error: 'Authentication required',
+        message: error.message || 'Your session has expired. Please log in again.',
+        code: error.code || 'AUTH_REQUIRED',
+        requiresReauth: true
+      });
+    }
+    
     res.status(500).json({
       error: 'Email snippet retrieval failed',
       message: error.message
@@ -169,6 +200,16 @@ async function searchEmails(req, res) {
 
   } catch (error) {
     console.error('❌ Failed to search emails');
+    
+    if (error.code === 'AUTH_REQUIRED' || error.code === 'REFRESH_TOKEN_INVALID' || error.statusCode === 401) {
+      return res.status(401).json({
+        error: 'Authentication required',
+        message: error.message || 'Your session has expired. Please log in again.',
+        code: error.code || 'AUTH_REQUIRED',
+        requiresReauth: true
+      });
+    }
+    
     res.status(500).json({
       error: 'Email search failed',
       message: error.message
@@ -205,6 +246,16 @@ async function replyToEmail(req, res) {
 
   } catch (error) {
     console.error('❌ Failed to reply to email');
+    
+    if (error.code === 'AUTH_REQUIRED' || error.code === 'REFRESH_TOKEN_INVALID' || error.statusCode === 401) {
+      return res.status(401).json({
+        error: 'Authentication required',
+        message: error.message || 'Your session has expired. Please log in again.',
+        code: error.code || 'AUTH_REQUIRED',
+        requiresReauth: true
+      });
+    }
+    
     res.status(500).json({
       error: 'Email reply failed',
       message: error.message
@@ -279,6 +330,16 @@ async function deleteEmail(req, res) {
 
   } catch (error) {
     console.error('❌ Failed to delete email');
+    
+    if (error.code === 'AUTH_REQUIRED' || error.code === 'REFRESH_TOKEN_INVALID' || error.statusCode === 401) {
+      return res.status(401).json({
+        error: 'Authentication required',
+        message: error.message || 'Your session has expired. Please log in again.',
+        code: error.code || 'AUTH_REQUIRED',
+        requiresReauth: true
+      });
+    }
+    
     res.status(500).json({
       error: 'Email deletion failed',
       message: error.message
@@ -316,6 +377,16 @@ async function toggleStar(req, res) {
 
   } catch (error) {
     console.error('❌ Failed to toggle star');
+    
+    if (error.code === 'AUTH_REQUIRED' || error.code === 'REFRESH_TOKEN_INVALID' || error.statusCode === 401) {
+      return res.status(401).json({
+        error: 'Authentication required',
+        message: error.message || 'Your session has expired. Please log in again.',
+        code: error.code || 'AUTH_REQUIRED',
+        requiresReauth: true
+      });
+    }
+    
     res.status(500).json({
       error: 'Star toggle failed',
       message: error.message
@@ -353,6 +424,16 @@ async function markAsRead(req, res) {
 
   } catch (error) {
     console.error('❌ Failed to mark as read');
+    
+    if (error.code === 'AUTH_REQUIRED' || error.code === 'REFRESH_TOKEN_INVALID' || error.statusCode === 401) {
+      return res.status(401).json({
+        error: 'Authentication required',
+        message: error.message || 'Your session has expired. Please log in again.',
+        code: error.code || 'AUTH_REQUIRED',
+        requiresReauth: true
+      });
+    }
+    
     res.status(500).json({
       error: 'Mark as read failed',
       message: error.message

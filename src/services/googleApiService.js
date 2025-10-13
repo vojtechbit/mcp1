@@ -39,22 +39,72 @@ async function getAuthenticatedClient(googleSub, forceRefresh = false) {
 }
 
 /**
- * Wrapper to handle Google API errors (especially 401 auth errors)
+ * Wrapper to handle Google API errors with automatic token refresh on 401
+ * @param {string} googleSub - User's Google ID
+ * @param {Function} apiCall - Function that makes the API call
+ * @param {number} retryCount - Internal retry counter (max 2 retries)
  */
-async function handleGoogleApiCall(apiCall, errorContext = {}) {
+async function handleGoogleApiCall(googleSub, apiCall, retryCount = 0) {
+  const MAX_RETRIES = 2; // Allow up to 2 retries (3 total attempts)
+  
   try {
     return await apiCall();
   } catch (error) {
     // Check if it's a 401 authentication error
-    if (error.code === 401 || error.message?.includes('Login Required') || error.message?.includes('Invalid Credentials')) {
-      console.error('❌ Google API returned 401 - authentication required');
+    const is401 = error.code === 401 || 
+                  error.response?.status === 401 || 
+                  error.message?.includes('Login Required') || 
+                  error.message?.includes('Invalid Credentials') ||
+                  error.message?.includes('invalid_grant');
+    
+    if (is401 && retryCount < MAX_RETRIES) {
+      console.log(`⚠️ 401 error detected (attempt ${retryCount + 1}/${MAX_RETRIES + 1}), forcing token refresh and retry...`);
+      console.log(`Error details: ${error.message}`);
+      
+      try {
+        // Force refresh the token - this will try even if expiry date says token is valid
+        await getValidAccessToken(googleSub, true);
+        
+        // Wait a bit before retry to avoid rate limiting
+        await new Promise(resolve => setTimeout(resolve, 500 * (retryCount + 1)));
+        
+        console.log(`🔄 Retrying API call after token refresh (attempt ${retryCount + 2}/${MAX_RETRIES + 1})...`);
+        // Retry the API call with incremented counter
+        return await handleGoogleApiCall(googleSub, apiCall, retryCount + 1);
+      } catch (refreshError) {
+        console.error(`❌ Token refresh failed on retry ${retryCount + 1}:`, {
+          message: refreshError.message,
+          code: refreshError.code,
+          isInvalidGrant: refreshError.message?.includes('invalid_grant'),
+          isTokenExpired: refreshError.message?.includes('Token has been expired')
+        });
+        
+        // If refresh token itself is invalid, we need re-authentication
+        if (refreshError.message?.includes('invalid_grant') || 
+            refreshError.message?.includes('Token has been expired') ||
+            refreshError.message?.includes('invalid_refresh_token')) {
+          console.error('💥 Refresh token is invalid or expired - user MUST re-authenticate');
+          const authError = new Error('Your session has expired. Please log in again.');
+          authError.code = 'REFRESH_TOKEN_INVALID';
+          authError.statusCode = 401;
+          authError.requiresReauth = true;
+          throw authError;
+        }
+        
+        // Fall through to throw auth error below
+      }
+    }
+    
+    // If still 401 after max retries, or other auth error
+    if (is401) {
+      console.error(`❌ Google API authentication failed after ${retryCount + 1} attempts - re-authentication required`);
       const authError = new Error('Authentication required - please log in again');
       authError.code = 'AUTH_REQUIRED';
       authError.statusCode = 401;
       throw authError;
     }
     
-    // Re-throw other errors with context
+    // Re-throw other errors
     throw error;
   }
 }
@@ -238,60 +288,62 @@ function stripHtmlTags(html) {
  * @param {boolean} [options.includeMcp1Attribution=false] - Add MCP1 branding at end (default: false)
  */
 async function sendEmail(googleSub, { to, subject, body, cc, bcc, includeMcp1Attribution = false }) {
-  try {
-    const authClient = await getAuthenticatedClient(googleSub);
-    const gmail = google.gmail({ version: 'v1', auth: authClient });
+  return await handleGoogleApiCall(googleSub, async () => {
+    try {
+      const authClient = await getAuthenticatedClient(googleSub);
+      const gmail = google.gmail({ version: 'v1', auth: authClient });
 
-    // Add optional MCP1 attribution/branding
-    const attribution = includeMcp1Attribution 
-      ? '\n\n---\nPosláno z MCP1 OAuth Proxy Server'
-      : '';
-    
-    const fullBody = body + attribution;
+      // Add optional MCP1 attribution/branding
+      const attribution = includeMcp1Attribution 
+        ? '\n\n---\nPosláno z MCP1 OAuth Proxy Server'
+        : '';
+      
+      const fullBody = body + attribution;
 
-    // RFC 2047 encoding for Subject with UTF-8 characters
-    const encodedSubject = `=?UTF-8?B?${Buffer.from(subject, 'utf8').toString('base64')}?=`;
-    
-    const messageParts = [
-      'Content-Type: text/plain; charset="UTF-8"',
-      'MIME-Version: 1.0',
-      'Content-Transfer-Encoding: 7bit',
-      `To: ${to}`,
-      `Subject: ${encodedSubject}`,
-    ];
+      // RFC 2047 encoding for Subject with UTF-8 characters
+      const encodedSubject = `=?UTF-8?B?${Buffer.from(subject, 'utf8').toString('base64')}?=`;
+      
+      const messageParts = [
+        'Content-Type: text/plain; charset="UTF-8"',
+        'MIME-Version: 1.0',
+        'Content-Transfer-Encoding: 7bit',
+        `To: ${to}`,
+        `Subject: ${encodedSubject}`,
+      ];
 
-    if (cc) messageParts.push(`Cc: ${cc}`);
-    if (bcc) messageParts.push(`Bcc: ${bcc}`);
-    
-    messageParts.push('');  // Empty line before body
-    messageParts.push(fullBody);
+      if (cc) messageParts.push(`Cc: ${cc}`);
+      if (bcc) messageParts.push(`Bcc: ${bcc}`);
+      
+      messageParts.push('');  // Empty line before body
+      messageParts.push(fullBody);
 
-    const message = messageParts.join('\r\n');
-    
-    // Base64url encode the entire message
-    const encodedMessage = Buffer.from(message, 'utf8')
-      .toString('base64')
-      .replace(/\+/g, '-')
-      .replace(/\//g, '_')
-      .replace(/=+$/, '');
+      const message = messageParts.join('\r\n');
+      
+      // Base64url encode the entire message
+      const encodedMessage = Buffer.from(message, 'utf8')
+        .toString('base64')
+        .replace(/\+/g, '-')
+        .replace(/\//g, '_')
+        .replace(/=+$/, '');
 
-    const result = await gmail.users.messages.send({
-      userId: 'me',
-      requestBody: { raw: encodedMessage }
-    });
+      const result = await gmail.users.messages.send({
+        userId: 'me',
+        requestBody: { raw: encodedMessage }
+      });
 
-    console.log('✅ Email sent successfully:', result.data.id);
-    return result.data;
-  } catch (error) {
-    console.error('❌ [GMAIL_ERROR] Failed to send email');
-    console.error('Details:', {
-      to, subject,
-      errorMessage: error.message,
-      statusCode: error.response?.status,
-      timestamp: new Date().toISOString()
-    });
-    throw error;
-  }
+      console.log('✅ Email sent successfully:', result.data.id);
+      return result.data;
+    } catch (error) {
+      console.error('❌ [GMAIL_ERROR] Failed to send email');
+      console.error('Details:', {
+        to, subject,
+        errorMessage: error.message,
+        statusCode: error.response?.status,
+        timestamp: new Date().toISOString()
+      });
+      throw error;
+    }
+  });
 }
 
 /**
@@ -304,8 +356,8 @@ async function sendEmail(googleSub, { to, subject, body, cc, bcc, includeMcp1Att
  * @param {number} retryCount - Internal retry counter
  * @returns {object} Email data with truncation info if applicable
  */
-async function readEmail(googleSub, messageId, options = {}, retryCount = 0) {
-  try {
+async function readEmail(googleSub, messageId, options = {}) {
+  return await handleGoogleApiCall(googleSub, async () => {
     const { 
       format = 'full',
       autoTruncate = true 
@@ -395,38 +447,15 @@ async function readEmail(googleSub, messageId, options = {}, retryCount = 0) {
 
     console.log('✅ Email read successfully:', messageId, `(${sizeEstimate} bytes)`);
     return response;
-    
-  } catch (error) {
-    // If 401 and first attempt, try refreshing token and retry
-    if ((error.code === 401 || error.response?.status === 401 || error.message?.includes('Invalid Credentials')) && retryCount === 0) {
-      console.log('⚠️ 401 error detected, attempting token refresh and retry...');
-      try {
-        await getAuthenticatedClient(googleSub, true);
-        return await readEmail(googleSub, messageId, options, retryCount + 1);
-      } catch (retryError) {
-        console.error('❌ Token refresh and retry failed');
-      }
-    }
-
-    console.error('❌ [GMAIL_ERROR] Failed to read email');
-    console.error('Details:', {
-      messageId,
-      errorMessage: error.message,
-      statusCode: error.response?.status,
-      errorCode: error.code,
-      retryCount,
-      timestamp: new Date().toISOString()
-    });
-    throw error;
-  }
+  });
 }
 
 /**
  * Search emails with query
  * Automatically retries with token refresh on 401 error
  */
-async function searchEmails(googleSub, { query, maxResults = 10, pageToken }, retryCount = 0) {
-  try {
+async function searchEmails(googleSub, { query, maxResults = 10, pageToken }) {
+  return await handleGoogleApiCall(googleSub, async () => {
     const authClient = await getAuthenticatedClient(googleSub);
     const gmail = google.gmail({ version: 'v1', auth: authClient });
 
@@ -442,32 +471,7 @@ async function searchEmails(googleSub, { query, maxResults = 10, pageToken }, re
 
     console.log('✅ Email search completed:', result.data.resultSizeEstimate);
     return result.data;
-  } catch (error) {
-    // If 401 and first attempt, try refreshing token and retry
-    if ((error.code === 401 || error.response?.status === 401 || error.message?.includes('Invalid Credentials')) && retryCount === 0) {
-      console.log('⚠️ 401 error detected, attempting token refresh and retry...');
-      try {
-        // Force refresh the token
-        await getAuthenticatedClient(googleSub, true);
-        // Retry the search
-        return await searchEmails(googleSub, { query, maxResults, pageToken }, retryCount + 1);
-      } catch (retryError) {
-        console.error('❌ Token refresh and retry failed');
-        // Fall through to regular error handling
-      }
-    }
-
-    console.error('❌ [GMAIL_ERROR] Failed to search emails');
-    console.error('Details:', {
-      query,
-      errorMessage: error.message,
-      statusCode: error.response?.status,
-      errorCode: error.code,
-      retryCount,
-      timestamp: new Date().toISOString()
-    });
-    throw error;
-  }
+  });
 }
 
 /**
