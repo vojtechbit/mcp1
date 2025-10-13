@@ -5,6 +5,9 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
+// ==================== TOKEN REFRESH MUTEX ====================
+const activeRefreshes = new Map();
+
 // ==================== EMAIL SIZE LIMITS ====================
 // Konstanty pro kontrolu velikosti emailů a automatické zkracování
 const EMAIL_SIZE_LIMITS = {
@@ -74,42 +77,54 @@ async function getValidAccessToken(googleSub, forceRefresh = false) {
 
     const now = new Date();
     const expiry = new Date(user.tokenExpiry);
-    const bufferTime = 5 * 60 * 1000; // 5 minutes (tokens refreshed on startup)
+    const bufferTime = 5 * 60 * 1000;
     const isExpired = now >= (expiry.getTime() - bufferTime);
 
     if (forceRefresh || isExpired) {
+      if (activeRefreshes.has(googleSub)) {
+        console.log('⏳ Token refresh already in progress, waiting...');
+        await activeRefreshes.get(googleSub);
+        const updatedUser = await getUserByGoogleSub(googleSub);
+        return updatedUser.accessToken;
+      }
+
       if (forceRefresh) {
         console.log('🔄 Forcing token refresh due to 401 error...');
       } else {
         console.log('🔄 Access token expired, refreshing...');
       }
       
-      try {
-        const newTokens = await refreshAccessToken(user.refreshToken);
-        // Google returns expiry_date as seconds until expiration
-        const expiryDate = new Date(Date.now() + ((newTokens.expiry_date || 3600) * 1000));
-        
-        await updateTokens(googleSub, {
-          accessToken: newTokens.access_token,
-          refreshToken: newTokens.refresh_token || user.refreshToken,
-          expiryDate
-        });
+      const refreshPromise = (async () => {
+        try {
+          const newTokens = await refreshAccessToken(user.refreshToken);
+          const expiryDate = new Date(Date.now() + ((newTokens.expiry_date || 3600) * 1000));
+          
+          await updateTokens(googleSub, {
+            accessToken: newTokens.access_token,
+            refreshToken: newTokens.refresh_token || user.refreshToken,
+            expiryDate
+          });
 
-        console.log('✅ Access token refreshed successfully');
-        return newTokens.access_token;
-      } catch (refreshError) {
-        console.error('❌ Token refresh failed - user needs to re-authenticate');
-        console.error('Refresh error details:', {
-          message: refreshError.message,
-          code: refreshError.code,
-          status: refreshError.response?.status
-        });
-        // Create special error that controllers can catch
-        const authError = new Error('Authentication required - please log in again');
-        authError.code = 'AUTH_REQUIRED';
-        authError.statusCode = 401;
-        throw authError;
-      }
+          console.log('✅ Access token refreshed successfully');
+          return newTokens.access_token;
+        } catch (refreshError) {
+          console.error('❌ Token refresh failed - user needs to re-authenticate');
+          console.error('Refresh error details:', {
+            message: refreshError.message,
+            code: refreshError.code,
+            status: refreshError.response?.status
+          });
+          const authError = new Error('Authentication required - please log in again');
+          authError.code = 'AUTH_REQUIRED';
+          authError.statusCode = 401;
+          throw authError;
+        } finally {
+          activeRefreshes.delete(googleSub);
+        }
+      })();
+      
+      activeRefreshes.set(googleSub, refreshPromise);
+      return await refreshPromise;
     }
 
     return user.accessToken;
