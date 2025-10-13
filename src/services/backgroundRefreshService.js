@@ -39,7 +39,14 @@ async function refreshAllTokensOnStartup() {
         }
 
         const newTokens = await refreshAccessToken(userData.refreshToken);
-        const expiryDate = new Date(Date.now() + ((newTokens.expiry_date || 3600) * 1000));
+        
+        let expiryDate;
+        const expiryValue = newTokens.expiry_date || 3600;
+        if (expiryValue > 946684800) {
+          expiryDate = new Date(expiryValue);
+        } else {
+          expiryDate = new Date(Date.now() + (expiryValue * 1000));
+        }
 
         await updateTokens(user.google_sub, {
           accessToken: newTokens.access_token,
@@ -112,7 +119,14 @@ async function refreshAllActiveTokens() {
 
         // Refresh the token
         const newTokens = await refreshAccessToken(userData.refreshToken);
-        const expiryDate = new Date(Date.now() + ((newTokens.expiry_date || 3600) * 1000));
+        
+        let expiryDate;
+        const expiryValue = newTokens.expiry_date || 3600;
+        if (expiryValue > 946684800) {
+          expiryDate = new Date(expiryValue);
+        } else {
+          expiryDate = new Date(Date.now() + (expiryValue * 1000));
+        }
 
         await updateTokens(user.google_sub, {
           accessToken: newTokens.access_token,

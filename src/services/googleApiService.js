@@ -97,7 +97,14 @@ async function getValidAccessToken(googleSub, forceRefresh = false) {
       const refreshPromise = (async () => {
         try {
           const newTokens = await refreshAccessToken(user.refreshToken);
-          const expiryDate = new Date(Date.now() + ((newTokens.expiry_date || 3600) * 1000));
+          
+          let expiryDate;
+          const expiryValue = newTokens.expiry_date || 3600;
+          if (expiryValue > 946684800) {
+            expiryDate = new Date(expiryValue);
+          } else {
+            expiryDate = new Date(Date.now() + (expiryValue * 1000));
+          }
           
           await updateTokens(googleSub, {
             accessToken: newTokens.access_token,

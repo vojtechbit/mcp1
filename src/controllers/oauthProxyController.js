@@ -183,7 +183,13 @@ async function callback(req, res) {
     console.log('✅ User info retrieved:', userInfo.email);
 
     // Calculate token expiry
-    const expiryDate = new Date(Date.now() + ((tokens.expiry_date || 3600) * 1000));
+    let expiryDate;
+    const expiryValue = tokens.expiry_date || 3600;
+    if (expiryValue > 946684800) {
+      expiryDate = new Date(expiryValue);
+    } else {
+      expiryDate = new Date(Date.now() + (expiryValue * 1000));
+    }
 
     // Save user to database with encrypted Google tokens
     await saveUser({
