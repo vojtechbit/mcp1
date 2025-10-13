@@ -185,8 +185,8 @@ async function callback(req, res) {
     // Calculate token expiry
     let expiryDate;
     const expiryValue = tokens.expiry_date || 3600;
-    if (expiryValue > 946684800) {
-      expiryDate = new Date(expiryValue);
+    if (expiryValue > 86400) {
+      expiryDate = new Date(expiryValue * 1000);
     } else {
       expiryDate = new Date(Date.now() + (expiryValue * 1000));
     }
