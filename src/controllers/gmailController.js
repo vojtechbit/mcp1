@@ -46,26 +46,86 @@ async function sendEmail(req, res) {
 }
 
 /**
- * Read an email
- * GET /api/gmail/read/:messageId
+ * Read an email with optional format parameter
+ * GET /api/gmail/read/:messageId?format=full|metadata|snippet|minimal
+ * 
+ * Query parameters:
+ * - format: 'full' (default), 'metadata', 'snippet', 'minimal'
+ * - autoTruncate: true (default), false - automatically truncate large emails
  */
 async function readEmail(req, res) {
   try {
     const { messageId } = req.params;
+    const { format = 'full', autoTruncate = 'true' } = req.query;
 
-    console.log(`📖 Reading email ${messageId}...`);
+    // Convert autoTruncate string to boolean
+    const autoTruncateBoolean = autoTruncate === 'true' || autoTruncate === '1';
 
-    const result = await gmailService.readEmail(req.user.googleSub, messageId);
+    console.log(`📖 Reading email ${messageId} (format: ${format}, autoTruncate: ${autoTruncateBoolean})...`);
 
-    res.json({
+    const result = await gmailService.readEmail(
+      req.user.googleSub, 
+      messageId,
+      { format, autoTruncate: autoTruncateBoolean }
+    );
+
+    // Přidat informace o formátu do response
+    const response = {
       success: true,
-      message: result
-    });
+      message: result,
+      format: format
+    };
+
+    // Pokud byl email zkrácen, přidat info
+    if (result.truncated) {
+      response.truncated = true;
+      response.truncationInfo = result.truncationInfo;
+      response.note = 'Email byl zkrácen kvůli velikosti. Pro zjištění více informací použijte format=metadata.';
+    }
+
+    res.json(response);
 
   } catch (error) {
     console.error('❌ Failed to read email');
     res.status(500).json({
       error: 'Email read failed',
+      message: error.message
+    });
+  }
+}
+
+/**
+ * Get email snippet (quick preview)
+ * GET /api/gmail/snippet/:messageId
+ * 
+ * This endpoint always returns just the snippet and basic metadata,
+ * making it fast and lightweight for previewing emails.
+ */
+async function getEmailSnippet(req, res) {
+  try {
+    const { messageId } = req.params;
+
+    console.log(`👀 Getting email snippet ${messageId}...`);
+
+    const result = await gmailService.readEmail(
+      req.user.googleSub, 
+      messageId,
+      { format: 'snippet' }
+    );
+
+    res.json({
+      success: true,
+      snippet: result.snippet,
+      messageId: result.id,
+      sizeEstimate: result.sizeEstimate,
+      headers: result.headers,
+      note: 'Toto je jen náhled emailu. Pro celý obsah použijte /api/gmail/read/:messageId'
+    });
+
+  } catch (error) {
+    console.error('❌ Failed to get email snippet');
+    res.status(500).json({
+      error: 'Email snippet retrieval failed',
       message: error.message
     });
   }
@@ -303,6 +363,7 @@ async function markAsRead(req, res) {
 export {
   sendEmail,
   readEmail,
+  getEmailSnippet,
   searchEmails,
   replyToEmail,
   createDraft,

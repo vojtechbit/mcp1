@@ -26,8 +26,11 @@ router.get('/auth/status', getAuthStatus);
 // Send email
 router.post('/gmail/send', gmailController.sendEmail);
 
-// Read email
+// Read email (supports ?format=full|metadata|snippet|minimal)
 router.get('/gmail/read/:messageId', gmailController.readEmail);
+
+// Get email snippet (fast preview)
+router.get('/gmail/snippet/:messageId', gmailController.getEmailSnippet);
 
 // Search emails
 router.get('/gmail/search', gmailController.searchEmails);

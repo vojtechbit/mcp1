@@ -75,12 +75,48 @@
     "/api/gmail/read/{messageId}": {
       "get": {
         "operationId": "readEmail",
-        "summary": "Read email",
+        "summary": "Read email with optional format parameter",
+        "description": "Read full email content. Automatically truncates large emails (>100KB) to prevent API response size issues. Use format parameter to control response size.",
+        "parameters": [
+          { "name": "messageId", "in": "path", "required": true, "schema": { "type": "string" } },
+          { 
+            "name": "format", 
+            "in": "query", 
+            "required": false,
+            "schema": { 
+              "type": "string", 
+              "enum": ["full", "metadata", "snippet", "minimal"],
+              "default": "full"
+            },
+            "description": "Response format: 'full' (default, with auto-truncation), 'metadata' (headers only), 'snippet' (preview only), 'minimal' (basic info)" 
+          },
+          { 
+            "name": "autoTruncate", 
+            "in": "query", 
+            "required": false,
+            "schema": { 
+              "type": "boolean",
+              "default": true
+            },
+            "description": "Automatically truncate large emails to prevent response size issues (default: true)" 
+          }
+        ],
+        "responses": {
+          "200": { "description": "Email data", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/EmailData" } } } }
+        }
+      }
+    },
+
+    "/api/gmail/snippet/{messageId}": {
+      "get": {
+        "operationId": "getEmailSnippet",
+        "summary": "Get email snippet (fast preview)",
+        "description": "Get a quick preview of an email without loading the full content. Always returns a small response, ideal for checking email content before reading the full message. This endpoint is much faster than readEmail for large emails.",
         "parameters": [
           { "name": "messageId", "in": "path", "required": true, "schema": { "type": "string" } }
         ],
         "responses": {
-          "200": { "description": "Email data", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/EmailData" } } } }
+          "200": { "description": "Email snippet", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/EmailSnippetResponse" } } } }
         }
       }
     },
@@ -363,7 +399,31 @@
           "id": { "type": "string" },
           "threadId": { "type": "string" },
           "payload": { "type": "object" },
-          "snippet": { "type": "string" }
+          "snippet": { "type": "string" },
+          "truncated": { "type": "boolean", "description": "True if email was automatically truncated due to size" },
+          "truncationInfo": {
+            "type": "object",
+            "description": "Information about truncation (only present if truncated=true)",
+            "properties": {
+              "originalSize": { "type": "integer", "description": "Original email size in bytes" },
+              "maxAllowedSize": { "type": "integer", "description": "Maximum allowed size in bytes" },
+              "truncatedBodyLength": { "type": "integer", "description": "Length of truncated body in characters" },
+              "reason": { "type": "string", "description": "Reason for truncation" }
+            }
+          },
+          "sizeWarning": { "type": "string", "description": "Warning if email is large (only present for large emails)" }
+        }
+      },
+      "EmailSnippetResponse": {
+        "type": "object",
+        "description": "Fast email preview without full content",
+        "properties": {
+          "success": { "type": "boolean" },
+          "snippet": { "type": "string", "description": "Short preview of email content" },
+          "messageId": { "type": "string" },
+          "sizeEstimate": { "type": "integer", "description": "Estimated email size in bytes" },
+          "headers": { "type": "array", "items": { "type": "object" }, "description": "Email headers (From, To, Subject, Date)" },
+          "note": { "type": "string" }
         }
       },
       "ReplyRequest": {

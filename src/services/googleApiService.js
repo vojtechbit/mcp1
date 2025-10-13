@@ -5,6 +5,15 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
+// ==================== EMAIL SIZE LIMITS ====================
+// Konstanty pro kontrolu velikosti emailů a automatické zkracování
+const EMAIL_SIZE_LIMITS = {
+  MAX_SIZE_BYTES: 100000,       // 100KB - nad tímto se email automaticky zkrátí
+  MAX_BODY_LENGTH: 8000,        // Maximální délka plain text těla (znaky)
+  MAX_HTML_LENGTH: 5000,        // Maximální délka HTML těla (znaky)
+  WARNING_SIZE_BYTES: 50000     // 50KB - nad tímto se zobrazí varování
+};
+
 /**
  * Create authenticated Google API client
  * Creates a NEW OAuth2 client instance for each request to avoid conflicts
@@ -116,6 +125,83 @@ async function getValidAccessToken(googleSub, forceRefresh = false) {
   }
 }
 
+// ==================== HELPER FUNCTIONS ====================
+
+/**
+ * Extrahuje plain text z Gmail message payload
+ * @param {object} payload - Gmail message payload
+ * @returns {string} Plain text obsah
+ */
+function extractPlainText(payload) {
+  let text = '';
+  
+  if (!payload) return text;
+  
+  // Pokud má payload přímo body.data (jednoduchý email)
+  if (payload.body && payload.body.data) {
+    try {
+      text = Buffer.from(payload.body.data, 'base64').toString('utf-8');
+    } catch (e) {
+      console.error('Error decoding body:', e.message);
+    }
+  }
+  
+  // Pokud má payload parts (multipart email)
+  if (payload.parts && payload.parts.length > 0) {
+    for (const part of payload.parts) {
+      // Hledáme text/plain části
+      if (part.mimeType === 'text/plain' && part.body && part.body.data) {
+        try {
+          text += Buffer.from(part.body.data, 'base64').toString('utf-8');
+        } catch (e) {
+          console.error('Error decoding part:', e.message);
+        }
+      }
+      
+      // Rekurzivně procházíme vnořené části
+      if (part.parts) {
+        text += extractPlainText(part);
+      }
+    }
+  }
+  
+  return text;
+}
+
+/**
+ * Zkrátí text na maximální délku a přidá označení
+ * @param {string} text - Text ke zkrácení
+ * @param {number} maxLength - Maximální délka
+ * @returns {string} Zkrácený text
+ */
+function truncateText(text, maxLength) {
+  if (!text || text.length <= maxLength) return text;
+  
+  return text.substring(0, maxLength) + '\n\n[... Text zkrácen kvůli velikosti. Původní délka: ' + text.length + ' znaků ...]';
+}
+
+/**
+ * Odstraní HTML tagy a vrátí plain text
+ * @param {string} html - HTML obsah
+ * @returns {string} Plain text
+ */
+function stripHtmlTags(html) {
+  if (!html) return '';
+  
+  // Základní odstranění HTML tagů
+  return html
+    .replace(/<style[^>]*>.*?<\/style>/gi, '') // Odstranit style tagy
+    .replace(/<script[^>]*>.*?<\/script>/gi, '') // Odstranit script tagy
+    .replace(/<[^>]+>/g, '') // Odstranit všechny HTML tagy
+    .replace(/&nbsp;/g, ' ') // Nahradit &nbsp; mezerou
+    .replace(/&amp;/g, '&') // Dekódovat &amp;
+    .replace(/&lt;/g, '<') // Dekódovat &lt;
+    .replace(/&gt;/g, '>') // Dekódovat &gt;
+    .replace(/&quot;/g, '"') // Dekódovat &quot;
+    .replace(/\s+/g, ' ') // Nahradit více mezer jednou
+    .trim();
+}
+
 // ==================== GMAIL FUNCTIONS ====================
 
 /**
@@ -187,29 +273,114 @@ async function sendEmail(googleSub, { to, subject, body, cc, bcc, includeMcp1Att
 }
 
 /**
- * Read a specific email
- * Automatically retries with token refresh on 401 error
+ * Read a specific email with intelligent size handling
+ * @param {string} googleSub - User's Google ID
+ * @param {string} messageId - Email message ID
+ * @param {object} options - Options for reading
+ * @param {string} options.format - 'full', 'metadata', 'snippet', 'minimal' (default: 'full')
+ * @param {boolean} options.autoTruncate - Automatically truncate large emails (default: true)
+ * @param {number} retryCount - Internal retry counter
+ * @returns {object} Email data with truncation info if applicable
  */
-async function readEmail(googleSub, messageId, retryCount = 0) {
+async function readEmail(googleSub, messageId, options = {}, retryCount = 0) {
   try {
+    const { 
+      format = 'full',
+      autoTruncate = true 
+    } = options;
+
     const authClient = await getAuthenticatedClient(googleSub);
     const gmail = google.gmail({ version: 'v1', auth: authClient });
 
+    // KROK 1: Nejdřív získáme metadata pro kontrolu velikosti
+    const metadataResult = await gmail.users.messages.get({
+      userId: 'me',
+      id: messageId,
+      format: 'metadata',
+      metadataHeaders: ['From', 'To', 'Subject', 'Date']
+    });
+
+    const sizeEstimate = metadataResult.data.sizeEstimate || 0;
+    const snippet = metadataResult.data.snippet || '';
+    
+    // KROK 2: Pokud uživatel chce jen snippet nebo metadata, vrátíme to hned
+    if (format === 'snippet') {
+      console.log('✅ Email snippet retrieved:', messageId, `(${sizeEstimate} bytes)`);
+      return {
+        id: messageId,
+        snippet: snippet,
+        sizeEstimate: sizeEstimate,
+        headers: metadataResult.data.payload.headers,
+        format: 'snippet'
+      };
+    }
+
+    if (format === 'metadata') {
+      console.log('✅ Email metadata retrieved:', messageId, `(${sizeEstimate} bytes)`);
+      return metadataResult.data;
+    }
+
+    // KROK 3: Kontrola velikosti - pokud je email příliš velký a máme autoTruncate
+    const isTooLarge = sizeEstimate > EMAIL_SIZE_LIMITS.MAX_SIZE_BYTES;
+    const isLarge = sizeEstimate > EMAIL_SIZE_LIMITS.WARNING_SIZE_BYTES;
+
+    if (isTooLarge && autoTruncate) {
+      console.log(`⚠️ Email is too large (${sizeEstimate} bytes), returning truncated version...`);
+      
+      // Získáme full verzi ale zkrátíme ji
+      const fullResult = await gmail.users.messages.get({
+        userId: 'me',
+        id: messageId,
+        format: format === 'minimal' ? 'minimal' : 'full'
+      });
+
+      // Extrahujeme plain text a zkrátíme
+      const plainText = extractPlainText(fullResult.data.payload);
+      const truncatedText = truncateText(plainText, EMAIL_SIZE_LIMITS.MAX_BODY_LENGTH);
+
+      // Vrátíme zkrácenou verzi s metadata
+      return {
+        ...metadataResult.data,
+        snippet: snippet,
+        bodyPreview: truncatedText,
+        truncated: true,
+        truncationInfo: {
+          originalSize: sizeEstimate,
+          maxAllowedSize: EMAIL_SIZE_LIMITS.MAX_SIZE_BYTES,
+          truncatedBodyLength: EMAIL_SIZE_LIMITS.MAX_BODY_LENGTH,
+          reason: 'Email překročil maximální povolenou velikost'
+        },
+        warning: `Email byl automaticky zkrácen z ${sizeEstimate} bytů na ${EMAIL_SIZE_LIMITS.MAX_BODY_LENGTH} znaků textu.`
+      };
+    }
+
+    // KROK 4: Email není příliš velký, vrátíme full verzi
     const result = await gmail.users.messages.get({
       userId: 'me',
       id: messageId,
-      format: 'full'
+      format: format === 'minimal' ? 'minimal' : 'full'
     });
 
-    console.log('✅ Email read successfully:', messageId);
-    return result.data;
+    const response = {
+      ...result.data,
+      truncated: false
+    };
+
+    // Přidáme varování pokud je email velký (ale ne příliš)
+    if (isLarge && !isTooLarge) {
+      response.sizeWarning = `Email je velký (${sizeEstimate} bytů). Může trvat delší dobu než se zpracuje.`;
+    }
+
+    console.log('✅ Email read successfully:', messageId, `(${sizeEstimate} bytes)`);
+    return response;
+    
   } catch (error) {
     // If 401 and first attempt, try refreshing token and retry
     if ((error.code === 401 || error.response?.status === 401 || error.message?.includes('Invalid Credentials')) && retryCount === 0) {
       console.log('⚠️ 401 error detected, attempting token refresh and retry...');
       try {
         await getAuthenticatedClient(googleSub, true);
-        return await readEmail(googleSub, messageId, retryCount + 1);
+        return await readEmail(googleSub, messageId, options, retryCount + 1);
       } catch (retryError) {
         console.error('❌ Token refresh and retry failed');
       }
@@ -668,6 +839,7 @@ async function deleteCalendarEvent(googleSub, eventId) {
 }
 
 export {
+  EMAIL_SIZE_LIMITS,
   getValidAccessToken,
   sendEmail,
   readEmail,
