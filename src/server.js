@@ -122,7 +122,9 @@ async function startServer() {
     console.log('✅ MongoDB connected successfully');
 
     // Refresh all tokens on startup (perfect for cold starts)
-    await refreshAllTokensOnStartup();
+    // TEMPORARILY DISABLED - causing startup crashes
+    // await refreshAllTokensOnStartup();
+    console.log('⚠️  Startup token refresh: DISABLED (preventing crashes)');
 
     // Start Express server
     app.listen(PORT, () => {
