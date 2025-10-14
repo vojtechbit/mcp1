@@ -183,12 +183,18 @@ async function callback(req, res) {
     console.log('✅ User info retrieved:', userInfo.email);
 
     // Calculate token expiry
+    // Google OAuth2 returns expiry_date as Unix timestamp in milliseconds
+    // and expires_in in seconds
     let expiryDate;
-    const expiryValue = tokens.expiry_date || 3600;
-    if (expiryValue > 86400) {
-      expiryDate = new Date(expiryValue * 1000);
+    if (tokens.expiry_date) {
+      // expiry_date is already a Unix timestamp in milliseconds
+      expiryDate = new Date(tokens.expiry_date);
+    } else if (tokens.expires_in) {
+      // expires_in is in seconds, convert to milliseconds
+      expiryDate = new Date(Date.now() + (tokens.expires_in * 1000));
     } else {
-      expiryDate = new Date(Date.now() + (expiryValue * 1000));
+      // Default: 1 hour from now
+      expiryDate = new Date(Date.now() + 3600 * 1000);
     }
 
     // Save user to database with encrypted Google tokens
