@@ -3,11 +3,14 @@ import * as contactsService from '../services/contactsService.js';
 /**
  * Contacts Controller
  * Manages contact list stored in Google Sheets
+ * 
+ * NEW: Supports Property and Phone fields + DELETE functionality
  */
 
 /**
  * Search contacts
  * GET /api/contacts/search?query=...
+ * NEW: Can also filter by property
  */
 async function searchContacts(req, res) {
   try {
@@ -44,7 +47,7 @@ async function searchContacts(req, res) {
       return res.status(404).json({
         error: 'Contact sheet not found',
         message: error.message,
-        instructions: 'Please create a Google Sheet named "MCP1 Contacts" with columns: Name | Email | Notes'
+        instructions: 'Please create a Google Sheet named "MCP1 Contacts" with columns: Name | Email | Notes | Property | Phone'
       });
     }
 
@@ -67,6 +70,7 @@ async function searchContacts(req, res) {
 /**
  * List all contacts
  * GET /api/contacts
+ * NEW: Returns property and phone fields
  */
 async function listContacts(req, res) {
   try {
@@ -94,7 +98,7 @@ async function listContacts(req, res) {
       return res.status(404).json({
         error: 'Contact sheet not found',
         message: error.message,
-        instructions: 'Please create a Google Sheet named "MCP1 Contacts" with columns: Name | Email | Notes'
+        instructions: 'Please create a Google Sheet named "MCP1 Contacts" with columns: Name | Email | Notes | Property | Phone'
       });
     }
 
@@ -117,11 +121,12 @@ async function listContacts(req, res) {
 /**
  * Add new contact
  * POST /api/contacts
- * Body: { name, email, notes? }
+ * Body: { name, email, notes?, property?, phone? }
+ * NEW: Supports property and phone fields
  */
 async function addContact(req, res) {
   try {
-    const { name, email, notes } = req.body;
+    const { name, email, notes, property, phone } = req.body;
 
     if (!name || !email) {
       return res.status(400).json({
@@ -132,9 +137,11 @@ async function addContact(req, res) {
 
     console.log(`➕ Adding contact: ${name} (${email})`);
     if (notes) console.log(`   Notes: ${notes}`);
+    if (property) console.log(`   Property: ${property}`);
+    if (phone) console.log(`   Phone: ${phone}`);
 
     const contact = await contactsService.addContact(req.user.googleSub, {
-      name, email, notes
+      name, email, notes, property, phone
     });
 
     res.json({
@@ -168,7 +175,7 @@ async function addContact(req, res) {
       return res.status(404).json({
         error: 'Contact sheet not found',
         message: error.message,
-        instructions: 'Please create a Google Sheet named "MCP1 Contacts" with columns: Name | Email | Notes'
+        instructions: 'Please create a Google Sheet named "MCP1 Contacts" with columns: Name | Email | Notes | Property | Phone'
       });
     }
 
@@ -189,13 +196,14 @@ async function addContact(req, res) {
 }
 
 /**
- * Update contact (finds by name+email and updates notes)
+ * Update contact (finds by name+email and updates all fields)
  * PUT /api/contacts
- * Body: { name, email, notes }
+ * Body: { name, email, notes?, property?, phone? }
+ * NEW: Supports property and phone fields
  */
 async function updateContact(req, res) {
   try {
-    const { name, email, notes } = req.body;
+    const { name, email, notes, property, phone } = req.body;
 
     if (!name || !email) {
       return res.status(400).json({
@@ -205,10 +213,12 @@ async function updateContact(req, res) {
     }
 
     console.log(`✏️  Updating contact: ${name} (${email})`);
-    if (notes) console.log(`   New notes: ${notes}`);
+    if (notes) console.log(`   Notes: ${notes}`);
+    if (property) console.log(`   Property: ${property}`);
+    if (phone) console.log(`   Phone: ${phone}`);
 
     const contact = await contactsService.updateContact(req.user.googleSub, {
-      name, email, notes
+      name, email, notes, property, phone
     });
 
     res.json({
@@ -242,9 +252,86 @@ async function updateContact(req, res) {
   }
 }
 
+/**
+ * Delete contact
+ * DELETE /api/contacts
+ * Query params: email (required), name (optional)
+ * Example: DELETE /api/contacts?email=john@example.com
+ * Example: DELETE /api/contacts?email=john@example.com&name=John Doe
+ * 
+ * NEW FUNCTION
+ */
+async function deleteContact(req, res) {
+  try {
+    const { email, name } = req.query;
+
+    if (!email) {
+      return res.status(400).json({
+        error: 'Bad Request',
+        message: 'Missing required parameter: email'
+      });
+    }
+
+    console.log(`🗑️  Deleting contact: ${name ? `${name} (${email})` : email}`);
+
+    const result = await contactsService.deleteContact(req.user.googleSub, {
+      email,
+      name
+    });
+
+    res.json({
+      success: true,
+      message: 'Contact deleted successfully',
+      deleted: result.deleted
+    });
+
+  } catch (error) {
+    console.error('❌ Failed to delete contact');
+    console.error('Error details:', {
+      message: error.message,
+      code: error.code,
+      statusCode: error.response?.status,
+      data: error.response?.data
+    });
+
+    // Special handling for contact not found
+    if (error.code === 'CONTACT_NOT_FOUND') {
+      return res.status(404).json({
+        error: 'Contact not found',
+        message: error.message,
+        code: 'CONTACT_NOT_FOUND'
+      });
+    }
+
+    // Special handling for missing sheet
+    if (error.message.includes('not found')) {
+      return res.status(404).json({
+        error: 'Contact sheet not found',
+        message: error.message,
+        instructions: 'Please create a Google Sheet named "MCP1 Contacts" with columns: Name | Email | Notes | Property | Phone'
+      });
+    }
+
+    // Check if it's an auth error
+    if (error.code === 'AUTH_REQUIRED' || error.statusCode === 401) {
+      return res.status(401).json({
+        error: 'Authentication required',
+        message: 'Your session has expired. Please log in again.',
+        code: 'AUTH_REQUIRED'
+      });
+    }
+
+    res.status(error.statusCode || 500).json({
+      error: 'Contact delete failed',
+      message: error.message
+    });
+  }
+}
+
 export {
   searchContacts,
   listContacts,
   addContact,
-  updateContact
+  updateContact,
+  deleteContact  // NEW EXPORT
 };

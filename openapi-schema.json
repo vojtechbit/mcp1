@@ -3,7 +3,7 @@
   "info": {
     "title": "Gmail & Calendar Assistant API",
     "description": "OAuth proxy API for Custom GPT",
-    "version": "1.0.0"
+    "version": "2.0.0"
   },
   "servers": [
     { "url": "https://mcp1-oauth-server.onrender.com", "description": "Primary API server" }
@@ -229,9 +229,10 @@
     "/api/contacts/search": {
       "get": {
         "operationId": "searchContacts",
-        "summary": "Search contacts",
+        "summary": "Search contacts by keyword",
+        "description": "Search contacts by name, email, notes, property, or phone number. Returns all matching contacts.",
         "parameters": [
-          { "name": "query", "in": "query", "required": true, "schema": { "type": "string" } }
+          { "name": "query", "in": "query", "required": true, "schema": { "type": "string" }, "description": "Search keyword (searches in name, email, notes, property, phone)" }
         ],
         "responses": {
           "200": { "description": "Contacts search results", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ContactsListResponse" } } } }
@@ -243,14 +244,15 @@
       "get": {
         "operationId": "listContacts",
         "summary": "List all contacts",
+        "description": "Returns all contacts from Google Sheets with name, email, notes, property, and phone fields.",
         "responses": {
           "200": { "description": "Contacts list", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ContactsListResponse" } } } }
         }
       },
       "post": {
         "operationId": "addContact",
-        "summary": "Add contact",
-        "description": "Add a new contact. Only requires name and email. Notes field is optional for additional information.",
+        "summary": "Add new contact",
+        "description": "Add a new contact. Requires name and email. Notes, property, and phone are optional. Property is typically used for real estate listings (e.g., '123 Main St Apartment').",
         "requestBody": {
           "required": true,
           "content": {
@@ -265,8 +267,8 @@
       },
       "put": {
         "operationId": "updateContact",
-        "summary": "Update contact",
-        "description": "Update an existing contact's notes. Finds contact by name and email, then updates the notes field. If contact doesn't exist, creates it.",
+        "summary": "Update existing contact",
+        "description": "Update an existing contact. Finds contact by name and email, then updates all fields. If contact doesn't exist, creates it.",
         "requestBody": {
           "required": true,
           "content": {
@@ -277,6 +279,52 @@
         },
         "responses": {
           "200": { "description": "Contact updated", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ContactCreateResponse" } } } }
+        }
+      },
+      "delete": {
+        "operationId": "deleteContact",
+        "summary": "Delete contact",
+        "description": "Delete a contact by email or by name+email combination. If only email is provided, deletes the first matching contact. If both name and email are provided, deletes the exact match.",
+        "parameters": [
+          { 
+            "name": "email", 
+            "in": "query", 
+            "required": true, 
+            "schema": { "type": "string" },
+            "description": "Email address of the contact to delete"
+          },
+          { 
+            "name": "name", 
+            "in": "query", 
+            "required": false, 
+            "schema": { "type": "string" },
+            "description": "Name of the contact (optional, for exact matching)"
+          }
+        ],
+        "responses": {
+          "200": { 
+            "description": "Contact deleted successfully", 
+            "content": { 
+              "application/json": { 
+                "schema": { "$ref": "#/components/schemas/ContactDeleteResponse" } 
+              } 
+            } 
+          },
+          "404": {
+            "description": "Contact not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": { "type": "string" },
+                    "message": { "type": "string" },
+                    "code": { "type": "string", "example": "CONTACT_NOT_FOUND" }
+                  }
+                }
+              }
+            }
+          }
         }
       }
     },
@@ -513,11 +561,13 @@
 
       "Contact": {
         "type": "object",
-        "description": "A contact with name, email, and optional notes",
+        "description": "A contact with name, email, optional notes, optional property address, and optional phone number",
         "properties": {
           "name": { "type": "string", "description": "Contact's full name" },
           "email": { "type": "string", "description": "Contact's email address" },
-          "notes": { "type": "string", "description": "Optional notes about the contact (e.g., 'work', 'personal', 'client')" }
+          "notes": { "type": "string", "description": "Optional notes about the contact (e.g., 'work', 'personal', 'client')" },
+          "property": { "type": "string", "description": "Optional property/real estate address associated with this contact (e.g., '123 Main St Apartment')" },
+          "phone": { "type": "string", "description": "Optional phone number" }
         },
         "required": ["name", "email"]
       },
@@ -534,12 +584,14 @@
       },
       "ContactCreateRequest": {
         "type": "object",
-        "description": "Create a new contact. Only name and email are required. Notes field is optional.",
+        "description": "Create a new contact. Only name and email are required. Notes, property, and phone fields are optional. Property is typically used for real estate listings.",
         "required": ["name", "email"],
         "properties": {
           "name": { "type": "string", "description": "Contact's full name" },
           "email": { "type": "string", "description": "Contact's email address" },
-          "notes": { "type": "string", "description": "Optional notes (e.g., 'work', 'personal', 'client')" }
+          "notes": { "type": "string", "description": "Optional notes (e.g., 'work', 'personal', 'client')" },
+          "property": { "type": "string", "description": "Optional property/real estate address (e.g., '123 Main St Apartment')" },
+          "phone": { "type": "string", "description": "Optional phone number" }
         }
       },
       "ContactCreateResponse": {
@@ -547,6 +599,14 @@
         "properties": {
           "success": { "type": "boolean" },
           "contact": { "$ref": "#/components/schemas/Contact" }
+        }
+      },
+      "ContactDeleteResponse": {
+        "type": "object",
+        "properties": {
+          "success": { "type": "boolean" },
+          "message": { "type": "string" },
+          "deleted": { "$ref": "#/components/schemas/Contact" }
         }
       },
 

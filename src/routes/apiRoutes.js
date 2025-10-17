@@ -81,6 +81,10 @@ router.post('/contacts', contactsController.addContact);
 // Update contact (by name+email)
 router.put('/contacts', contactsController.updateContact);
 
+// Delete contact (NEW)
+// Query params: ?email=... (required), ?name=... (optional)
+router.delete('/contacts', contactsController.deleteContact);
+
 // ==================== TASKS ROUTES ====================
 
 // List all tasks

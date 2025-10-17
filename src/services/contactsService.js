@@ -8,6 +8,8 @@ dotenv.config();
 /**
  * Google Sheets & Drive Service
  * Handles reading/writing to Google Sheets for contacts
+ * 
+ * NEW STRUCTURE: Name | Email | Notes | Property | Phone
  */
 
 const CONTACTS_SHEET_NAME = 'MCP1 Contacts'; // Name of the Google Sheet
@@ -170,6 +172,7 @@ async function findContactsSheet(googleSub) {
 /**
  * Create a new contacts sheet with proper headers
  * Returns spreadsheet ID
+ * NEW: Now creates 5 columns: Name | Email | Notes | Property | Phone
  */
 async function createContactsSheet(googleSub) {
   try {
@@ -177,7 +180,7 @@ async function createContactsSheet(googleSub) {
 
     console.log(`📝 Creating new sheet: "${CONTACTS_SHEET_NAME}"`);
 
-    // Create new spreadsheet
+    // Create new spreadsheet with 5 columns
     const createResponse = await sheets.spreadsheets.create({
       requestBody: {
         properties: {
@@ -189,7 +192,7 @@ async function createContactsSheet(googleSub) {
               title: 'Sheet1',
               gridProperties: {
                 rowCount: 1000,
-                columnCount: 3
+                columnCount: 5 // Changed from 3 to 5
               }
             }
           }
@@ -200,13 +203,13 @@ async function createContactsSheet(googleSub) {
     const spreadsheetId = createResponse.data.spreadsheetId;
     console.log(`✅ Sheet created with ID: ${spreadsheetId}`);
 
-    // Add header row
+    // Add header row with new columns
     await sheets.spreadsheets.values.update({
       spreadsheetId,
-      range: 'A1:C1',
+      range: 'A1:E1', // Changed from A1:C1 to A1:E1
       valueInputOption: 'RAW',
       requestBody: {
-        values: [['Name', 'Email', 'Notes']]
+        values: [['Name', 'Email', 'Notes', 'Property', 'Phone']] // Added Property and Phone
       }
     });
 
@@ -236,7 +239,7 @@ async function createContactsSheet(googleSub) {
       }
     });
 
-    console.log(`✅ Header row added: Name | Email | Notes`);
+    console.log(`✅ Header row added: Name | Email | Notes | Property | Phone`);
     return spreadsheetId;
 
   } catch (error) {
@@ -270,6 +273,7 @@ async function getOrCreateContactsSheet(googleSub) {
 /**
  * Search contacts in Google Sheet
  * Returns array of matching contacts
+ * NEW: Now searches in name, email, notes, property, and phone
  */
 async function searchContacts(googleSub, searchQuery) {
   try {
@@ -278,10 +282,10 @@ async function searchContacts(googleSub, searchQuery) {
 
     console.log(`🔍 Searching contacts for query: "${searchQuery}"`);
 
-    // Read all contacts from Sheet
+    // Read all contacts from Sheet (now with 5 columns)
     const response = await sheets.spreadsheets.values.get({
       spreadsheetId,
-      range: 'A2:C1000', // Skip header row, read Name, Email, Notes
+      range: 'A2:E1000', // Changed from A2:C1000 to A2:E1000
     });
 
     const rows = response.data.values || [];
@@ -291,19 +295,25 @@ async function searchContacts(googleSub, searchQuery) {
       return [];
     }
 
-    // Filter contacts based on search query (search in name, email, and notes)
+    // Filter contacts based on search query (search in all fields including property)
     const query = searchQuery.toLowerCase();
     const matches = rows
       .filter(row => {
         const name = (row[0] || '').toLowerCase();
         const email = (row[1] || '').toLowerCase();
         const notes = (row[2] || '').toLowerCase();
-        return name.includes(query) || email.includes(query) || notes.includes(query);
+        const property = (row[3] || '').toLowerCase(); // NEW
+        const phone = (row[4] || '').toLowerCase();     // NEW
+        return name.includes(query) || email.includes(query) || 
+               notes.includes(query) || property.includes(query) || 
+               phone.includes(query);
       })
       .map(row => ({
         name: row[0] || '',
         email: row[1] || '',
-        notes: row[2] || ''
+        notes: row[2] || '',
+        property: row[3] || '',  // NEW
+        phone: row[4] || ''       // NEW
       }));
 
     console.log(`✅ Found ${matches.length} matching contacts`);
@@ -324,6 +334,7 @@ async function searchContacts(googleSub, searchQuery) {
 
 /**
  * List all contacts from Google Sheet
+ * NEW: Now returns property and phone fields
  */
 async function listAllContacts(googleSub) {
   try {
@@ -332,10 +343,10 @@ async function listAllContacts(googleSub) {
 
     console.log('📋 Listing all contacts...');
 
-    // Read all contacts from Sheet
+    // Read all contacts from Sheet (now with 5 columns)
     const response = await sheets.spreadsheets.values.get({
       spreadsheetId,
-      range: 'A2:C1000', // Skip header row
+      range: 'A2:E1000', // Changed from A2:C1000 to A2:E1000
     });
 
     const rows = response.data.values || [];
@@ -343,7 +354,9 @@ async function listAllContacts(googleSub) {
     const contacts = rows.map(row => ({
       name: row[0] || '',
       email: row[1] || '',
-      notes: row[2] || ''
+      notes: row[2] || '',
+      property: row[3] || '',  // NEW
+      phone: row[4] || ''       // NEW
     }));
 
     console.log(`✅ Found ${contacts.length} contacts`);
@@ -364,20 +377,23 @@ async function listAllContacts(googleSub) {
 /**
  * Add new contact to Google Sheet
  * Checks if email already exists and returns conflict info if so
+ * NEW: Now supports property and phone fields
  */
 async function addContact(googleSub, contactData) {
   try {
     const sheets = await getSheetsClient(googleSub);
     const spreadsheetId = await getOrCreateContactsSheet(googleSub);
 
-    const { name, email, notes } = contactData;
+    const { name, email, notes, property, phone } = contactData;
 
     console.log(`➕ Adding contact: ${name} (${email})`);
+    if (property) console.log(`   Property: ${property}`);
+    if (phone) console.log(`   Phone: ${phone}`);
 
     // Check if email already exists
     const response = await sheets.spreadsheets.values.get({
       spreadsheetId,
-      range: 'A2:C1000',
+      range: 'A2:E1000', // Changed from A2:C1000
     });
 
     const rows = response.data.values || [];
@@ -396,23 +412,25 @@ async function addContact(googleSub, contactData) {
       error.existingContact = {
         name: existingContact[0] || '',
         email: existingContact[1] || '',
-        notes: existingContact[2] || ''
+        notes: existingContact[2] || '',
+        property: existingContact[3] || '',  // NEW
+        phone: existingContact[4] || ''       // NEW
       };
       throw error;
     }
 
-    // Append new row if email doesn't exist
+    // Append new row with 5 columns
     await sheets.spreadsheets.values.append({
       spreadsheetId,
-      range: 'A:C',
+      range: 'A:E', // Changed from A:C
       valueInputOption: 'RAW',
       requestBody: {
-        values: [[name, email, notes || '']]
+        values: [[name, email, notes || '', property || '', phone || '']] // Added property and phone
       }
     });
 
     console.log(`✅ Contact added successfully`);
-    return { name, email, notes: notes || '' };
+    return { name, email, notes: notes || '', property: property || '', phone: phone || '' };
 
   } catch (error) {
     // If it's our CONTACT_EXISTS error, re-throw it
@@ -433,22 +451,23 @@ async function addContact(googleSub, contactData) {
 }
 
 /**
- * Update existing contact (finds by name+email and updates notes)
+ * Update existing contact (finds by name+email and updates all fields)
  * If contact doesn't exist, adds it as new
+ * NEW: Now supports updating property and phone
  */
 async function updateContact(googleSub, contactData) {
   try {
     const sheets = await getSheetsClient(googleSub);
     const spreadsheetId = await getOrCreateContactsSheet(googleSub);
 
-    const { name, email, notes } = contactData;
+    const { name, email, notes, property, phone } = contactData;
 
     console.log(`✏️  Updating contact: ${name} (${email})`);
 
     // Read all contacts to find existing one
     const response = await sheets.spreadsheets.values.get({
       spreadsheetId,
-      range: 'A2:C1000',
+      range: 'A2:E1000', // Changed from A2:C1000
     });
 
     const rows = response.data.values || [];
@@ -471,20 +490,20 @@ async function updateContact(googleSub, contactData) {
       return await addContact(googleSub, contactData);
     }
 
-    // Update existing row
+    // Update existing row with all 5 columns
     console.log(`🔄 Updating row ${rowIndex}`);
     
     await sheets.spreadsheets.values.update({
       spreadsheetId,
-      range: `A${rowIndex}:C${rowIndex}`,
+      range: `A${rowIndex}:E${rowIndex}`, // Changed from A${rowIndex}:C${rowIndex}
       valueInputOption: 'RAW',
       requestBody: {
-        values: [[name, email, notes || '']]
+        values: [[name, email, notes || '', property || '', phone || '']] // Added property and phone
       }
     });
 
     console.log(`✅ Contact updated successfully`);
-    return { name, email, notes: notes || '' };
+    return { name, email, notes: notes || '', property: property || '', phone: phone || '' };
 
   } catch (error) {
     console.error('❌ [SHEETS_ERROR] Failed to update contact');
@@ -499,9 +518,120 @@ async function updateContact(googleSub, contactData) {
   }
 }
 
+/**
+ * Delete contact from Google Sheet
+ * Can delete by email OR by name+email combination
+ * NEW FUNCTION
+ */
+async function deleteContact(googleSub, { email, name }) {
+  try {
+    const sheets = await getSheetsClient(googleSub);
+    const spreadsheetId = await getOrCreateContactsSheet(googleSub);
+
+    console.log(`🗑️  Deleting contact: ${name ? `${name} (${email})` : email}`);
+
+    // Read all contacts to find the one to delete
+    const response = await sheets.spreadsheets.values.get({
+      spreadsheetId,
+      range: 'A2:E1000',
+    });
+
+    const rows = response.data.values || [];
+
+    // Find row index to delete
+    let rowIndex = -1;
+    let deletedContact = null;
+
+    for (let i = 0; i < rows.length; i++) {
+      const rowEmail = (rows[i][1] || '').toLowerCase().trim();
+      const rowName = (rows[i][0] || '').toLowerCase().trim();
+      
+      // Match by email only, or by name+email if both provided
+      if (name) {
+        if (rowEmail === email.toLowerCase().trim() && rowName === name.toLowerCase().trim()) {
+          rowIndex = i + 2;
+          deletedContact = {
+            name: rows[i][0] || '',
+            email: rows[i][1] || '',
+            notes: rows[i][2] || '',
+            property: rows[i][3] || '',
+            phone: rows[i][4] || ''
+          };
+          break;
+        }
+      } else {
+        if (rowEmail === email.toLowerCase().trim()) {
+          rowIndex = i + 2;
+          deletedContact = {
+            name: rows[i][0] || '',
+            email: rows[i][1] || '',
+            notes: rows[i][2] || '',
+            property: rows[i][3] || '',
+            phone: rows[i][4] || ''
+          };
+          break;
+        }
+      }
+    }
+
+    if (rowIndex === -1) {
+      console.log(`⚠️  Contact not found: ${name ? `${name} (${email})` : email}`);
+      const error = new Error(`Contact not found: ${name ? `${name} (${email})` : email}`);
+      error.code = 'CONTACT_NOT_FOUND';
+      error.statusCode = 404;
+      throw error;
+    }
+
+    // Delete the row using batchUpdate
+    console.log(`🗑️  Deleting row ${rowIndex}`);
+    
+    await sheets.spreadsheets.batchUpdate({
+      spreadsheetId,
+      requestBody: {
+        requests: [
+          {
+            deleteDimension: {
+              range: {
+                sheetId: 0, // Usually the first sheet
+                dimension: 'ROWS',
+                startIndex: rowIndex - 1, // 0-based index
+                endIndex: rowIndex         // Exclusive end
+              }
+            }
+          }
+        ]
+      }
+    });
+
+    console.log(`✅ Contact deleted successfully`);
+    return {
+      success: true,
+      deleted: deletedContact
+    };
+
+  } catch (error) {
+    // If it's our CONTACT_NOT_FOUND error, re-throw it
+    if (error.code === 'CONTACT_NOT_FOUND') {
+      throw error;
+    }
+    
+    console.error('❌ [SHEETS_ERROR] Failed to delete contact');
+    console.error('Details:', {
+      email,
+      name,
+      errorMessage: error.message,
+      statusCode: error.response?.status,
+      errorData: error.response?.data,
+      timestamp: new Date().toISOString()
+    });
+    throw error;
+  }
+}
+
 export {
   searchContacts,
   listAllContacts,
   addContact,
-  updateContact
+  updateContact,
+  deleteContact  // NEW EXPORT
 };
