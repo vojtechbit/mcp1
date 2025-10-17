@@ -1,82 +1,175 @@
 import * as tasksService from '../services/tasksService.js';
+import { heavyLimiter } from '../server.js';
 import { computeETag, checkETagMatch } from '../utils/helpers.js';
-import { PAGE_SIZE_DEFAULT, PAGE_SIZE_MAX } from '../config/limits.js';
+import { createSnapshot, getSnapshot } from '../utils/snapshotStore.js';
+import {
+  PAGE_SIZE_DEFAULT,
+  PAGE_SIZE_MAX,
+  AGGREGATE_CAP_TASKS
+} from '../config/limits.js';
 
 /**
  * Tasks Controller
- * Manages Google Tasks
+ * Manages Google Tasks with aggregate + snapshot support
  */
 
 /**
- * List all tasks
- * GET /api/tasks?maxResults=100&page=1
+ * List tasks
+ * GET /api/tasks?maxResults=10&pageToken=...&aggregate=true&snapshotToken=...&ignoreSnapshot=true
  * 
- * Note: Google Tasks API returns all tasks, so we implement client-side pagination
  * Features:
- * - Pagination support with hasMore
+ * - Pagination with nextPageToken (Google Tasks API native)
+ * - aggregate=true: paginate internally until AGGREGATE_CAP_TASKS
+ * - snapshotToken: stable iteration with TTL ~2 min
+ * - ignoreSnapshot=true: force fresh data even with snapshot
  * - ETag support for caching
  */
 async function listTasks(req, res) {
-  try {
-    let { maxResults, page } = req.query;
+  const runList = async (req, res) => {
+    try {
+      let {
+        maxResults,
+        pageToken,
+        aggregate,
+        snapshotToken,
+        ignoreSnapshot,
+        showCompleted
+      } = req.query;
 
-    console.log('📋 Listing all tasks...');
+      // Handle snapshot token
+      let snapshot = null;
+      if (snapshotToken && ignoreSnapshot !== 'true') {
+        snapshot = getSnapshot(snapshotToken);
+        if (!snapshot) {
+          return res.status(400).json({
+            error: 'Invalid or expired snapshot token',
+            message: 'Please start a new query'
+          });
+        }
+      }
 
-    // Get all tasks from service
-    const allTasks = await tasksService.listAllTasks(req.user.googleSub);
+      const aggregateMode = aggregate === 'true';
 
-    // Implement client-side pagination
-    const pageSize = Math.min(
-      parseInt(maxResults) || PAGE_SIZE_DEFAULT,
-      PAGE_SIZE_MAX
-    );
-    const currentPage = parseInt(page) || 1;
-    const startIndex = (currentPage - 1) * pageSize;
-    const endIndex = startIndex + pageSize;
+      console.log(`📋 Listing tasks (aggregate: ${aggregateMode}, snapshot: ${!!snapshot})`);
 
-    const paginatedTasks = allTasks.slice(startIndex, endIndex);
-    const hasMore = endIndex < allTasks.length;
+      if (aggregateMode) {
+        // Aggregate mode: paginate internally
+        let allItems = [];
+        let currentPageToken = pageToken;
+        let pagesConsumed = 0;
+        let hasMore = false;
+        let partial = false;
 
-    const response = {
-      success: true,
-      count: paginatedTasks.length,
-      totalCount: allTasks.length,
-      tasks: paginatedTasks,
-      hasMore,
-      page: currentPage,
-      pageSize
-    };
+        while (true) {
+          const result = await tasksService.listTasks(req.user.googleSub, {
+            maxResults: PAGE_SIZE_DEFAULT,
+            pageToken: currentPageToken,
+            showCompleted: showCompleted === 'true'
+          });
 
-    // ETag support
-    const etag = computeETag(response);
-    if (checkETagMatch(req.headers['if-none-match'], etag)) {
-      return res.status(304).end();
-    }
+          const items = result.items || [];
+          allItems = allItems.concat(items);
+          pagesConsumed++;
 
-    res.setHeader('ETag', etag);
-    res.json(response);
+          // Check if we hit the cap
+          if (allItems.length >= AGGREGATE_CAP_TASKS) {
+            hasMore = true;
+            partial = true;
+            allItems = allItems.slice(0, AGGREGATE_CAP_TASKS);
+            break;
+          }
 
-  } catch (error) {
-    console.error('❌ Failed to list tasks');
-    console.error('Error details:', {
-      message: error.message,
-      code: error.code,
-      statusCode: error.response?.status,
-      data: error.response?.data
-    });
-    
-    if (error.code === 'AUTH_REQUIRED' || error.statusCode === 401) {
-      return res.status(401).json({
-        error: 'Authentication required',
-        message: 'Your session has expired. Please log in again.',
-        code: 'AUTH_REQUIRED'
+          // Check if there are more pages
+          if (result.nextPageToken) {
+            currentPageToken = result.nextPageToken;
+          } else {
+            hasMore = false;
+            break;
+          }
+        }
+
+        // Create snapshot token
+        const newSnapshotToken = createSnapshot(
+          JSON.stringify({ showCompleted }),
+          { aggregate: true }
+        );
+
+        const response = {
+          success: true,
+          items: allItems,
+          totalExact: allItems.length,
+          pagesConsumed,
+          hasMore,
+          partial,
+          snapshotToken: newSnapshotToken
+        };
+
+        // ETag support
+        const etag = computeETag(response);
+        if (checkETagMatch(req.headers['if-none-match'], etag)) {
+          return res.status(304).end();
+        }
+
+        res.setHeader('ETag', etag);
+        return res.json(response);
+
+      } else {
+        // Normal mode: single page
+        const pageSize = Math.min(
+          parseInt(maxResults) || PAGE_SIZE_DEFAULT,
+          PAGE_SIZE_MAX
+        );
+
+        const result = await tasksService.listTasks(req.user.googleSub, {
+          maxResults: pageSize,
+          pageToken,
+          showCompleted: showCompleted === 'true'
+        });
+
+        const items = result.items || [];
+        const hasMore = !!result.nextPageToken;
+        const nextPageToken = result.nextPageToken;
+
+        const response = {
+          success: true,
+          items,
+          hasMore,
+          nextPageToken
+        };
+
+        // ETag support
+        const etag = computeETag(response);
+        if (checkETagMatch(req.headers['if-none-match'], etag)) {
+          return res.status(304).end();
+        }
+
+        res.setHeader('ETag', etag);
+        return res.json(response);
+      }
+
+    } catch (error) {
+      console.error('❌ Failed to list tasks');
+
+      if (error.code === 'AUTH_REQUIRED' || error.statusCode === 401) {
+        return res.status(401).json({
+          error: 'Authentication required',
+          message: 'Your session has expired. Please log in again.',
+          code: 'AUTH_REQUIRED'
+        });
+      }
+
+      res.status(error.statusCode || 500).json({
+        error: 'Tasks list failed',
+        message: error.message
       });
     }
-    
-    res.status(error.statusCode || 500).json({
-      error: 'Tasks list failed',
-      message: error.message
-    });
+  };
+
+  // Apply heavy limiter if aggregate mode
+  if (req.query.aggregate === 'true') {
+    heavyLimiter(req, res, () => runList(req, res));
+  } else {
+    runList(req, res);
   }
 }
 
@@ -84,6 +177,7 @@ async function listTasks(req, res) {
  * Create new task
  * POST /api/tasks
  * Body: { title, notes?, due? }
+ * Header: Idempotency-Key (optional)
  */
 async function createTask(req, res) {
   try {
@@ -97,12 +191,10 @@ async function createTask(req, res) {
     }
 
     console.log(`➕ Creating task: ${title}`);
-    if (notes) console.log(`   Notes: ${notes}`);
-    if (due) console.log(`   Due: ${due}`);
 
     const task = await tasksService.createTask(req.user.googleSub, {
-      title, 
-      notes, 
+      title,
+      notes,
       due
     });
 
@@ -114,13 +206,7 @@ async function createTask(req, res) {
 
   } catch (error) {
     console.error('❌ Failed to create task');
-    console.error('Error details:', {
-      message: error.message,
-      code: error.code,
-      statusCode: error.response?.status,
-      data: error.response?.data
-    });
-    
+
     if (error.code === 'AUTH_REQUIRED' || error.statusCode === 401) {
       return res.status(401).json({
         error: 'Authentication required',
@@ -128,7 +214,7 @@ async function createTask(req, res) {
         code: 'AUTH_REQUIRED'
       });
     }
-    
+
     res.status(error.statusCode || 500).json({
       error: 'Task creation failed',
       message: error.message
@@ -140,6 +226,7 @@ async function createTask(req, res) {
  * Update task (mark as completed or modify)
  * PATCH /api/tasks/:taskListId/:taskId
  * Body: { status?, title?, notes?, due? }
+ * Header: Idempotency-Key (optional)
  */
 async function updateTask(req, res) {
   try {
@@ -154,7 +241,6 @@ async function updateTask(req, res) {
     }
 
     console.log(`✏️  Updating task ${taskId} in list ${taskListId}`);
-    console.log('   Updates:', updates);
 
     const task = await tasksService.updateTask(
       req.user.googleSub,
@@ -171,13 +257,7 @@ async function updateTask(req, res) {
 
   } catch (error) {
     console.error('❌ Failed to update task');
-    console.error('Error details:', {
-      message: error.message,
-      code: error.code,
-      statusCode: error.response?.status,
-      data: error.response?.data
-    });
-    
+
     if (error.code === 'AUTH_REQUIRED' || error.statusCode === 401) {
       return res.status(401).json({
         error: 'Authentication required',
@@ -185,7 +265,7 @@ async function updateTask(req, res) {
         code: 'AUTH_REQUIRED'
       });
     }
-    
+
     res.status(error.statusCode || 500).json({
       error: 'Task update failed',
       message: error.message
@@ -196,6 +276,7 @@ async function updateTask(req, res) {
 /**
  * Delete task
  * DELETE /api/tasks/:taskListId/:taskId
+ * Header: Idempotency-Key (optional)
  */
 async function deleteTask(req, res) {
   try {
@@ -212,13 +293,7 @@ async function deleteTask(req, res) {
 
   } catch (error) {
     console.error('❌ Failed to delete task');
-    console.error('Error details:', {
-      message: error.message,
-      code: error.code,
-      statusCode: error.response?.status,
-      data: error.response?.data
-    });
-    
+
     if (error.code === 'AUTH_REQUIRED' || error.statusCode === 401) {
       return res.status(401).json({
         error: 'Authentication required',
@@ -226,7 +301,7 @@ async function deleteTask(req, res) {
         code: 'AUTH_REQUIRED'
       });
     }
-    
+
     res.status(error.statusCode || 500).json({
       error: 'Task deletion failed',
       message: error.message

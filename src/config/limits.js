@@ -15,6 +15,7 @@ const BATCH_READ_MAX_IDS = Math.min(50, Math.floor(REQUEST_BUDGET_15M / 12));
 const BATCH_READ_CONCURRENCY = 3;
 const AGGREGATE_CAP_MAIL = 2000;
 const AGGREGATE_CAP_CAL = 4000;
+const AGGREGATE_CAP_TASKS = 1000;
 const RETRY_DELAYS_MS = [1000, 3000, 8000];
 
 // Reference timezone for relative time parsing
@@ -36,6 +37,7 @@ console.log(`  BATCH_READ_MAX_IDS:     ${BATCH_READ_MAX_IDS}`);
 console.log(`  BATCH_READ_CONCURRENCY: ${BATCH_READ_CONCURRENCY}`);
 console.log(`  AGGREGATE_CAP_MAIL:     ${AGGREGATE_CAP_MAIL}`);
 console.log(`  AGGREGATE_CAP_CAL:      ${AGGREGATE_CAP_CAL}`);
+console.log(`  AGGREGATE_CAP_TASKS:    ${AGGREGATE_CAP_TASKS}`);
 console.log(`  RETRY_DELAYS_MS:        [${RETRY_DELAYS_MS.join(', ')}]`);
 console.log(`  REFERENCE_TIMEZONE:     ${REFERENCE_TIMEZONE}`);
 console.log(`  SNAPSHOT_TTL_MS:        ${SNAPSHOT_TTL_MS}ms`);
@@ -52,6 +54,7 @@ export {
   BATCH_READ_CONCURRENCY,
   AGGREGATE_CAP_MAIL,
   AGGREGATE_CAP_CAL,
+  AGGREGATE_CAP_TASKS,
   RETRY_DELAYS_MS,
   REFERENCE_TIMEZONE,
   SNAPSHOT_TTL_MS

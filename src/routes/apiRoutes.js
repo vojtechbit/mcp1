@@ -1,5 +1,6 @@
 import express from 'express';
 import { verifyToken } from '../middleware/authMiddleware.js';
+import { idempotencyMiddleware } from '../middleware/idempotencyMiddleware.js';
 import * as gmailController from '../controllers/gmailController.js';
 import * as calendarController from '../controllers/calendarController.js';
 import * as contactsController from '../controllers/contactsController.js';
@@ -15,6 +16,10 @@ const router = express.Router();
 
 // Apply authentication middleware to all API routes
 router.use(verifyToken);
+
+// Apply idempotency middleware to mutation routes
+// (automatically skips GET requests)
+router.use(idempotencyMiddleware);
 
 // ==================== AUTH STATUS ====================
 

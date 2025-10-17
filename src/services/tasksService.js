@@ -98,7 +98,73 @@ async function getTasksClient(googleSub) {
 }
 
 /**
- * List all tasks from all task lists
+ * List tasks with pagination support
+ * @param {string} googleSub - User's Google ID
+ * @param {object} options - { tasklistId?, maxResults?, pageToken?, showCompleted? }
+ * @returns {object} { items, nextPageToken }
+ */
+async function listTasks(googleSub, options = {}) {
+  try {
+    const tasksClient = await getTasksClient(googleSub);
+
+    // Get task list ID (default if not provided)
+    let tasklistId = options.tasklistId;
+    
+    if (!tasklistId) {
+      const taskListsResponse = await tasksClient.tasklists.list({
+        maxResults: 1
+      });
+
+      const taskLists = taskListsResponse.data.items || [];
+
+      if (taskLists.length === 0) {
+        return { items: [], nextPageToken: null };
+      }
+
+      tasklistId = taskLists[0].id;
+    }
+
+    // List tasks with pagination
+    const params = {
+      tasklist: tasklistId,
+      maxResults: options.maxResults || 10,
+      showCompleted: options.showCompleted !== undefined ? options.showCompleted : false,
+      showHidden: false
+    };
+
+    if (options.pageToken) {
+      params.pageToken = options.pageToken;
+    }
+
+    const response = await tasksClient.tasks.list(params);
+
+    const items = (response.data.items || []).map(task => ({
+      id: task.id,
+      title: task.title,
+      notes: task.notes || '',
+      due: task.due || null,
+      status: task.status,
+      taskListId: tasklistId
+    }));
+
+    return {
+      items,
+      nextPageToken: response.data.nextPageToken || null
+    };
+
+  } catch (error) {
+    console.error('❌ [TASKS_ERROR] Failed to list tasks');
+    console.error('Details:', {
+      errorMessage: error.message,
+      statusCode: error.response?.status,
+      timestamp: new Date().toISOString()
+    });
+    throw error;
+  }
+}
+
+/**
+ * List all tasks from all task lists (legacy - for backward compatibility)
  */
 async function listAllTasks(googleSub) {
   try {
@@ -334,6 +400,7 @@ async function deleteTask(googleSub, taskListId, taskId) {
 }
 
 export {
+  listTasks,
   listAllTasks,
   createTask,
   updateTask,

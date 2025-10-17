@@ -2,6 +2,102 @@
 
 All notable changes to MCP1 OAuth Server will be documented in this file.
 
+## [2.2.0] - 2025-10-18
+
+### 🚀 Idempotency + Tasks Enhancement
+
+Major features: Idempotency keys for all mutations and Tasks API with aggregate + snapshot support.
+
+#### New Features
+
+##### Idempotency Keys
+- Added comprehensive idempotency support for all mutations (POST/PUT/PATCH/DELETE)
+- Prevents duplicate execution with Idempotency-Key header or body.idempotency_key
+- Fingerprint-based detection: SHA-256(method + path + canonical JSON)
+- MongoDB storage with TTL (12 hours auto-cleanup)
+- Behavior:
+  - First occurrence: Execute and store result
+  - Same fingerprint: Return stored result (no re-execution)
+  - Different fingerprint with same key: 409 IDEMPOTENCY_KEY_REUSE_MISMATCH
+- Applied to: Gmail send/reply/draft/star/read/delete, Calendar create/update/delete, Contacts bulk ops, Tasks create/update/delete
+- Logging: HIT/MISS/CONFLICT with hashed keys for privacy
+
+##### Tasks API - Aggregate Mode
+- Added aggregate=true parameter for internal pagination
+- Returns: totalExact, pagesConsumed, partial, hasMore
+- Aggregate cap: AGGREGATE_CAP_TASKS (1000 tasks)
+- Heavy rate limiter applied for aggregate mode
+
+##### Tasks API - Snapshot Tokens
+- Snapshot support with ~120s TTL for stable iteration
+- Parameters: snapshotToken, ignoreSnapshot=true
+- Guarantees consistent membership and ordering during pagination
+- Returns snapshotToken in aggregate mode responses
+
+##### Tasks API - Native Pagination
+- Updated to use Google Tasks API nextPageToken
+- Removed client-side pagination (now uses API native paging)
+- Supports: maxResults, pageToken, showCompleted
+
+#### Implementation Details
+
+**New Files:**
+- src/middleware/idempotencyMiddleware.js - Idempotency middleware
+
+**Modified Files:**
+- src/routes/apiRoutes.js - Applied idempotency middleware globally
+- src/controllers/tasksController.js - Complete rewrite with aggregate + snapshot
+- src/services/tasksService.js - Added listTasks() with native paging support
+- src/config/limits.js - Added AGGREGATE_CAP_TASKS (1000)
+
+**Database:**
+- New collection: idempotency_records
+- Unique index: (key, method, path)
+- TTL index: createdAt (12 hours)
+
+#### Email-Specific Behavior
+
+- Each new send requires new Idempotency-Key
+- Same recipient but different subject/body → new key (or 409)
+- Retry with same key → returns original result, doesn't send again
+
+#### API Examples
+
+**Idempotency:**
+```bash
+# First request
+POST /api/gmail/send
+Idempotency-Key: msg-001
+→ 200 OK + messageId
+
+# Retry
+POST /api/gmail/send  
+Idempotency-Key: msg-001  
+→ 200 OK + SAME messageId (not sent again)
+
+# Different body, same key
+→ 409 IDEMPOTENCY_KEY_REUSE_MISMATCH
+```
+
+**Tasks Aggregate:**
+```bash
+GET /api/tasks?aggregate=true
+→ { totalExact, pagesConsumed, partial, snapshotToken }
+```
+
+**Tasks Snapshot:**
+```bash
+GET /api/tasks?snapshotToken=snap_xyz
+→ Frozen data (consistent for ~2 minutes)
+```
+
+### 📝 Notes
+- All changes backward compatible
+- Idempotency is opt-in (key not required)
+- Tasks aggregate/snapshot are opt-in
+- No breaking changes
+- Zero new ENV variables
+
 ## [2.1.0] - 2025-10-18
 
 ### 🚀 Backend Finalization - Complete
