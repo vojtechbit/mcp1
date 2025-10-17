@@ -18,25 +18,31 @@ router.use(verifyToken);
 
 // ==================== AUTH STATUS ====================
 
-// Check authentication status (for "přihlásit se" requests)
+// Check authentication status
 router.get('/auth/status', getAuthStatus);
 
 // ==================== GMAIL ROUTES ====================
 
-// Send email
+// Send email (with send-to-self support)
 router.post('/gmail/send', gmailController.sendEmail);
+
+// Reply to email (with send-to-self support)
+router.post('/gmail/reply/:messageId', gmailController.replyToEmail);
 
 // Read email (supports ?format=full|metadata|snippet|minimal)
 router.get('/gmail/read/:messageId', gmailController.readEmail);
 
+// Batch preview (summary, snippet, or metadata for many IDs)
+router.post('/mail/batchPreview', gmailController.batchPreview);
+
+// Batch read (full/minimal reads for many IDs with truncation)
+router.post('/mail/batchRead', gmailController.batchRead);
+
 // Get email snippet (fast preview)
 router.get('/gmail/snippet/:messageId', gmailController.getEmailSnippet);
 
-// Search emails
+// Search emails (with aggregate, include=summary, normalizeQuery, relative time)
 router.get('/gmail/search', gmailController.searchEmails);
-
-// Reply to email
-router.post('/gmail/reply/:messageId', gmailController.replyToEmail);
 
 // Create draft
 router.post('/gmail/draft', gmailController.createDraft);
@@ -58,7 +64,7 @@ router.post('/calendar/events', calendarController.createEvent);
 // Get specific event
 router.get('/calendar/events/:eventId', calendarController.getEvent);
 
-// List events
+// List events (with pagination and aggregate support)
 router.get('/calendar/events', calendarController.listEvents);
 
 // Update event
@@ -69,11 +75,20 @@ router.delete('/calendar/events/:eventId', calendarController.deleteEvent);
 
 // ==================== CONTACTS ROUTES ====================
 
+// Address suggestions (fuzzy match)
+router.get('/contacts/address-suggest', contactsController.getAddressSuggestions);
+
 // Search contacts
 router.get('/contacts/search', contactsController.searchContacts);
 
 // List all contacts
 router.get('/contacts', contactsController.listContacts);
+
+// Bulk upsert contacts (heavy operation)
+router.post('/contacts/bulkUpsert', contactsController.bulkUpsertContacts);
+
+// Bulk delete contacts (heavy operation)
+router.post('/contacts/bulkDelete', contactsController.bulkDeleteContacts);
 
 // Add new contact
 router.post('/contacts', contactsController.addContact);
@@ -81,13 +96,12 @@ router.post('/contacts', contactsController.addContact);
 // Update contact (by name+email)
 router.put('/contacts', contactsController.updateContact);
 
-// Delete contact (NEW)
-// Query params: ?email=... (required), ?name=... (optional)
+// Delete contact
 router.delete('/contacts', contactsController.deleteContact);
 
 // ==================== TASKS ROUTES ====================
 
-// List all tasks
+// List all tasks (with pagination and aggregate support)
 router.get('/tasks', tasksController.listTasks);
 
 // Create new task

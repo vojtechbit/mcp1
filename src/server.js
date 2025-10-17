@@ -4,6 +4,7 @@ import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 import dotenv from 'dotenv';
 import { connectToDatabase } from './config/database.js';
+import { RL_MAX_PER_IP, RL_MAX_HEAVY_PER_IP } from './config/limits.js';
 import { refreshAllTokensOnStartup, startBackgroundRefresh } from './services/backgroundRefreshService.js';
 import authRoutes from './routes/authRoutes.js';
 import apiRoutes from './routes/apiRoutes.js';
@@ -12,7 +13,7 @@ import privacyRoutes from './routes/privacyRoutes.js';
 import debugRoutes from './routes/debugRoutes.js';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler.js';
 
-// Load environment variables
+// Load environment variables FIRST (before importing limits)
 dotenv.config();
 
 const app = express();
@@ -35,17 +36,17 @@ app.use(cors({
   ],
   credentials: true,
   methods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization']
+  allowedHeaders: ['Content-Type', 'Authorization', 'If-None-Match']
 }));
 
 // Body parsing
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-// Rate limiting
-const limiter = rateLimit({
+// Rate limiting - Standard routes
+const standardLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100, // Limit each IP to 100 requests per windowMs
+  max: RL_MAX_PER_IP,
   message: {
     error: 'Too many requests',
     message: 'Please try again later'
@@ -54,7 +55,23 @@ const limiter = rateLimit({
   legacyHeaders: false
 });
 
-app.use('/api', limiter);
+// Rate limiting - Heavy routes (aggregate, batch operations, bulk contacts)
+const heavyLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: RL_MAX_HEAVY_PER_IP,
+  message: {
+    error: 'Too many heavy requests',
+    message: 'These operations are resource-intensive. Please try again later.'
+  },
+  standardHeaders: true,
+  legacyHeaders: false
+});
+
+// Apply standard limiter to most API routes
+app.use('/api', standardLimiter);
+
+// Export heavy limiter for use in specific route files
+export { heavyLimiter };
 
 // Request logging (development only)
 if (process.env.NODE_ENV === 'development') {
@@ -80,13 +97,25 @@ app.get('/health', (req, res) => {
 app.get('/', (req, res) => {
   res.json({
     name: 'Gmail & Calendar OAuth Server',
-    version: '1.0.0',
-    description: 'OAuth proxy server for Custom GPT Actions',
+    version: '2.0.0',
+    description: 'OAuth proxy server for Custom GPT Actions with advanced features',
     endpoints: {
       auth: '/auth/google',
       status: '/auth/status',
-      api: '/api/*'
+      api: '/api/*',
+      mail: '/api/mail/*',
+      contacts: '/api/contacts/*',
+      calendar: '/api/calendar/*'
     },
+    features: [
+      'Pagination with aggregate mode',
+      'Batch mail operations',
+      'ETag caching',
+      'Snapshot tokens for stable iteration',
+      'Bulk contact operations',
+      'Send-to-self email support',
+      'Address suggestions'
+    ],
     documentation: 'https://github.com/vojtechbit/mcp1'
   });
 });
@@ -139,8 +168,9 @@ async function startServer() {
       console.log('='.repeat(60));
       console.log('📧 Gmail API: Ready');
       console.log('📅 Calendar API: Ready');
+      console.log('📇 Contacts API: Ready');
       console.log('🛡️  Security: Enabled');
-      console.log('⚡ Rate limiting: Active');
+      console.log(`⚡ Rate limiting: ${RL_MAX_PER_IP}/15min (standard), ${RL_MAX_HEAVY_PER_IP}/15min (heavy)`);
       
       // Start background token refresh (optional)
       if (process.env.ENABLE_BACKGROUND_REFRESH === 'true') {

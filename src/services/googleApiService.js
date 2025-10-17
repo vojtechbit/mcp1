@@ -864,6 +864,69 @@ async function deleteCalendarEvent(googleSub, eventId) {
   }
 }
 
+/**
+ * Check for calendar conflicts
+ * Queries existing events in [start, end) range
+ * Returns array of conflicting events
+ * @param {string} googleSub - User's Google ID
+ * @param {object} options - { start, end, excludeEventId? }
+ */
+async function checkConflicts(googleSub, { start, end, excludeEventId }) {
+  try {
+    const authClient = await getAuthenticatedClient(googleSub);
+    const calendar = google.calendar({ version: 'v3', auth: authClient });
+
+    // Query events in the time range
+    const result = await calendar.events.list({
+      calendarId: 'primary',
+      timeMin: start,
+      timeMax: end,
+      singleEvents: true,
+      orderBy: 'startTime'
+    });
+
+    const events = result.data.items || [];
+
+    // Filter for actual conflicts (start < end && end > start)
+    const conflicts = [];
+    const requestStart = new Date(start);
+    const requestEnd = new Date(end);
+
+    for (const event of events) {
+      // Skip the event being updated if excludeEventId is provided
+      if (excludeEventId && event.id === excludeEventId) {
+        continue;
+      }
+
+      const eventStart = new Date(event.start.dateTime || event.start.date);
+      const eventEnd = new Date(event.end.dateTime || event.end.date);
+
+      // Check for overlap: existing.start < end && existing.end > start
+      if (eventStart < requestEnd && eventEnd > requestStart) {
+        conflicts.push({
+          eventId: event.id,
+          summary: event.summary,
+          start: event.start.dateTime || event.start.date,
+          end: event.end.dateTime || event.end.date,
+          htmlLink: event.htmlLink
+        });
+      }
+    }
+
+    console.log(`🔍 Checked conflicts: ${conflicts.length} found`);
+    return conflicts;
+  } catch (error) {
+    console.error('❌ [CALENDAR_ERROR] Failed to check conflicts');
+    console.error('Details:', {
+      start,
+      end,
+      errorMessage: error.message,
+      timestamp: new Date().toISOString()
+    });
+    throw error;
+  }
+}
+
 export {
   EMAIL_SIZE_LIMITS,
   getValidAccessToken,
@@ -879,5 +942,6 @@ export {
   getCalendarEvent,
   listCalendarEvents,
   updateCalendarEvent,
-  deleteCalendarEvent
+  deleteCalendarEvent,
+  checkConflicts
 };

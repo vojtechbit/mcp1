@@ -8,11 +8,23 @@
 - Posílat, číst, hledat emaily
 - Odpovídat, vytvářet drafty
 - Mazat, označovat hvězdičkou, mark as read
+- Batch operace (preview, read)
+- Aggregate mode pro velké dotazy
+- Mail summaries
+- Normalizace dotazů a relativní čas
 
 ### Calendar:
 - Vytvářet, upravovat, mazat události
 - Listovat události, hledat v kalendáři
 - Pozvat účastníky na schůzky
+- Detekce konfliktů (checkConflicts)
+- Aggregate mode pro velké rozsahy
+
+### Contacts:
+- Hledat a spravovat kontakty
+- Bulk operace (upsert, delete)
+- Fuzzy adresní návrhy
+- Google Sheets integrace
 
 ## Quick Start
 

@@ -2,6 +2,78 @@
 
 All notable changes to MCP1 OAuth Server will be documented in this file.
 
+## [2.1.0] - 2025-10-18
+
+### 🚀 Backend Finalization - Complete
+
+Major backend enhancements for consistency, stability, and advanced features.
+
+#### New Features
+
+##### ETag / 304 Support
+- Added ETag caching for all GET list/detail endpoints
+- Returns 304 Not Modified when client sends matching If-None-Match header
+- Reduces bandwidth and improves performance
+- Supported on: Mail search/read, Calendar list/get, Contacts list/search
+
+##### Snapshot Tokens
+- Unified snapshot token system with 120-second TTL
+- Ensures stable membership and ordering during pagination
+- In-memory storage with automatic cleanup
+- Available on: Mail search, Calendar list (aggregate mode)
+
+##### Normalize & Relative Time
+- Query normalization: strips diacritics, alias expansion, safe escaping
+- Relative time support: today, tomorrow, thisWeek, lastHour
+- Reference timezone: Europe/Prague
+- Usage: ?normalizeQuery=true&relative=today
+
+##### Contacts Bulk Operations
+- POST /contacts/bulkUpsert - append multiple contacts, report duplicates
+- POST /contacts/bulkDelete - delete by emails or rowIds
+- Heavy rate limiter applied for resource-intensive operations
+- Fixed range: A2:E (Name | Email | Notes | RealEstate | Phone)
+
+##### Address Suggestions
+- GET /contacts/address-suggest?query=...
+- Fuzzy matching using Jaro-Winkler similarity
+- Returns up to 3 canonical suggestions with scores
+- Optimized for assistant use with small payloads
+
+##### Calendar Conflict Detection
+- New parameters: checkConflicts, force
+- Detects overlapping events before create/update
+- Returns 409 with conflict details if force=false
+- Creates event with conflict info if force=true
+- Uses events.list with singleEvents=true, orderBy=startTime
+
+##### Response Field Coherence
+- Standardized all list/search endpoints
+- Required fields: success, items, hasMore, nextPageToken
+- Aggregate mode adds: totalExact, pagesConsumed, partial, snapshotToken
+- Mail summaries add: idsReturned, summariesReturned, summariesPartial
+
+#### Testing
+
+##### Acceptance Script
+- Added comprehensive end-to-end test script: scripts/acceptance.sh
+- Tests all 9 feature categories
+- Clear PASS/FAIL output with colors
+- Executable bash script using jq for JSON parsing
+- Configurable base URL via environment variable
+- Automatically cleans up test data
+
+#### Documentation
+- Added IMPLEMENTATION_FINAL.md with complete implementation details
+- Added scripts/README.md with test documentation
+- Updated main README.md with new features
+
+### 📝 Notes
+- All changes backward compatible
+- No breaking changes
+- No new ENV variables required
+- Uses existing REQUEST_BUDGET_15M for all derived limits
+
 ## [Unreleased] - 2025-10-12
 
 ### 🚨 BREAKING CHANGES

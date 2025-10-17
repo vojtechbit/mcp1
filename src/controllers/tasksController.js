@@ -1,4 +1,6 @@
 import * as tasksService from '../services/tasksService.js';
+import { computeETag, checkETagMatch } from '../utils/helpers.js';
+import { PAGE_SIZE_DEFAULT, PAGE_SIZE_MAX } from '../config/limits.js';
 
 /**
  * Tasks Controller
@@ -7,19 +9,52 @@ import * as tasksService from '../services/tasksService.js';
 
 /**
  * List all tasks
- * GET /api/tasks
+ * GET /api/tasks?maxResults=100&page=1
+ * 
+ * Note: Google Tasks API returns all tasks, so we implement client-side pagination
+ * Features:
+ * - Pagination support with hasMore
+ * - ETag support for caching
  */
 async function listTasks(req, res) {
   try {
+    let { maxResults, page } = req.query;
+
     console.log('📋 Listing all tasks...');
 
-    const tasks = await tasksService.listAllTasks(req.user.googleSub);
+    // Get all tasks from service
+    const allTasks = await tasksService.listAllTasks(req.user.googleSub);
 
-    res.json({
+    // Implement client-side pagination
+    const pageSize = Math.min(
+      parseInt(maxResults) || PAGE_SIZE_DEFAULT,
+      PAGE_SIZE_MAX
+    );
+    const currentPage = parseInt(page) || 1;
+    const startIndex = (currentPage - 1) * pageSize;
+    const endIndex = startIndex + pageSize;
+
+    const paginatedTasks = allTasks.slice(startIndex, endIndex);
+    const hasMore = endIndex < allTasks.length;
+
+    const response = {
       success: true,
-      count: tasks.length,
-      tasks: tasks
-    });
+      count: paginatedTasks.length,
+      totalCount: allTasks.length,
+      tasks: paginatedTasks,
+      hasMore,
+      page: currentPage,
+      pageSize
+    };
+
+    // ETag support
+    const etag = computeETag(response);
+    if (checkETagMatch(req.headers['if-none-match'], etag)) {
+      return res.status(304).end();
+    }
+
+    res.setHeader('ETag', etag);
+    res.json(response);
 
   } catch (error) {
     console.error('❌ Failed to list tasks');
@@ -29,6 +64,14 @@ async function listTasks(req, res) {
       statusCode: error.response?.status,
       data: error.response?.data
     });
+    
+    if (error.code === 'AUTH_REQUIRED' || error.statusCode === 401) {
+      return res.status(401).json({
+        error: 'Authentication required',
+        message: 'Your session has expired. Please log in again.',
+        code: 'AUTH_REQUIRED'
+      });
+    }
     
     res.status(error.statusCode || 500).json({
       error: 'Tasks list failed',
@@ -78,7 +121,6 @@ async function createTask(req, res) {
       data: error.response?.data
     });
     
-    // Check if it's an auth error
     if (error.code === 'AUTH_REQUIRED' || error.statusCode === 401) {
       return res.status(401).json({
         error: 'Authentication required',
@@ -136,6 +178,14 @@ async function updateTask(req, res) {
       data: error.response?.data
     });
     
+    if (error.code === 'AUTH_REQUIRED' || error.statusCode === 401) {
+      return res.status(401).json({
+        error: 'Authentication required',
+        message: 'Your session has expired. Please log in again.',
+        code: 'AUTH_REQUIRED'
+      });
+    }
+    
     res.status(error.statusCode || 500).json({
       error: 'Task update failed',
       message: error.message
@@ -168,6 +218,14 @@ async function deleteTask(req, res) {
       statusCode: error.response?.status,
       data: error.response?.data
     });
+    
+    if (error.code === 'AUTH_REQUIRED' || error.statusCode === 401) {
+      return res.status(401).json({
+        error: 'Authentication required',
+        message: 'Your session has expired. Please log in again.',
+        code: 'AUTH_REQUIRED'
+      });
+    }
     
     res.status(error.statusCode || 500).json({
       error: 'Task deletion failed',

@@ -1,16 +1,16 @@
 import * as contactsService from '../services/contactsService.js';
+import { heavyLimiter } from '../server.js';
+import { computeETag, checkETagMatch } from '../utils/helpers.js';
 
 /**
  * Contacts Controller
  * Manages contact list stored in Google Sheets
- * 
- * NEW: Supports Property and Phone fields + DELETE functionality
+ * Structure: Name | Email | Notes | RealEstate | Phone
  */
 
 /**
  * Search contacts
  * GET /api/contacts/search?query=...
- * NEW: Can also filter by property
  */
 async function searchContacts(req, res) {
   try {
@@ -23,10 +23,15 @@ async function searchContacts(req, res) {
       });
     }
 
-    console.log(`🔍 Searching contacts: ${query}`);
-
     const results = await contactsService.searchContacts(req.user.googleSub, query);
 
+    // ETag support
+    const etag = computeETag(results);
+    if (checkETagMatch(req.headers['if-none-match'], etag)) {
+      return res.status(304).end();
+    }
+
+    res.setHeader('ETag', etag);
     res.json({
       success: true,
       count: results.length,
@@ -35,23 +40,15 @@ async function searchContacts(req, res) {
 
   } catch (error) {
     console.error('❌ Failed to search contacts');
-    console.error('Error details:', {
-      message: error.message,
-      code: error.code,
-      statusCode: error.response?.status,
-      data: error.response?.data
-    });
     
-    // Special handling for missing sheet
     if (error.message.includes('not found')) {
       return res.status(404).json({
         error: 'Contact sheet not found',
         message: error.message,
-        instructions: 'Please create a Google Sheet named "MCP1 Contacts" with columns: Name | Email | Notes | Property | Phone'
+        instructions: 'Please create a Google Sheet named "MCP1 Contacts" with columns: Name | Email | Notes | RealEstate | Phone'
       });
     }
 
-    // Check if it's an auth error
     if (error.code === 'AUTH_REQUIRED' || error.statusCode === 401) {
       return res.status(401).json({
         error: 'Authentication required',
@@ -68,41 +65,84 @@ async function searchContacts(req, res) {
 }
 
 /**
- * List all contacts
- * GET /api/contacts
- * NEW: Returns property and phone fields
+ * Get address suggestions (fuzzy match)
+ * GET /api/contacts/address-suggest?query=...
  */
-async function listContacts(req, res) {
+async function getAddressSuggestions(req, res) {
   try {
-    console.log('📋 Listing all contacts...');
+    const { query } = req.query;
 
-    const contacts = await contactsService.listAllContacts(req.user.googleSub);
+    if (!query) {
+      return res.status(400).json({
+        error: 'Bad Request',
+        message: 'Missing required parameter: query'
+      });
+    }
+
+    const suggestions = await contactsService.getAddressSuggestions(req.user.googleSub, query);
 
     res.json({
       success: true,
+      count: suggestions.length,
+      suggestions: suggestions.map(s => ({
+        name: s.name,
+        email: s.email,
+        // Include score internally but don't emphasize it
+        _score: s.score
+      }))
+    });
+
+  } catch (error) {
+    console.error('❌ Failed to get address suggestions');
+    
+    if (error.code === 'AUTH_REQUIRED' || error.statusCode === 401) {
+      return res.status(401).json({
+        error: 'Authentication required',
+        message: 'Your session has expired. Please log in again.',
+        code: 'AUTH_REQUIRED'
+      });
+    }
+
+    res.status(error.statusCode || 500).json({
+      error: 'Address suggestion failed',
+      message: error.message
+    });
+  }
+}
+
+/**
+ * List all contacts
+ * GET /api/contacts
+ */
+async function listContacts(req, res) {
+  try {
+    const contacts = await contactsService.listAllContacts(req.user.googleSub);
+
+    // ETag support
+    const etag = computeETag(contacts);
+    if (checkETagMatch(req.headers['if-none-match'], etag)) {
+      return res.status(304).end();
+    }
+
+    res.setHeader('ETag', etag);
+    res.json({
+      success: true,
       count: contacts.length,
-      contacts: contacts
+      contacts: contacts,
+      hasMore: false // Contacts always returns all items
     });
 
   } catch (error) {
     console.error('❌ Failed to list contacts');
-    console.error('Error details:', {
-      message: error.message,
-      code: error.code,
-      statusCode: error.response?.status,
-      data: error.response?.data
-    });
 
-    // Special handling for missing sheet
     if (error.message.includes('not found')) {
       return res.status(404).json({
         error: 'Contact sheet not found',
         message: error.message,
-        instructions: 'Please create a Google Sheet named "MCP1 Contacts" with columns: Name | Email | Notes | Property | Phone'
+        instructions: 'Please create a Google Sheet named "MCP1 Contacts" with columns: Name | Email | Notes | RealEstate | Phone'
       });
     }
 
-    // Check if it's an auth error
     if (error.code === 'AUTH_REQUIRED' || error.statusCode === 401) {
       return res.status(401).json({
         error: 'Authentication required',
@@ -121,12 +161,11 @@ async function listContacts(req, res) {
 /**
  * Add new contact
  * POST /api/contacts
- * Body: { name, email, notes?, property?, phone? }
- * NEW: Supports property and phone fields
+ * Body: { name, email, notes?, realEstate?, phone? }
  */
 async function addContact(req, res) {
   try {
-    const { name, email, notes, property, phone } = req.body;
+    const { name, email, notes, realEstate, phone } = req.body;
 
     if (!name || !email) {
       return res.status(400).json({
@@ -135,51 +174,35 @@ async function addContact(req, res) {
       });
     }
 
-    console.log(`➕ Adding contact: ${name} (${email})`);
-    if (notes) console.log(`   Notes: ${notes}`);
-    if (property) console.log(`   Property: ${property}`);
-    if (phone) console.log(`   Phone: ${phone}`);
-
-    const contact = await contactsService.addContact(req.user.googleSub, {
-      name, email, notes, property, phone
+    const result = await contactsService.addContact(req.user.googleSub, {
+      name, email, notes, realEstate, phone
     });
 
-    res.json({
+    const response = {
       success: true,
       message: 'Contact added successfully',
-      contact: contact
-    });
+      contact: result
+    };
+
+    // If duplicates exist, inform the assistant
+    if (result.duplicates && result.duplicates.length > 0) {
+      response.duplicates = result.duplicates;
+      response.note = 'Duplicate email(s) detected. Contact was still added. You may want to suggest merging duplicates to the user.';
+    }
+
+    res.json(response);
 
   } catch (error) {
     console.error('❌ Failed to add contact');
-    console.error('Error details:', {
-      message: error.message,
-      code: error.code,
-      statusCode: error.response?.status,
-      data: error.response?.data
-    });
 
-    // Special handling for duplicate contact
-    if (error.code === 'CONTACT_EXISTS') {
-      return res.status(409).json({
-        error: 'Contact already exists',
-        message: error.message,
-        code: 'CONTACT_EXISTS',
-        existingContact: error.existingContact,
-        suggestion: 'Use the update contact endpoint to modify the existing contact, or provide a different email address.'
-      });
-    }
-
-    // Special handling for missing sheet
     if (error.message.includes('not found')) {
       return res.status(404).json({
         error: 'Contact sheet not found',
         message: error.message,
-        instructions: 'Please create a Google Sheet named "MCP1 Contacts" with columns: Name | Email | Notes | Property | Phone'
+        instructions: 'Please create a Google Sheet named "MCP1 Contacts" with columns: Name | Email | Notes | RealEstate | Phone'
       });
     }
 
-    // Check if it's an auth error
     if (error.code === 'AUTH_REQUIRED' || error.statusCode === 401) {
       return res.status(401).json({
         error: 'Authentication required',
@@ -196,14 +219,120 @@ async function addContact(req, res) {
 }
 
 /**
+ * Bulk upsert contacts
+ * POST /api/contacts/bulkUpsert
+ * Body: { contacts: [{name, email, notes?, realEstate?, phone?}] }
+ */
+async function bulkUpsertContacts(req, res) {
+  // Apply heavy limiter
+  heavyLimiter(req, res, async () => {
+    try {
+      const { contacts } = req.body;
+
+      if (!contacts || !Array.isArray(contacts) || contacts.length === 0) {
+        return res.status(400).json({
+          error: 'Bad Request',
+          message: 'Missing or invalid field: contacts (must be non-empty array)'
+        });
+      }
+
+      // Validate each contact
+      for (const contact of contacts) {
+        if (!contact.name || !contact.email) {
+          return res.status(400).json({
+            error: 'Bad Request',
+            message: 'Each contact must have name and email'
+          });
+        }
+      }
+
+      const result = await contactsService.bulkUpsert(req.user.googleSub, contacts);
+
+      const response = {
+        success: true,
+        inserted: result.inserted,
+        message: `${result.inserted} contact(s) added successfully`
+      };
+
+      if (result.duplicates) {
+        response.duplicates = result.duplicates;
+        response.note = 'Duplicate email(s) detected. Contacts were still added. You may want to suggest merging duplicates to the user.';
+      }
+
+      res.json(response);
+
+    } catch (error) {
+      console.error('❌ Failed to bulk upsert contacts');
+
+      if (error.code === 'AUTH_REQUIRED' || error.statusCode === 401) {
+        return res.status(401).json({
+          error: 'Authentication required',
+          message: 'Your session has expired. Please log in again.',
+          code: 'AUTH_REQUIRED'
+        });
+      }
+
+      res.status(error.statusCode || 500).json({
+        error: 'Bulk upsert failed',
+        message: error.message
+      });
+    }
+  });
+}
+
+/**
+ * Bulk delete contacts
+ * POST /api/contacts/bulkDelete
+ * Body: { emails: [string] } OR { rowIds: [number] }
+ */
+async function bulkDeleteContacts(req, res) {
+  // Apply heavy limiter
+  heavyLimiter(req, res, async () => {
+    try {
+      const { emails, rowIds } = req.body;
+
+      if ((!emails || emails.length === 0) && (!rowIds || rowIds.length === 0)) {
+        return res.status(400).json({
+          error: 'Bad Request',
+          message: 'Must provide either emails or rowIds array'
+        });
+      }
+
+      const result = await contactsService.bulkDelete(req.user.googleSub, { emails, rowIds });
+
+      res.json({
+        success: true,
+        deleted: result.deleted,
+        message: `${result.deleted} contact(s) deleted successfully`
+      });
+
+    } catch (error) {
+      console.error('❌ Failed to bulk delete contacts');
+
+      if (error.code === 'AUTH_REQUIRED' || error.statusCode === 401) {
+        return res.status(401).json({
+          error: 'Authentication required',
+          message: 'Your session has expired. Please log in again.',
+          code: 'AUTH_REQUIRED'
+        });
+      }
+
+      res.status(error.statusCode || 500).json({
+        error: 'Bulk delete failed',
+        message: error.message
+      });
+    }
+  });
+}
+
+/**
  * Update contact (finds by name+email and updates all fields)
  * PUT /api/contacts
- * Body: { name, email, notes?, property?, phone? }
- * NEW: Supports property and phone fields
+ * Body: { name, email, notes?, realEstate?, phone? }
  */
 async function updateContact(req, res) {
   try {
-    const { name, email, notes, property, phone } = req.body;
+    const { name, email, notes, realEstate, phone } = req.body;
 
     if (!name || !email) {
       return res.status(400).json({
@@ -212,13 +341,8 @@ async function updateContact(req, res) {
       });
     }
 
-    console.log(`✏️  Updating contact: ${name} (${email})`);
-    if (notes) console.log(`   Notes: ${notes}`);
-    if (property) console.log(`   Property: ${property}`);
-    if (phone) console.log(`   Phone: ${phone}`);
-
     const contact = await contactsService.updateContact(req.user.googleSub, {
-      name, email, notes, property, phone
+      name, email, notes, realEstate, phone
     });
 
     res.json({
@@ -229,14 +353,7 @@ async function updateContact(req, res) {
 
   } catch (error) {
     console.error('❌ Failed to update contact');
-    console.error('Error details:', {
-      message: error.message,
-      code: error.code,
-      statusCode: error.response?.status,
-      data: error.response?.data
-    });
 
-    // Check if it's an auth error
     if (error.code === 'AUTH_REQUIRED' || error.statusCode === 401) {
       return res.status(401).json({
         error: 'Authentication required',
@@ -256,10 +373,6 @@ async function updateContact(req, res) {
  * Delete contact
  * DELETE /api/contacts
  * Query params: email (required), name (optional)
- * Example: DELETE /api/contacts?email=john@example.com
- * Example: DELETE /api/contacts?email=john@example.com&name=John Doe
- * 
- * NEW FUNCTION
  */
 async function deleteContact(req, res) {
   try {
@@ -271,8 +384,6 @@ async function deleteContact(req, res) {
         message: 'Missing required parameter: email'
       });
     }
-
-    console.log(`🗑️  Deleting contact: ${name ? `${name} (${email})` : email}`);
 
     const result = await contactsService.deleteContact(req.user.googleSub, {
       email,
@@ -287,14 +398,7 @@ async function deleteContact(req, res) {
 
   } catch (error) {
     console.error('❌ Failed to delete contact');
-    console.error('Error details:', {
-      message: error.message,
-      code: error.code,
-      statusCode: error.response?.status,
-      data: error.response?.data
-    });
 
-    // Special handling for contact not found
     if (error.code === 'CONTACT_NOT_FOUND') {
       return res.status(404).json({
         error: 'Contact not found',
@@ -303,16 +407,14 @@ async function deleteContact(req, res) {
       });
     }
 
-    // Special handling for missing sheet
     if (error.message.includes('not found')) {
       return res.status(404).json({
         error: 'Contact sheet not found',
         message: error.message,
-        instructions: 'Please create a Google Sheet named "MCP1 Contacts" with columns: Name | Email | Notes | Property | Phone'
+        instructions: 'Please create a Google Sheet named "MCP1 Contacts" with columns: Name | Email | Notes | RealEstate | Phone'
       });
     }
 
-    // Check if it's an auth error
     if (error.code === 'AUTH_REQUIRED' || error.statusCode === 401) {
       return res.status(401).json({
         error: 'Authentication required',
@@ -330,8 +432,11 @@ async function deleteContact(req, res) {
 
 export {
   searchContacts,
+  getAddressSuggestions,
   listContacts,
   addContact,
+  bulkUpsertContacts,
+  bulkDeleteContacts,
   updateContact,
-  deleteContact  // NEW EXPORT
+  deleteContact
 };
