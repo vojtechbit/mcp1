@@ -2,6 +2,52 @@
 
 All notable changes to MCP1 OAuth Server will be documented in this file.
 
+## [3.2.0] - 2025-10-18
+
+### ✅ Attachment Processing Complete
+
+Final implementation of attachment handling with full PDF and Excel support.
+
+#### New Features
+
+##### Dependencies Added
+- **pdf-parse** v1.1.1 - PDF text extraction
+- **xlsx** v0.18.5 - Excel spreadsheet processing
+
+##### XLSX/XLS Preview (COMPLETE)
+- Full implementation of Excel file preview
+- Sheet selection by index or name
+- Lists all available sheets
+- Converts to JSON array format
+- Handles empty cells gracefully
+- Truncation support for large files
+- Comprehensive error handling
+
+##### CSV Preview (ENHANCED)
+- Improved quote handling
+- Better delimiter detection
+- Empty file detection
+- Consistent response format
+
+#### Attachment Endpoints
+- `GET /api/gmail/attachments/:messageId/:attachmentId` - Metadata
+- `GET /api/gmail/attachments/:messageId/:attachmentId/text?maxKb=256` - Text preview (PDF, TXT, HTML)
+- `GET /api/gmail/attachments/:messageId/:attachmentId/table?sheet=0&maxRows=50` - Table preview (CSV, XLSX)
+
+#### Supported Formats
+- **Text**: PDF, TXT, HTML
+- **Tables**: CSV, XLSX, XLS
+- Automatic MIME type and filename detection
+- Configurable limits (maxKb, maxRows)
+
+#### Security & Limits
+- Max text preview: 2048 KB
+- Max table rows: 500
+- Automatic size validation
+- Rate limiting applied
+
+---
+
 ## [2.2.0] - 2025-10-18
 
 ### 🚀 Idempotency + Tasks Enhancement

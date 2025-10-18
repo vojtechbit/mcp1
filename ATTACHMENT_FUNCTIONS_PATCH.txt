@@ -1,0 +1,293 @@
+// Add these imports at the top
+import pdfParse from 'pdf-parse';
+import XLSX from 'xlsx';
+
+/**
+ * Preview attachment text (PDF, TXT, HTML) - FULL IMPLEMENTATION
+ */
+async function previewAttachmentText(googleSub, messageId, attachmentId, maxKb = 256) {
+  return await handleGoogleApiCall(googleSub, async () => {
+    const authClient = await getAuthenticatedClient(googleSub);
+    const gmail = google.gmail({ version: 'v1', auth: authClient });
+
+    // Get message to find attachment MIME type
+    const message = await gmail.users.messages.get({
+      userId: 'me',
+      id: messageId,
+      format: 'full'
+    });
+
+    let mimeType = 'application/octet-stream';
+    
+    function findMimeType(parts) {
+      for (const part of parts) {
+        if (part.body?.attachmentId === attachmentId) {
+          mimeType = part.mimeType || mimeType;
+          return true;
+        }
+        if (part.parts) {
+          if (findMimeType(part.parts)) return true;
+        }
+      }
+      return false;
+    }
+
+    if (message.data.payload?.parts) {
+      findMimeType(message.data.payload.parts);
+    }
+
+    // Get attachment data
+    const attachment = await gmail.users.messages.attachments.get({
+      userId: 'me',
+      messageId: messageId,
+      id: attachmentId
+    });
+
+    const data = Buffer.from(attachment.data.data, 'base64url');
+    const sizeKb = data.length / 1024;
+    
+    if (sizeKb > maxKb * 2) {
+      return {
+        success: false,
+        error: 'Attachment too large for preview',
+        sizeKb: Math.round(sizeKb),
+        maxKb: maxKb
+      };
+    }
+
+    let text = '';
+    let contentType = 'text/plain';
+
+    try {
+      // Handle PDF files
+      if (mimeType === 'application/pdf') {
+        const pdfData = await pdfParse(data);
+        text = pdfData.text;
+        contentType = 'application/pdf';
+      }
+      // Handle plain text
+      else if (mimeType.includes('text/plain')) {
+        text = data.toString('utf-8');
+        contentType = 'text/plain';
+      }
+      // Handle HTML
+      else if (mimeType.includes('text/html')) {
+        text = data.toString('utf-8');
+        contentType = 'text/html';
+      }
+      // Fallback
+      else {
+        text = data.toString('utf-8', 0, Math.min(data.length, maxKb * 1024));
+        contentType = mimeType;
+      }
+
+      // Truncate if needed
+      const maxChars = maxKb * 1024;
+      const truncated = text.length > maxChars;
+      if (truncated) {
+        text = text.substring(0, maxChars);
+      }
+
+      return {
+        success: true,
+        truncated: truncated,
+        chars: text.length,
+        bytesScanned: data.length,
+        contentType: contentType,
+        text: text
+      };
+
+    } catch (error) {
+      console.error('Error extracting text:', error.message);
+      
+      // Fallback to raw text
+      text = data.toString('utf-8', 0, Math.min(data.length, maxKb * 1024));
+      
+      return {
+        success: true,
+        truncated: true,
+        chars: text.length,
+        bytesScanned: Math.min(data.length, maxKb * 1024),
+        contentType: 'text/plain',
+        text: text,
+        warning: 'Could not parse as PDF, showing raw text'
+      };
+    }
+  });
+}
+
+/**
+ * Preview attachment table (CSV, XLSX) - FULL IMPLEMENTATION
+ */
+async function previewAttachmentTable(googleSub, messageId, attachmentId, options = {}) {
+  return await handleGoogleApiCall(googleSub, async () => {
+    const { sheet = 0, maxRows = 50 } = options;
+    
+    const authClient = await getAuthenticatedClient(googleSub);
+    const gmail = google.gmail({ version: 'v1', auth: authClient });
+
+    // Get message to find attachment MIME type and filename
+    const message = await gmail.users.messages.get({
+      userId: 'me',
+      id: messageId,
+      format: 'full'
+    });
+
+    let mimeType = 'application/octet-stream';
+    let filename = 'unknown';
+    
+    function findAttachmentInfo(parts) {
+      for (const part of parts) {
+        if (part.body?.attachmentId === attachmentId) {
+          mimeType = part.mimeType || mimeType;
+          filename = part.filename || filename;
+          return true;
+        }
+        if (part.parts) {
+          if (findAttachmentInfo(part.parts)) return true;
+        }
+      }
+      return false;
+    }
+
+    if (message.data.payload?.parts) {
+      findAttachmentInfo(message.data.payload.parts);
+    }
+
+    // Get attachment data
+    const attachment = await gmail.users.messages.attachments.get({
+      userId: 'me',
+      messageId: messageId,
+      id: attachmentId
+    });
+
+    const data = Buffer.from(attachment.data.data, 'base64url');
+
+    try {
+      // Handle CSV files
+      if (mimeType.includes('csv') || filename.toLowerCase().endsWith('.csv')) {
+        const text = data.toString('utf-8');
+        const lines = text.split('\n').filter(l => l.trim());
+        
+        if (lines.length === 0) {
+          return {
+            success: false,
+            error: 'CSV file is empty'
+          };
+        }
+
+        const headers = lines[0].split(',').map(h => h.trim().replace(/^["']|["']$/g, ''));
+        const rows = lines.slice(1, Math.min(lines.length, maxRows + 1))
+          .map(line => {
+            // Simple CSV parsing (handles basic cases)
+            return line.split(',').map(cell => cell.trim().replace(/^["']|["']$/g, ''));
+          });
+        
+        return {
+          success: true,
+          truncated: lines.length > maxRows + 1,
+          totalRows: lines.length - 1,
+          totalCols: headers.length,
+          headers: headers,
+          rows: rows
+        };
+      }
+      
+      // Handle XLSX files
+      else if (mimeType.includes('spreadsheet') || 
+               mimeType.includes('excel') ||
+               filename.toLowerCase().endsWith('.xlsx') ||
+               filename.toLowerCase().endsWith('.xls')) {
+        
+        const workbook = XLSX.read(data, { type: 'buffer' });
+        
+        // Get sheet names
+        const sheetNames = workbook.SheetNames;
+        
+        if (sheetNames.length === 0) {
+          return {
+            success: false,
+            error: 'Excel file has no sheets'
+          };
+        }
+
+        // Determine which sheet to read
+        let sheetName;
+        if (typeof sheet === 'string') {
+          sheetName = sheet;
+          if (!sheetNames.includes(sheetName)) {
+            return {
+              success: false,
+              error: `Sheet "${sheetName}" not found`,
+              sheets: sheetNames
+            };
+          }
+        } else {
+          const sheetIndex = parseInt(sheet);
+          if (sheetIndex >= sheetNames.length) {
+            return {
+              success: false,
+              error: `Sheet index ${sheetIndex} out of range`,
+              sheets: sheetNames
+            };
+          }
+          sheetName = sheetNames[sheetIndex];
+        }
+
+        const worksheet = workbook.Sheets[sheetName];
+        
+        // Convert to JSON array
+        const jsonData = XLSX.utils.sheet_to_json(worksheet, { 
+          header: 1,  // Return array of arrays
+          defval: null,  // Use null for empty cells
+          blankrows: false  // Skip blank rows
+        });
+
+        if (jsonData.length === 0) {
+          return {
+            success: false,
+            error: 'Sheet is empty',
+            sheetName: sheetName,
+            sheets: sheetNames
+          };
+        }
+
+        const headers = jsonData[0].map(h => h !== null ? String(h) : '');
+        const rows = jsonData.slice(1, Math.min(jsonData.length, maxRows + 1));
+        
+        return {
+          success: true,
+          truncated: jsonData.length > maxRows + 1,
+          sheetName: sheetName,
+          sheets: sheetNames,
+          totalRows: jsonData.length - 1,
+          totalCols: headers.length,
+          headers: headers,
+          rows: rows
+        };
+      }
+      
+      // Unsupported type
+      else {
+        return {
+          success: false,
+          error: 'Unsupported file type for table preview',
+          mimeType: mimeType,
+          filename: filename,
+          hint: 'Only CSV and XLSX files are supported'
+        };
+      }
+
+    } catch (error) {
+      console.error('Error parsing table:', error.message);
+      
+      return {
+        success: false,
+        error: 'Failed to parse file',
+        details: error.message,
+        mimeType: mimeType,
+        filename: filename
+      };
+    }
+  });
+}
