@@ -1,5 +1,5 @@
 import crypto from 'crypto';
-import { getDb } from '../config/database.js';
+import { getDatabase } from '../config/database.js';
 
 /**
  * Idempotency Middleware
@@ -88,7 +88,7 @@ export async function idempotencyMiddleware(req, res, next) {
   const fingerprint = computeFingerprint(method, path, body);
 
   try {
-    const db = getDb();
+    const db = await getDatabase();
     const collection = db.collection('idempotency_records');
 
     // Ensure indexes exist (safe to call multiple times)
@@ -183,7 +183,7 @@ export async function idempotencyMiddleware(req, res, next) {
  */
 export async function cleanupExpiredRecords() {
   try {
-    const db = getDb();
+    const db = await getDatabase();
     const collection = db.collection('idempotency_records');
     
     const cutoff = new Date(Date.now() - IDEMPOTENCY_TTL_HOURS * 3600 * 1000);
