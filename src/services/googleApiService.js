@@ -9,23 +9,19 @@ dotenv.config();
 const activeRefreshes = new Map();
 
 // ==================== EMAIL SIZE LIMITS ====================
-// Konstanty pro kontrolu velikosti emailů a automatické zkracování
 const EMAIL_SIZE_LIMITS = {
-  MAX_SIZE_BYTES: 100000,       // 100KB - nad tímto se email automaticky zkrátí
-  MAX_BODY_LENGTH: 8000,        // Maximální délka plain text těla (znaky)
-  MAX_HTML_LENGTH: 5000,        // Maximální délka HTML těla (znaky)
-  WARNING_SIZE_BYTES: 50000     // 50KB - nad tímto se zobrazí varování
+  MAX_SIZE_BYTES: 100000,
+  MAX_BODY_LENGTH: 8000,
+  MAX_HTML_LENGTH: 5000,
+  WARNING_SIZE_BYTES: 50000
 };
 
 /**
  * Create authenticated Google API client
- * Creates a NEW OAuth2 client instance for each request to avoid conflicts
- * @param {boolean} forceRefresh - Force token refresh before creating client
  */
 async function getAuthenticatedClient(googleSub, forceRefresh = false) {
   const accessToken = await getValidAccessToken(googleSub, forceRefresh);
   
-  // Create NEW OAuth2 client instance for this request
   const { OAuth2 } = google.auth;
   const client = new OAuth2(
     process.env.GOOGLE_CLIENT_ID,
@@ -40,17 +36,13 @@ async function getAuthenticatedClient(googleSub, forceRefresh = false) {
 
 /**
  * Wrapper to handle Google API errors with automatic token refresh on 401
- * @param {string} googleSub - User's Google ID
- * @param {Function} apiCall - Function that makes the API call
- * @param {number} retryCount - Internal retry counter (max 2 retries)
  */
 async function handleGoogleApiCall(googleSub, apiCall, retryCount = 0) {
-  const MAX_RETRIES = 2; // Allow up to 2 retries (3 total attempts)
+  const MAX_RETRIES = 2;
   
   try {
     return await apiCall();
   } catch (error) {
-    // Check if it's a 401 authentication error
     const is401 = error.code === 401 || 
                   error.response?.status === 401 || 
                   error.message?.includes('Login Required') || 
@@ -58,60 +50,37 @@ async function handleGoogleApiCall(googleSub, apiCall, retryCount = 0) {
                   error.message?.includes('invalid_grant');
     
     if (is401 && retryCount < MAX_RETRIES) {
-      console.log(`⚠️ 401 error detected (attempt ${retryCount + 1}/${MAX_RETRIES + 1}), forcing token refresh and retry...`);
-      console.log(`Error details: ${error.message}`);
+      console.log(`⚠️ 401 error detected (attempt ${retryCount + 1}/${MAX_RETRIES + 1}), forcing token refresh...`);
       
       try {
-        // Force refresh the token - this will try even if expiry date says token is valid
         await getValidAccessToken(googleSub, true);
-        
-        // Wait a bit before retry to avoid rate limiting
         await new Promise(resolve => setTimeout(resolve, 500 * (retryCount + 1)));
-        
-        console.log(`🔄 Retrying API call after token refresh (attempt ${retryCount + 2}/${MAX_RETRIES + 1})...`);
-        // Retry the API call with incremented counter
         return await handleGoogleApiCall(googleSub, apiCall, retryCount + 1);
       } catch (refreshError) {
-        console.error(`❌ Token refresh failed on retry ${retryCount + 1}:`, {
-          message: refreshError.message,
-          code: refreshError.code,
-          isInvalidGrant: refreshError.message?.includes('invalid_grant'),
-          isTokenExpired: refreshError.message?.includes('Token has been expired')
-        });
-        
-        // If refresh token itself is invalid, we need re-authentication
         if (refreshError.message?.includes('invalid_grant') || 
-            refreshError.message?.includes('Token has been expired') ||
-            refreshError.message?.includes('invalid_refresh_token')) {
-          console.error('💥 Refresh token is invalid or expired - user MUST re-authenticate');
+            refreshError.message?.includes('Token has been expired')) {
           const authError = new Error('Your session has expired. Please log in again.');
           authError.code = 'REFRESH_TOKEN_INVALID';
           authError.statusCode = 401;
           authError.requiresReauth = true;
           throw authError;
         }
-        
-        // Fall through to throw auth error below
       }
     }
     
-    // If still 401 after max retries, or other auth error
     if (is401) {
-      console.error(`❌ Google API authentication failed after ${retryCount + 1} attempts - re-authentication required`);
       const authError = new Error('Authentication required - please log in again');
       authError.code = 'AUTH_REQUIRED';
       authError.statusCode = 401;
       throw authError;
     }
     
-    // Re-throw other errors
     throw error;
   }
 }
 
 /**
  * Get valid access token (auto-refresh if expired)
- * @param {boolean} forceRefresh - Force token refresh even if not expired
  */
 async function getValidAccessToken(googleSub, forceRefresh = false) {
   try {
@@ -132,16 +101,9 @@ async function getValidAccessToken(googleSub, forceRefresh = false) {
 
     if (forceRefresh || isExpired) {
       if (activeRefreshes.has(googleSub)) {
-        console.log('⏳ Token refresh already in progress, waiting...');
         await activeRefreshes.get(googleSub);
         const updatedUser = await getUserByGoogleSub(googleSub);
         return updatedUser.accessToken;
-      }
-
-      if (forceRefresh) {
-        console.log('🔄 Forcing token refresh due to 401 error...');
-      } else {
-        console.log('🔄 Access token expired, refreshing...');
       }
       
       const refreshPromise = (async () => {
@@ -165,12 +127,6 @@ async function getValidAccessToken(googleSub, forceRefresh = false) {
           console.log('✅ Access token refreshed successfully');
           return newTokens.access_token;
         } catch (refreshError) {
-          console.error('❌ Token refresh failed - user needs to re-authenticate');
-          console.error('Refresh error details:', {
-            message: refreshError.message,
-            code: refreshError.code,
-            status: refreshError.response?.status
-          });
           const authError = new Error('Authentication required - please log in again');
           authError.code = 'AUTH_REQUIRED';
           authError.statusCode = 401;
@@ -186,30 +142,18 @@ async function getValidAccessToken(googleSub, forceRefresh = false) {
 
     return user.accessToken;
   } catch (error) {
-    console.error('❌ [TOKEN_ERROR] Failed to get valid access token');
-    console.error('Details:', {
-      googleSub,
-      errorMessage: error.message,
-      errorCode: error.code,
-      timestamp: new Date().toISOString()
-    });
+    console.error('❌ [TOKEN_ERROR] Failed to get valid access token:', error.message);
     throw error;
   }
 }
 
 // ==================== HELPER FUNCTIONS ====================
 
-/**
- * Extrahuje plain text z Gmail message payload
- * @param {object} payload - Gmail message payload
- * @returns {string} Plain text obsah
- */
 function extractPlainText(payload) {
   let text = '';
   
   if (!payload) return text;
   
-  // Pokud má payload přímo body.data (jednoduchý email)
   if (payload.body && payload.body.data) {
     try {
       text = Buffer.from(payload.body.data, 'base64').toString('utf-8');
@@ -218,10 +162,8 @@ function extractPlainText(payload) {
     }
   }
   
-  // Pokud má payload parts (multipart email)
   if (payload.parts && payload.parts.length > 0) {
     for (const part of payload.parts) {
-      // Hledáme text/plain části
       if (part.mimeType === 'text/plain' && part.body && part.body.data) {
         try {
           text += Buffer.from(part.body.data, 'base64').toString('utf-8');
@@ -230,7 +172,6 @@ function extractPlainText(payload) {
         }
       }
       
-      // Rekurzivně procházíme vnořené části
       if (part.parts) {
         text += extractPlainText(part);
       }
@@ -240,133 +181,100 @@ function extractPlainText(payload) {
   return text;
 }
 
-/**
- * Zkrátí text na maximální délku a přidá označení
- * @param {string} text - Text ke zkrácení
- * @param {number} maxLength - Maximální délka
- * @returns {string} Zkrácený text
- */
 function truncateText(text, maxLength) {
   if (!text || text.length <= maxLength) return text;
-  
-  return text.substring(0, maxLength) + '\n\n[... Text zkrácen kvůli velikosti. Původní délka: ' + text.length + ' znaků ...]';
+  return text.substring(0, maxLength) + '\n\n[... Text zkrácen kvůli velikosti ...]';
 }
 
 /**
- * Odstraní HTML tagy a vrátí plain text
- * @param {string} html - HTML obsah
- * @returns {string} Plain text
+ * Extract attachments from email payload
  */
-function stripHtmlTags(html) {
-  if (!html) return '';
+function extractAttachments(payload, messageId) {
+  const attachments = [];
   
-  // Základní odstranění HTML tagů
-  return html
-    .replace(/<style[^>]*>.*?<\/style>/gi, '') // Odstranit style tagy
-    .replace(/<script[^>]*>.*?<\/script>/gi, '') // Odstranit script tagy
-    .replace(/<[^>]+>/g, '') // Odstranit všechny HTML tagy
-    .replace(/&nbsp;/g, ' ') // Nahradit &nbsp; mezerou
-    .replace(/&amp;/g, '&') // Dekódovat &amp;
-    .replace(/&lt;/g, '<') // Dekódovat &lt;
-    .replace(/&gt;/g, '>') // Dekódovat &gt;
-    .replace(/&quot;/g, '"') // Dekódovat &quot;
-    .replace(/\s+/g, ' ') // Nahradit více mezer jednou
-    .trim();
+  if (!payload || !payload.parts) return attachments;
+  
+  function traverseParts(parts) {
+    for (const part of parts) {
+      if (part.filename && part.body && part.body.attachmentId) {
+        attachments.push({
+          attachmentId: part.body.attachmentId,
+          filename: part.filename,
+          mimeType: part.mimeType,
+          size: part.body.size || 0,
+          isInline: part.headers?.some(h => 
+            h.name.toLowerCase() === 'content-disposition' && 
+            h.value.includes('inline')
+          ) || false,
+          cid: part.headers?.find(h => 
+            h.name.toLowerCase() === 'content-id'
+          )?.value?.replace(/[<>]/g, '') || null
+        });
+      }
+      
+      if (part.parts) {
+        traverseParts(part.parts);
+      }
+    }
+  }
+  
+  traverseParts(payload.parts);
+  return attachments;
 }
 
 // ==================== GMAIL FUNCTIONS ====================
 
-/**
- * Send an email
- * @param {string} googleSub - User's Google ID
- * @param {object} options - Email options
- * @param {string} options.to - Recipient email
- * @param {string} options.subject - Email subject
- * @param {string} options.body - Email body
- * @param {string} [options.cc] - CC recipients
- * @param {string} [options.bcc] - BCC recipients
- * @param {boolean} [options.includeMcp1Attribution=false] - Add MCP1 branding at end (default: false)
- */
-async function sendEmail(googleSub, { to, subject, body, cc, bcc, includeMcp1Attribution = false }) {
+async function sendEmail(googleSub, { to, subject, body, cc, bcc }) {
   return await handleGoogleApiCall(googleSub, async () => {
-    try {
-      const authClient = await getAuthenticatedClient(googleSub);
-      const gmail = google.gmail({ version: 'v1', auth: authClient });
+    const authClient = await getAuthenticatedClient(googleSub);
+    const gmail = google.gmail({ version: 'v1', auth: authClient });
 
-      // Add optional MCP1 attribution/branding
-      const attribution = includeMcp1Attribution 
-        ? '\n\n---\nPosláno z MCP1 OAuth Proxy Server'
-        : '';
-      
-      const fullBody = body + attribution;
+    const encodedSubject = `=?UTF-8?B?${Buffer.from(subject, 'utf8').toString('base64')}?=`;
+    
+    const messageParts = [
+      'Content-Type: text/plain; charset="UTF-8"',
+      'MIME-Version: 1.0',
+      'Content-Transfer-Encoding: 7bit',
+      `To: ${to}`,
+      `Subject: ${encodedSubject}`,
+    ];
 
-      // RFC 2047 encoding for Subject with UTF-8 characters
-      const encodedSubject = `=?UTF-8?B?${Buffer.from(subject, 'utf8').toString('base64')}?=`;
-      
-      const messageParts = [
-        'Content-Type: text/plain; charset="UTF-8"',
-        'MIME-Version: 1.0',
-        'Content-Transfer-Encoding: 7bit',
-        `To: ${to}`,
-        `Subject: ${encodedSubject}`,
-      ];
+    if (cc) messageParts.push(`Cc: ${cc}`);
+    if (bcc) messageParts.push(`Bcc: ${bcc}`);
+    
+    messageParts.push('', body);
 
-      if (cc) messageParts.push(`Cc: ${cc}`);
-      if (bcc) messageParts.push(`Bcc: ${bcc}`);
-      
-      messageParts.push('');  // Empty line before body
-      messageParts.push(fullBody);
+    const message = messageParts.join('\r\n');
+    const encodedMessage = Buffer.from(message, 'utf8')
+      .toString('base64')
+      .replace(/\+/g, '-')
+      .replace(/\//g, '_')
+      .replace(/=+$/, '');
 
-      const message = messageParts.join('\r\n');
-      
-      // Base64url encode the entire message
-      const encodedMessage = Buffer.from(message, 'utf8')
-        .toString('base64')
-        .replace(/\+/g, '-')
-        .replace(/\//g, '_')
-        .replace(/=+$/, '');
+    const result = await gmail.users.messages.send({
+      userId: 'me',
+      requestBody: { raw: encodedMessage }
+    });
 
-      const result = await gmail.users.messages.send({
-        userId: 'me',
-        requestBody: { raw: encodedMessage }
-      });
-
-      console.log('✅ Email sent successfully:', result.data.id);
-      return result.data;
-    } catch (error) {
-      console.error('❌ [GMAIL_ERROR] Failed to send email');
-      console.error('Details:', {
-        to, subject,
-        errorMessage: error.message,
-        statusCode: error.response?.status,
-        timestamp: new Date().toISOString()
-      });
-      throw error;
-    }
+    console.log('✅ Email sent:', result.data.id);
+    return result.data;
   });
 }
 
 /**
- * Read a specific email with intelligent size handling
- * @param {string} googleSub - User's Google ID
- * @param {string} messageId - Email message ID
- * @param {object} options - Options for reading
- * @param {string} options.format - 'full', 'metadata', 'snippet', 'minimal' (default: 'full')
- * @param {boolean} options.autoTruncate - Automatically truncate large emails (default: true)
- * @param {number} retryCount - Internal retry counter
- * @returns {object} Email data with truncation info if applicable
+ * Read email with optional includeAttachments parameter
  */
 async function readEmail(googleSub, messageId, options = {}) {
   return await handleGoogleApiCall(googleSub, async () => {
     const { 
       format = 'full',
-      autoTruncate = true 
+      autoTruncate = true,
+      includeAttachments = false
     } = options;
 
     const authClient = await getAuthenticatedClient(googleSub);
     const gmail = google.gmail({ version: 'v1', auth: authClient });
 
-    // KROK 1: Nejdřív získáme metadata pro kontrolu velikosti
     const metadataResult = await gmail.users.messages.get({
       userId: 'me',
       id: messageId,
@@ -377,9 +285,7 @@ async function readEmail(googleSub, messageId, options = {}) {
     const sizeEstimate = metadataResult.data.sizeEstimate || 0;
     const snippet = metadataResult.data.snippet || '';
     
-    // KROK 2: Pokud uživatel chce jen snippet nebo metadata, vrátíme to hned
     if (format === 'snippet') {
-      console.log('✅ Email snippet retrieved:', messageId, `(${sizeEstimate} bytes)`);
       return {
         id: messageId,
         snippet: snippet,
@@ -390,15 +296,10 @@ async function readEmail(googleSub, messageId, options = {}) {
     }
 
     if (format === 'metadata') {
-      console.log('✅ Email metadata retrieved:', messageId, `(${sizeEstimate} bytes)`);
-      
-      // Extract and transform headers for easy access
       const headers = metadataResult.data.payload.headers;
       const fromHeader = headers.find(h => h.name.toLowerCase() === 'from')?.value || '';
       const subjectHeader = headers.find(h => h.name.toLowerCase() === 'subject')?.value || '';
-      const dateHeader = headers.find(h => h.name.toLowerCase() === 'date')?.value || '';
       
-      // Parse displayName and email from "Name <email>" format
       let from = fromHeader;
       let fromEmail = fromHeader;
       let fromName = '';
@@ -411,7 +312,6 @@ async function readEmail(googleSub, messageId, options = {}) {
       
       return {
         ...metadataResult.data,
-        // Transformed fields for easy access
         from: from,
         fromEmail: fromEmail,
         fromName: fromName,
@@ -421,26 +321,19 @@ async function readEmail(googleSub, messageId, options = {}) {
       };
     }
 
-    // KROK 3: Kontrola velikosti - pokud je email příliš velký a máme autoTruncate
     const isTooLarge = sizeEstimate > EMAIL_SIZE_LIMITS.MAX_SIZE_BYTES;
-    const isLarge = sizeEstimate > EMAIL_SIZE_LIMITS.WARNING_SIZE_BYTES;
 
     if (isTooLarge && autoTruncate) {
-      console.log(`⚠️ Email is too large (${sizeEstimate} bytes), returning truncated version...`);
-      
-      // Získáme full verzi ale zkrátíme ji
       const fullResult = await gmail.users.messages.get({
         userId: 'me',
         id: messageId,
         format: format === 'minimal' ? 'minimal' : 'full'
       });
 
-      // Extrahujeme plain text a zkrátíme
       const plainText = extractPlainText(fullResult.data.payload);
       const truncatedText = truncateText(plainText, EMAIL_SIZE_LIMITS.MAX_BODY_LENGTH);
 
-      // Vrátíme zkrácenou verzi s metadata
-      return {
+      const response = {
         ...metadataResult.data,
         snippet: snippet,
         bodyPreview: truncatedText,
@@ -448,14 +341,17 @@ async function readEmail(googleSub, messageId, options = {}) {
         truncationInfo: {
           originalSize: sizeEstimate,
           maxAllowedSize: EMAIL_SIZE_LIMITS.MAX_SIZE_BYTES,
-          truncatedBodyLength: EMAIL_SIZE_LIMITS.MAX_BODY_LENGTH,
-          reason: 'Email překročil maximální povolenou velikost'
-        },
-        warning: `Email byl automaticky zkrácen z ${sizeEstimate} bytů na ${EMAIL_SIZE_LIMITS.MAX_BODY_LENGTH} znaků textu.`
+          truncatedBodyLength: EMAIL_SIZE_LIMITS.MAX_BODY_LENGTH
+        }
       };
+      
+      if (includeAttachments) {
+        response.attachments = extractAttachments(fullResult.data.payload, messageId);
+      }
+      
+      return response;
     }
 
-    // KROK 4: Email není příliš velký, vrátíme full verzi
     const result = await gmail.users.messages.get({
       userId: 'me',
       id: messageId,
@@ -466,21 +362,15 @@ async function readEmail(googleSub, messageId, options = {}) {
       ...result.data,
       truncated: false
     };
-
-    // Přidáme varování pokud je email velký (ale ne příliš)
-    if (isLarge && !isTooLarge) {
-      response.sizeWarning = `Email je velký (${sizeEstimate} bytů). Může trvat delší dobu než se zpracuje.`;
+    
+    if (includeAttachments) {
+      response.attachments = extractAttachments(result.data.payload, messageId);
     }
 
-    console.log('✅ Email read successfully:', messageId, `(${sizeEstimate} bytes)`);
     return response;
   });
 }
 
-/**
- * Search emails with query
- * Automatically retries with token refresh on 401 error
- */
 async function searchEmails(googleSub, { query, maxResults = 10, pageToken }) {
   return await handleGoogleApiCall(googleSub, async () => {
     const authClient = await getAuthenticatedClient(googleSub);
@@ -495,21 +385,15 @@ async function searchEmails(googleSub, { query, maxResults = 10, pageToken }) {
     if (pageToken) params.pageToken = pageToken;
 
     const result = await gmail.users.messages.list(params);
-
-    console.log('✅ Email search completed:', result.data.resultSizeEstimate);
     return result.data;
   });
 }
 
-/**
- * Reply to an email
- */
 async function replyToEmail(googleSub, messageId, { body }) {
-  try {
+  return await handleGoogleApiCall(googleSub, async () => {
     const authClient = await getAuthenticatedClient(googleSub);
     const gmail = google.gmail({ version: 'v1', auth: authClient });
 
-    // Get original message to extract headers
     const original = await gmail.users.messages.get({
       userId: 'me',
       id: messageId,
@@ -522,11 +406,9 @@ async function replyToEmail(googleSub, messageId, { body }) {
     const originalSubject = headers.find(h => h.name === 'Subject')?.value;
     const originalMessageId = headers.find(h => h.name === 'Message-ID')?.value;
 
-    // RFC 2047 encoding for Subject with UTF-8 characters
     const replySubject = originalSubject?.replace(/^Re: /, '') || '';
     const encodedSubject = `=?UTF-8?B?${Buffer.from(`Re: ${replySubject}`, 'utf8').toString('base64')}?=`;
 
-    // Create reply
     const messageParts = [
       'Content-Type: text/plain; charset="UTF-8"',
       'MIME-Version: 1.0',
@@ -554,29 +436,15 @@ async function replyToEmail(googleSub, messageId, { body }) {
       }
     });
 
-    console.log('✅ Reply sent successfully:', result.data.id);
     return result.data;
-  } catch (error) {
-    console.error('❌ [GMAIL_ERROR] Failed to reply to email');
-    console.error('Details:', {
-      messageId,
-      errorMessage: error.message,
-      statusCode: error.response?.status,
-      timestamp: new Date().toISOString()
-    });
-    throw error;
-  }
+  });
 }
 
-/**
- * Create a draft
- */
 async function createDraft(googleSub, { to, subject, body }) {
-  try {
+  return await handleGoogleApiCall(googleSub, async () => {
     const authClient = await getAuthenticatedClient(googleSub);
     const gmail = google.gmail({ version: 'v1', auth: authClient });
 
-    // RFC 2047 encoding for Subject with UTF-8 characters
     const encodedSubject = `=?UTF-8?B?${Buffer.from(subject, 'utf8').toString('base64')}?=`;
 
     const messageParts = [
@@ -603,24 +471,12 @@ async function createDraft(googleSub, { to, subject, body }) {
       }
     });
 
-    console.log('✅ Draft created:', result.data.id);
     return result.data;
-  } catch (error) {
-    console.error('❌ [GMAIL_ERROR] Failed to create draft');
-    console.error('Details:', {
-      to, subject,
-      errorMessage: error.message,
-      timestamp: new Date().toISOString()
-    });
-    throw error;
-  }
+  });
 }
 
-/**
- * Delete an email (move to trash)
- */
 async function deleteEmail(googleSub, messageId) {
-  try {
+  return await handleGoogleApiCall(googleSub, async () => {
     const authClient = await getAuthenticatedClient(googleSub);
     const gmail = google.gmail({ version: 'v1', auth: authClient });
 
@@ -629,24 +485,12 @@ async function deleteEmail(googleSub, messageId) {
       id: messageId
     });
 
-    console.log('✅ Email moved to trash:', messageId);
     return { success: true, messageId };
-  } catch (error) {
-    console.error('❌ [GMAIL_ERROR] Failed to delete email');
-    console.error('Details:', {
-      messageId,
-      errorMessage: error.message,
-      timestamp: new Date().toISOString()
-    });
-    throw error;
-  }
+  });
 }
 
-/**
- * Star/unstar an email
- */
 async function toggleStar(googleSub, messageId, star = true) {
-  try {
+  return await handleGoogleApiCall(googleSub, async () => {
     const authClient = await getAuthenticatedClient(googleSub);
     const gmail = google.gmail({ version: 'v1', auth: authClient });
 
@@ -659,24 +503,12 @@ async function toggleStar(googleSub, messageId, star = true) {
       }
     });
 
-    console.log(`✅ Email ${star ? 'starred' : 'unstarred'}:`, messageId);
     return { success: true, messageId, starred: star };
-  } catch (error) {
-    console.error('❌ [GMAIL_ERROR] Failed to toggle star');
-    console.error('Details:', {
-      messageId, star,
-      errorMessage: error.message,
-      timestamp: new Date().toISOString()
-    });
-    throw error;
-  }
+  });
 }
 
-/**
- * Mark email as read/unread
- */
 async function markAsRead(googleSub, messageId, read = true) {
-  try {
+  return await handleGoogleApiCall(googleSub, async () => {
     const authClient = await getAuthenticatedClient(googleSub);
     const gmail = google.gmail({ version: 'v1', auth: authClient });
 
@@ -689,54 +521,402 @@ async function markAsRead(googleSub, messageId, read = true) {
       }
     });
 
-    console.log(`✅ Email marked as ${read ? 'read' : 'unread'}:`, messageId);
     return { success: true, messageId, read };
-  } catch (error) {
-    console.error('❌ [GMAIL_ERROR] Failed to mark as read');
-    console.error('Details:', {
-      messageId, read,
-      errorMessage: error.message,
-      timestamp: new Date().toISOString()
+  });
+}
+
+// ==================== NEW: LABELS ====================
+
+/**
+ * List all Gmail labels
+ */
+async function listLabels(googleSub) {
+  return await handleGoogleApiCall(googleSub, async () => {
+    const authClient = await getAuthenticatedClient(googleSub);
+    const gmail = google.gmail({ version: 'v1', auth: authClient });
+
+    const result = await gmail.users.labels.list({
+      userId: 'me'
     });
-    throw error;
-  }
+
+    const labels = result.data.labels.map(label => ({
+      id: label.id,
+      name: label.name,
+      type: label.type === 'system' ? 'system' : 'user',
+      color: label.color?.backgroundColor || null
+    }));
+
+    console.log('✅ Labels listed:', labels.length);
+    return labels;
+  });
+}
+
+/**
+ * Modify labels on a message
+ */
+async function modifyMessageLabels(googleSub, messageId, { add = [], remove = [] }) {
+  return await handleGoogleApiCall(googleSub, async () => {
+    const authClient = await getAuthenticatedClient(googleSub);
+    const gmail = google.gmail({ version: 'v1', auth: authClient });
+
+    await gmail.users.messages.modify({
+      userId: 'me',
+      id: messageId,
+      requestBody: {
+        addLabelIds: add,
+        removeLabelIds: remove
+      }
+    });
+
+    console.log(`✅ Labels modified on message ${messageId}`);
+    return { success: true };
+  });
+}
+
+/**
+ * Modify labels on all messages in a thread
+ */
+async function modifyThreadLabels(googleSub, threadId, { add = [], remove = [] }) {
+  return await handleGoogleApiCall(googleSub, async () => {
+    const authClient = await getAuthenticatedClient(googleSub);
+    const gmail = google.gmail({ version: 'v1', auth: authClient });
+
+    await gmail.users.threads.modify({
+      userId: 'me',
+      id: threadId,
+      requestBody: {
+        addLabelIds: add,
+        removeLabelIds: remove
+      }
+    });
+
+    console.log(`✅ Labels modified on thread ${threadId}`);
+    return { success: true };
+  });
+}
+
+// ==================== NEW: THREADS ====================
+
+/**
+ * Get thread summary
+ */
+async function getThread(googleSub, threadId) {
+  return await handleGoogleApiCall(googleSub, async () => {
+    const authClient = await getAuthenticatedClient(googleSub);
+    const gmail = google.gmail({ version: 'v1', auth: authClient });
+
+    const result = await gmail.users.threads.get({
+      userId: 'me',
+      id: threadId,
+      format: 'metadata',
+      metadataHeaders: ['From', 'Subject', 'Date']
+    });
+
+    const messages = result.data.messages || [];
+    const lastMessage = messages[messages.length - 1];
+    const lastHeaders = lastMessage?.payload?.headers || [];
+    
+    // Extract participants
+    const participantsSet = new Set();
+    for (const msg of messages) {
+      const fromHeader = msg.payload?.headers?.find(h => h.name.toLowerCase() === 'from')?.value;
+      if (fromHeader) {
+        const emailMatch = fromHeader.match(/<(.+)>/) || fromHeader.match(/([^\s]+@[^\s]+)/);
+        if (emailMatch) {
+          participantsSet.add(emailMatch[1] || emailMatch[0]);
+        }
+      }
+    }
+
+    const lastFrom = lastHeaders.find(h => h.name.toLowerCase() === 'from')?.value || '';
+    const lastSubject = lastHeaders.find(h => h.name.toLowerCase() === 'subject')?.value || '';
+    
+    let lastFromEmail = lastFrom;
+    let lastFromName = '';
+    const emailMatch = lastFrom.match(/<(.+)>/);
+    if (emailMatch) {
+      lastFromEmail = emailMatch[1];
+      lastFromName = lastFrom.replace(/<.+>/, '').trim().replace(/^["']|["']$/g, '');
+    }
+
+    const isUnread = messages.some(msg => msg.labelIds?.includes('UNREAD'));
+    const allLabelIds = new Set();
+    messages.forEach(msg => {
+      (msg.labelIds || []).forEach(id => allLabelIds.add(id));
+    });
+
+    return {
+      threadId: threadId,
+      count: messages.length,
+      unread: isUnread,
+      participants: Array.from(participantsSet).map(email => ({
+        email,
+        name: null
+      })),
+      messageIds: messages.map(m => m.id),
+      labelIds: Array.from(allLabelIds),
+      last: {
+        id: lastMessage.id,
+        from: {
+          name: lastFromName || null,
+          email: lastFromEmail
+        },
+        subject: lastSubject,
+        date: new Date(parseInt(lastMessage.internalDate)).toISOString(),
+        snippet: lastMessage.snippet
+      }
+    };
+  });
+}
+
+/**
+ * Mark thread as read/unread
+ */
+async function setThreadRead(googleSub, threadId, read = true) {
+  return await handleGoogleApiCall(googleSub, async () => {
+    const authClient = await getAuthenticatedClient(googleSub);
+    const gmail = google.gmail({ version: 'v1', auth: authClient });
+
+    await gmail.users.threads.modify({
+      userId: 'me',
+      id: threadId,
+      requestBody: {
+        addLabelIds: read ? [] : ['UNREAD'],
+        removeLabelIds: read ? ['UNREAD'] : []
+      }
+    });
+
+    console.log(`✅ Thread marked as ${read ? 'read' : 'unread'}:`, threadId);
+    return { success: true };
+  });
+}
+
+/**
+ * Reply to a thread
+ */
+async function replyToThread(googleSub, threadId, { body }) {
+  return await handleGoogleApiCall(googleSub, async () => {
+    const authClient = await getAuthenticatedClient(googleSub);
+    const gmail = google.gmail({ version: 'v1', auth: authClient });
+
+    // Get thread to find last message
+    const thread = await gmail.users.threads.get({
+      userId: 'me',
+      id: threadId,
+      format: 'metadata',
+      metadataHeaders: ['From', 'Subject', 'Message-ID']
+    });
+
+    const messages = thread.data.messages || [];
+    const lastMessage = messages[messages.length - 1];
+    const headers = lastMessage?.payload?.headers || [];
+    
+    const originalFrom = headers.find(h => h.name === 'From')?.value;
+    const originalSubject = headers.find(h => h.name === 'Subject')?.value;
+    const originalMessageId = headers.find(h => h.name === 'Message-ID')?.value;
+
+    const replySubject = originalSubject?.replace(/^Re: /, '') || '';
+    const encodedSubject = `=?UTF-8?B?${Buffer.from(`Re: ${replySubject}`, 'utf8').toString('base64')}?=`;
+
+    const messageParts = [
+      'Content-Type: text/plain; charset="UTF-8"',
+      'MIME-Version: 1.0',
+      'Content-Transfer-Encoding: 7bit',
+      `To: ${originalFrom}`,
+      `Subject: ${encodedSubject}`,
+      `In-Reply-To: ${originalMessageId}`,
+      `References: ${originalMessageId}`,
+      '',
+      body
+    ];
+
+    const message = messageParts.join('\r\n');
+    const encodedMessage = Buffer.from(message, 'utf8')
+      .toString('base64')
+      .replace(/\+/g, '-')
+      .replace(/\//g, '_')
+      .replace(/=+$/, '');
+
+    const result = await gmail.users.messages.send({
+      userId: 'me',
+      requestBody: {
+        raw: encodedMessage,
+        threadId: threadId
+      }
+    });
+
+    console.log('✅ Reply sent to thread:', threadId);
+    return result.data;
+  });
+}
+
+// ==================== NEW: ATTACHMENTS ====================
+
+/**
+ * Get attachment metadata with download URL
+ */
+async function getAttachmentMeta(googleSub, messageId, attachmentId) {
+  return await handleGoogleApiCall(googleSub, async () => {
+    const authClient = await getAuthenticatedClient(googleSub);
+    const gmail = google.gmail({ version: 'v1', auth: authClient });
+
+    // Get message to find attachment details
+    const message = await gmail.users.messages.get({
+      userId: 'me',
+      id: messageId,
+      format: 'full'
+    });
+
+    let attachmentMeta = null;
+    
+    function findAttachment(parts) {
+      for (const part of parts) {
+        if (part.body?.attachmentId === attachmentId) {
+          attachmentMeta = {
+            attachmentId: attachmentId,
+            filename: part.filename,
+            mimeType: part.mimeType,
+            size: part.body.size || 0,
+            isInline: part.headers?.some(h => 
+              h.name.toLowerCase() === 'content-disposition' && 
+              h.value.includes('inline')
+            ) || false,
+            cid: part.headers?.find(h => 
+              h.name.toLowerCase() === 'content-id'
+            )?.value?.replace(/[<>]/g, '') || null
+          };
+          return true;
+        }
+        if (part.parts) {
+          if (findAttachment(part.parts)) return true;
+        }
+      }
+      return false;
+    }
+
+    if (message.data.payload?.parts) {
+      findAttachment(message.data.payload.parts);
+    }
+
+    if (!attachmentMeta) {
+      throw new Error('Attachment not found');
+    }
+
+    // Note: In production, generate signed URL with expiration
+    // For now, we'll just return metadata
+    attachmentMeta.downloadUrl = null;
+    attachmentMeta.expiresAt = null;
+
+    return attachmentMeta;
+  });
+}
+
+/**
+ * Preview attachment text (PDF, TXT, HTML)
+ */
+async function previewAttachmentText(googleSub, messageId, attachmentId, maxKb = 256) {
+  return await handleGoogleApiCall(googleSub, async () => {
+    const authClient = await getAuthenticatedClient(googleSub);
+    const gmail = google.gmail({ version: 'v1', auth: authClient });
+
+    // Get attachment data
+    const attachment = await gmail.users.messages.attachments.get({
+      userId: 'me',
+      messageId: messageId,
+      id: attachmentId
+    });
+
+    const data = Buffer.from(attachment.data.data, 'base64url');
+    const sizeKb = data.length / 1024;
+    
+    if (sizeKb > maxKb) {
+      return {
+        success: false,
+        error: 'Attachment too large for preview',
+        sizeKb: Math.round(sizeKb)
+      };
+    }
+
+    // For now, return simple text extraction
+    // In production, use pdf-parse or similar for PDFs
+    const text = data.toString('utf-8', 0, Math.min(data.length, maxKb * 1024));
+    
+    return {
+      success: true,
+      truncated: text.length < data.length,
+      chars: text.length,
+      bytesScanned: Math.min(data.length, maxKb * 1024),
+      contentType: 'text/plain',
+      text: text
+    };
+  });
+}
+
+/**
+ * Preview attachment table (CSV, XLSX)
+ */
+async function previewAttachmentTable(googleSub, messageId, attachmentId, options = {}) {
+  return await handleGoogleApiCall(googleSub, async () => {
+    const { sheet = 0, maxRows = 50 } = options;
+    
+    const authClient = await getAuthenticatedClient(googleSub);
+    const gmail = google.gmail({ version: 'v1', auth: authClient });
+
+    // Get attachment data
+    const attachment = await gmail.users.messages.attachments.get({
+      userId: 'me',
+      messageId: messageId,
+      id: attachmentId
+    });
+
+    const data = Buffer.from(attachment.data.data, 'base64url');
+    
+    // For CSV
+    if (attachment.data.mimeType?.includes('csv')) {
+      const text = data.toString('utf-8');
+      const lines = text.split('\n').filter(l => l.trim());
+      const headers = lines[0].split(',').map(h => h.trim());
+      const rows = lines.slice(1, Math.min(lines.length, maxRows + 1))
+        .map(line => line.split(',').map(cell => cell.trim()));
+      
+      return {
+        success: true,
+        truncated: lines.length > maxRows + 1,
+        totalRows: lines.length - 1,
+        totalCols: headers.length,
+        headers: headers,
+        rows: rows
+      };
+    }
+    
+    // For XLSX (simplified - in production use xlsx library properly)
+    return {
+      success: false,
+      error: 'XLSX preview not yet implemented'
+    };
+  });
 }
 
 // ==================== CALENDAR FUNCTIONS ====================
 
-/**
- * Create a calendar event (with optional attendees)
- * @param {string} googleSub - User's Google ID
- * @param {object} eventData - Event details
- * @param {boolean} [eventData.includeMcp1Attribution=true] - Add MCP1 branding to description (default: true)
- */
 async function createCalendarEvent(googleSub, eventData) {
-  try {
+  return await handleGoogleApiCall(googleSub, async () => {
     const authClient = await getAuthenticatedClient(googleSub);
     const calendar = google.calendar({ version: 'v3', auth: authClient });
 
-    // Add MCP1 attribution/branding to description (default: true)
-    const includeMcp1Attribution = eventData.includeMcp1Attribution !== false; // Default true
-    const attribution = includeMcp1Attribution
-      ? '\n\n---\nVytvořeno: MCP1 OAuth Proxy Server'
-      : '';
-    
-    const fullDescription = (eventData.description || '') + attribution;
-
     const event = {
       summary: eventData.summary,
-      description: fullDescription,
+      description: eventData.description || '',
       start: {
         dateTime: eventData.start,
-        timeZone: eventData.timeZone || 'UTC'
+        timeZone: eventData.timeZone || 'Europe/Prague'
       },
       end: {
         dateTime: eventData.end,
-        timeZone: eventData.timeZone || 'UTC'
+        timeZone: eventData.timeZone || 'Europe/Prague'
       }
     };
 
-    // Add attendees if provided
     if (eventData.attendees) {
       event.attendees = eventData.attendees.map(email => ({ email }));
     }
@@ -752,28 +932,15 @@ async function createCalendarEvent(googleSub, eventData) {
     const result = await calendar.events.insert({
       calendarId: 'primary',
       requestBody: event,
-      sendUpdates: eventData.attendees ? 'all' : 'none' // Send invites if attendees
+      sendUpdates: eventData.attendees ? 'all' : 'none'
     });
 
-    console.log('✅ Calendar event created:', result.data.id);
     return result.data;
-  } catch (error) {
-    console.error('❌ [CALENDAR_ERROR] Failed to create event');
-    console.error('Details:', {
-      summary: eventData.summary,
-      errorMessage: error.message,
-      statusCode: error.response?.status,
-      timestamp: new Date().toISOString()
-    });
-    throw error;
-  }
+  });
 }
 
-/**
- * Get a specific calendar event
- */
 async function getCalendarEvent(googleSub, eventId) {
-  try {
+  return await handleGoogleApiCall(googleSub, async () => {
     const authClient = await getAuthenticatedClient(googleSub);
     const calendar = google.calendar({ version: 'v3', auth: authClient });
 
@@ -782,24 +949,12 @@ async function getCalendarEvent(googleSub, eventId) {
       eventId: eventId
     });
 
-    console.log('✅ Calendar event retrieved:', eventId);
     return result.data;
-  } catch (error) {
-    console.error('❌ [CALENDAR_ERROR] Failed to get event');
-    console.error('Details:', {
-      eventId,
-      errorMessage: error.message,
-      timestamp: new Date().toISOString()
-    });
-    throw error;
-  }
+  });
 }
 
-/**
- * List calendar events
- */
 async function listCalendarEvents(googleSub, { timeMin, timeMax, maxResults = 10, query }) {
-  try {
+  return await handleGoogleApiCall(googleSub, async () => {
     const authClient = await getAuthenticatedClient(googleSub);
     const calendar = google.calendar({ version: 'v3', auth: authClient });
 
@@ -815,24 +970,12 @@ async function listCalendarEvents(googleSub, { timeMin, timeMax, maxResults = 10
     if (query) params.q = query;
 
     const result = await calendar.events.list(params);
-
-    console.log('✅ Calendar events listed:', result.data.items?.length || 0);
     return result.data;
-  } catch (error) {
-    console.error('❌ [CALENDAR_ERROR] Failed to list events');
-    console.error('Details:', {
-      errorMessage: error.message,
-      timestamp: new Date().toISOString()
-    });
-    throw error;
-  }
+  });
 }
 
-/**
- * Update a calendar event
- */
 async function updateCalendarEvent(googleSub, eventId, updates) {
-  try {
+  return await handleGoogleApiCall(googleSub, async () => {
     const authClient = await getAuthenticatedClient(googleSub);
     const calendar = google.calendar({ version: 'v3', auth: authClient });
 
@@ -852,24 +995,12 @@ async function updateCalendarEvent(googleSub, eventId, updates) {
       requestBody: updatedEvent
     });
 
-    console.log('✅ Calendar event updated:', eventId);
     return result.data;
-  } catch (error) {
-    console.error('❌ [CALENDAR_ERROR] Failed to update event');
-    console.error('Details:', {
-      eventId,
-      errorMessage: error.message,
-      timestamp: new Date().toISOString()
-    });
-    throw error;
-  }
+  });
 }
 
-/**
- * Delete a calendar event
- */
 async function deleteCalendarEvent(googleSub, eventId) {
-  try {
+  return await handleGoogleApiCall(googleSub, async () => {
     const authClient = await getAuthenticatedClient(googleSub);
     const calendar = google.calendar({ version: 'v3', auth: authClient });
 
@@ -878,32 +1009,15 @@ async function deleteCalendarEvent(googleSub, eventId) {
       eventId: eventId
     });
 
-    console.log('✅ Calendar event deleted:', eventId);
     return { success: true, eventId };
-  } catch (error) {
-    console.error('❌ [CALENDAR_ERROR] Failed to delete event');
-    console.error('Details:', {
-      eventId,
-      errorMessage: error.message,
-      timestamp: new Date().toISOString()
-    });
-    throw error;
-  }
+  });
 }
 
-/**
- * Check for calendar conflicts
- * Queries existing events in [start, end) range
- * Returns array of conflicting events
- * @param {string} googleSub - User's Google ID
- * @param {object} options - { start, end, excludeEventId? }
- */
 async function checkConflicts(googleSub, { start, end, excludeEventId }) {
-  try {
+  return await handleGoogleApiCall(googleSub, async () => {
     const authClient = await getAuthenticatedClient(googleSub);
     const calendar = google.calendar({ version: 'v3', auth: authClient });
 
-    // Query events in the time range
     const result = await calendar.events.list({
       calendarId: 'primary',
       timeMin: start,
@@ -913,14 +1027,11 @@ async function checkConflicts(googleSub, { start, end, excludeEventId }) {
     });
 
     const events = result.data.items || [];
-
-    // Filter for actual conflicts (start < end && end > start)
     const conflicts = [];
     const requestStart = new Date(start);
     const requestEnd = new Date(end);
 
     for (const event of events) {
-      // Skip the event being updated if excludeEventId is provided
       if (excludeEventId && event.id === excludeEventId) {
         continue;
       }
@@ -928,7 +1039,6 @@ async function checkConflicts(googleSub, { start, end, excludeEventId }) {
       const eventStart = new Date(event.start.dateTime || event.start.date);
       const eventEnd = new Date(event.end.dateTime || event.end.date);
 
-      // Check for overlap: existing.start < end && existing.end > start
       if (eventStart < requestEnd && eventEnd > requestStart) {
         conflicts.push({
           eventId: event.id,
@@ -940,18 +1050,8 @@ async function checkConflicts(googleSub, { start, end, excludeEventId }) {
       }
     }
 
-    console.log(`🔍 Checked conflicts: ${conflicts.length} found`);
     return conflicts;
-  } catch (error) {
-    console.error('❌ [CALENDAR_ERROR] Failed to check conflicts');
-    console.error('Details:', {
-      start,
-      end,
-      errorMessage: error.message,
-      timestamp: new Date().toISOString()
-    });
-    throw error;
-  }
+  });
 }
 
 export {
@@ -965,6 +1065,15 @@ export {
   deleteEmail,
   toggleStar,
   markAsRead,
+  listLabels,
+  modifyMessageLabels,
+  modifyThreadLabels,
+  getThread,
+  setThreadRead,
+  replyToThread,
+  getAttachmentMeta,
+  previewAttachmentText,
+  previewAttachmentTable,
   createCalendarEvent,
   getCalendarEvent,
   listCalendarEvents,

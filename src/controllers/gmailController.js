@@ -16,21 +16,12 @@ import {
   AGGREGATE_CAP_MAIL 
 } from '../config/limits.js';
 
-/**
- * Send an email
- * POST /api/gmail/send
- * Body: { to?, subject, body, cc?, bcc?, toSelf?, confirmSelfSend? }
- * 
- * Send-to-self support:
- * - If toSelf=true and confirmSelfSend=true, send to currentUser.primaryEmail
- * - If toSelf=true but confirmSelfSend is not true, return 400
- * - If explicit "to" is provided, ignore toSelf
- */
+// ==================== EMAIL OPERATIONS ====================
+
 async function sendEmail(req, res) {
   try {
     let { to, subject, body, cc, bcc, toSelf, confirmSelfSend } = req.body;
 
-    // Handle send-to-self
     if (toSelf && !to) {
       if (!confirmSelfSend) {
         return res.status(400).json({
@@ -39,25 +30,15 @@ async function sendEmail(req, res) {
           code: 'CONFIRM_SELF_SEND_REQUIRED'
         });
       }
-      // Get user's email from the session/profile
       to = req.user.email || req.user.primaryEmail;
-      if (!to) {
-        return res.status(400).json({
-          error: 'User email not available',
-          message: 'Cannot determine your email address for send-to-self'
-        });
-      }
     }
 
-    // Validate required fields
     if (!to || !subject || !body) {
       return res.status(400).json({
         error: 'Bad Request',
-        message: 'Missing required fields: to (or toSelf), subject, body'
+        message: 'Missing required fields: to, subject, body'
       });
     }
-
-    console.log(`📧 Sending email to ${to}${toSelf ? ' (self)' : ''}...`);
 
     const result = await gmailService.sendEmail(req.user.googleSub, {
       to, subject, body, cc, bcc
@@ -66,25 +47,19 @@ async function sendEmail(req, res) {
     res.json({
       success: true,
       messageId: result.id,
+      threadId: result.threadId,
       message: 'Email sent successfully',
       sentToSelf: toSelf === true,
-      preview: {
-        to: to,
-        subject: subject,
-        body: body,
-        cc: cc || null,
-        bcc: bcc || null
-      }
+      preview: { to, subject, body, cc, bcc }
     });
-
   } catch (error) {
-    console.error('❌ Failed to send email');
+    console.error('❌ Failed to send email:', error.message);
     
-    if (error.code === 'AUTH_REQUIRED' || error.code === 'REFRESH_TOKEN_INVALID' || error.statusCode === 401) {
+    if (error.statusCode === 401) {
       return res.status(401).json({
         error: 'Authentication required',
-        message: error.message || 'Your session has expired. Please log in again.',
-        code: error.code || 'AUTH_REQUIRED',
+        message: error.message,
+        code: error.code,
         requiresReauth: true
       });
     }
@@ -96,15 +71,6 @@ async function sendEmail(req, res) {
   }
 }
 
-/**
- * Reply to an email
- * POST /api/gmail/reply/:messageId
- * Body: { body, toSelf?, confirmSelfSend? }
- * 
- * Send-to-self support:
- * - If toSelf=true and confirmSelfSend=true, reply to yourself
- * - If toSelf=true but confirmSelfSend is not true, return 400
- */
 async function replyToEmail(req, res) {
   try {
     const { messageId } = req.params;
@@ -117,7 +83,6 @@ async function replyToEmail(req, res) {
       });
     }
 
-    // Handle send-to-self for replies
     if (toSelf && !confirmSelfSend) {
       return res.status(400).json({
         error: 'Confirmation required',
@@ -126,25 +91,23 @@ async function replyToEmail(req, res) {
       });
     }
 
-    console.log(`↩️  Replying to email ${messageId}${toSelf ? ' (self)' : ''}...`);
-
     const result = await gmailService.replyToEmail(req.user.googleSub, messageId, { body });
 
     res.json({
       success: true,
       messageId: result.id,
+      threadId: result.threadId,
       message: 'Reply sent successfully',
       repliedToSelf: toSelf === true
     });
-
   } catch (error) {
-    console.error('❌ Failed to reply to email');
+    console.error('❌ Failed to reply:', error.message);
     
-    if (error.code === 'AUTH_REQUIRED' || error.code === 'REFRESH_TOKEN_INVALID' || error.statusCode === 401) {
+    if (error.statusCode === 401) {
       return res.status(401).json({
         error: 'Authentication required',
-        message: error.message || 'Your session has expired. Please log in again.',
-        code: error.code || 'AUTH_REQUIRED',
+        message: error.message,
+        code: error.code,
         requiresReauth: true
       });
     }
@@ -156,70 +119,47 @@ async function replyToEmail(req, res) {
   }
 }
 
-/**
- * Read an email with optional format parameter
- * GET /api/gmail/read/:messageId?format=full|metadata|snippet|minimal
- * 
- * Auto-routes to batchRead if more than 5 IDs provided as comma-separated string
- * Query parameters:
- * - format: 'full' (default), 'metadata', 'snippet', 'minimal'
- * - autoTruncate: true (default), false
- */
 async function readEmail(req, res) {
   try {
     const { messageId } = req.params;
-    const { format = 'full', autoTruncate = 'true' } = req.query;
+    const { format = 'full', autoTruncate = 'true', includeAttachments = 'false' } = req.query;
 
-    // Check if messageId contains multiple IDs (comma-separated)
     const ids = messageId.split(',').map(id => id.trim()).filter(id => id);
     
     if (ids.length > 5) {
-      // Route to batch read
-      console.log(`📚 Auto-routing to batch read (${ids.length} IDs)`);
       req.body = { ids };
       return batchRead(req, res);
     }
 
-    const autoTruncateBoolean = autoTruncate === 'true' || autoTruncate === '1';
-
-    console.log(`📖 Reading email ${messageId} (format: ${format}, autoTruncate: ${autoTruncateBoolean})...`);
-
     const result = await gmailService.readEmail(
       req.user.googleSub, 
       messageId,
-      { format, autoTruncate: autoTruncateBoolean }
+      { 
+        format, 
+        autoTruncate: autoTruncate === 'true',
+        includeAttachments: includeAttachments === 'true'
+      }
     );
 
-    // ETag support
     const etag = computeETag(result);
     if (checkETagMatch(req.headers['if-none-match'], etag)) {
       return res.status(304).end();
     }
 
-    const response = {
-      success: true,
-      message: result,
-      format: format,
-      truncated: result.truncated || false,
-      sizeEstimate: result.sizeEstimate,
-      webViewUrl: result.webViewUrl || `https://mail.google.com/mail/u/0/#inbox/${messageId}`
-    };
-
-    if (result.truncated) {
-      response.truncationInfo = result.truncationInfo;
-    }
-
     res.setHeader('ETag', etag);
-    res.json(response);
-
+    res.json({
+      success: true,
+      email: result,
+      truncated: result.truncated || false
+    });
   } catch (error) {
-    console.error('❌ Failed to read email');
+    console.error('❌ Failed to read email:', error.message);
     
-    if (error.code === 'AUTH_REQUIRED' || error.code === 'REFRESH_TOKEN_INVALID' || error.statusCode === 401) {
+    if (error.statusCode === 401) {
       return res.status(401).json({
         error: 'Authentication required',
-        message: error.message || 'Your session has expired. Please log in again.',
-        code: error.code || 'AUTH_REQUIRED',
+        message: error.message,
+        code: error.code,
         requiresReauth: true
       });
     }
@@ -231,80 +171,55 @@ async function readEmail(req, res) {
   }
 }
 
-/**
- * Batch preview endpoint
- * POST /mail/batchPreview
- * Body: { ids: string[], kind: "summary"|"snippet"|"metadata" }
- * 
- * Enforces BATCH_PREVIEW_MAX_IDS limit (chunks internally if needed)
- * Returns combined response with all items
- */
-async function batchPreview(req, res) {
+async function getEmailSnippet(req, res) {
   try {
-    const { ids, kind = 'summary' } = req.body;
+    const { messageId } = req.params;
 
-    if (!ids || !Array.isArray(ids) || ids.length === 0) {
-      return res.status(400).json({
-        error: 'Bad Request',
-        message: 'Missing or invalid field: ids (must be non-empty array)'
-      });
+    const result = await gmailService.readEmail(
+      req.user.googleSub, 
+      messageId,
+      { format: 'snippet' }
+    );
+
+    const etag = computeETag(result);
+    if (checkETagMatch(req.headers['if-none-match'], etag)) {
+      return res.status(304).end();
     }
 
-    if (!['summary', 'snippet', 'metadata'].includes(kind)) {
-      return res.status(400).json({
-        error: 'Bad Request',
-        message: 'Invalid kind. Must be: summary, snippet, or metadata'
-      });
-    }
-
-    console.log(`📚 Batch preview: ${ids.length} IDs (kind: ${kind})`);
-
-    // Chunk if exceeds limit
-    const chunks = [];
-    for (let i = 0; i < ids.length; i += BATCH_PREVIEW_MAX_IDS) {
-      chunks.push(ids.slice(i, i + BATCH_PREVIEW_MAX_IDS));
-    }
-
-    let allResults = [];
-
-    for (const chunk of chunks) {
-      const chunkResults = await fetchBatchPreview(req.user.googleSub, chunk, kind);
-      allResults = allResults.concat(chunkResults);
-    }
-
+    res.setHeader('ETag', etag);
     res.json({
       success: true,
-      idsRequested: ids.length,
-      idsReturned: allResults.length,
-      kind,
-      items: allResults
+      snippet: result.snippet,
+      messageId: result.id,
+      sizeEstimate: result.sizeEstimate,
+      headers: result.headers
     });
-
   } catch (error) {
-    console.error('❌ Failed batch preview');
+    console.error('❌ Failed to get snippet:', error.message);
     
-    if (error.code === 'AUTH_REQUIRED' || error.statusCode === 401) {
+    if (error.statusCode === 401) {
       return res.status(401).json({
         error: 'Authentication required',
-        message: 'Your session has expired. Please log in again.',
-        code: 'AUTH_REQUIRED'
+        message: error.message,
+        code: error.code,
+        requiresReauth: true
       });
     }
     
     res.status(500).json({
-      error: 'Batch preview failed',
+      error: 'Snippet retrieval failed',
       message: error.message
     });
   }
 }
 
 /**
- * Helper: fetch batch preview items
+ * FIXED: Summary should NOT include snippet
+ * According to OpenAPI spec, summary should only have: from, subject, date
  */
 async function fetchBatchPreview(googleSub, ids, kind) {
   const results = [];
   
-  // Process in small batches with concurrency limit
   for (let i = 0; i < ids.length; i += BATCH_READ_CONCURRENCY) {
     const batch = ids.slice(i, i + BATCH_READ_CONCURRENCY);
     
@@ -312,12 +227,12 @@ async function fetchBatchPreview(googleSub, ids, kind) {
       try {
         if (kind === 'summary') {
           const msg = await gmailService.readEmail(googleSub, id, { format: 'metadata' });
+          // FIXED: summary should NOT include snippet
           return {
             id,
             from: msg.from,
             subject: msg.subject,
-            date: msg.date,      // ISO string
-            snippet: msg.snippet // Email preview
+            date: msg.date
           };
         } else if (kind === 'snippet') {
           const msg = await gmailService.readEmail(googleSub, id, { format: 'snippet' });
@@ -326,7 +241,6 @@ async function fetchBatchPreview(googleSub, ids, kind) {
             snippet: msg.snippet
           };
         } else {
-          // metadata
           const msg = await gmailService.readEmail(googleSub, id, { format: 'metadata' });
           return msg;
         }
@@ -343,14 +257,60 @@ async function fetchBatchPreview(googleSub, ids, kind) {
   return results;
 }
 
-/**
- * Batch read endpoint
- * POST /mail/batchRead
- * Body: { ids: string[] }
- * 
- * Enforces BATCH_READ_MAX_IDS limit
- * Truncates body to 2000 characters per message
- */
+async function batchPreview(req, res) {
+  try {
+    const { ids, kind = 'summary' } = req.body;
+
+    if (!ids || !Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({
+        error: 'Bad Request',
+        message: 'Missing or invalid field: ids'
+      });
+    }
+
+    if (!['summary', 'snippet', 'metadata'].includes(kind)) {
+      return res.status(400).json({
+        error: 'Bad Request',
+        message: 'Invalid kind. Must be: summary, snippet, or metadata'
+      });
+    }
+
+    const chunks = [];
+    for (let i = 0; i < ids.length; i += BATCH_PREVIEW_MAX_IDS) {
+      chunks.push(ids.slice(i, i + BATCH_PREVIEW_MAX_IDS));
+    }
+
+    let allResults = [];
+    for (const chunk of chunks) {
+      const chunkResults = await fetchBatchPreview(req.user.googleSub, chunk, kind);
+      allResults = allResults.concat(chunkResults);
+    }
+
+    res.json({
+      success: true,
+      idsRequested: ids.length,
+      idsReturned: allResults.length,
+      kind,
+      items: allResults
+    });
+  } catch (error) {
+    console.error('❌ Batch preview failed:', error.message);
+    
+    if (error.statusCode === 401) {
+      return res.status(401).json({
+        error: 'Authentication required',
+        message: error.message,
+        code: 'AUTH_REQUIRED'
+      });
+    }
+    
+    res.status(500).json({
+      error: 'Batch preview failed',
+      message: error.message
+    });
+  }
+}
+
 async function batchRead(req, res) {
   try {
     const { ids } = req.body;
@@ -358,38 +318,26 @@ async function batchRead(req, res) {
     if (!ids || !Array.isArray(ids) || ids.length === 0) {
       return res.status(400).json({
         error: 'Bad Request',
-        message: 'Missing or invalid field: ids (must be non-empty array)'
+        message: 'Missing or invalid field: ids'
       });
     }
 
-    // Enforce limit
     const limitedIds = ids.slice(0, BATCH_READ_MAX_IDS);
     const truncated = ids.length > BATCH_READ_MAX_IDS;
 
-    console.log(`📚 Batch read: ${limitedIds.length} IDs (truncated: ${truncated})`);
-
     const results = [];
 
-    // Process in small batches with concurrency limit
     for (let i = 0; i < limitedIds.length; i += BATCH_READ_CONCURRENCY) {
       const batch = limitedIds.slice(i, i + BATCH_READ_CONCURRENCY);
       
       const promises = batch.map(async (id) => {
         try {
-          const msg = await gmailService.readEmail(req.user.googleSub, id, {
+          return await gmailService.readEmail(req.user.googleSub, id, {
             format: 'full',
             autoTruncate: true
           });
-          
-          // Truncate body to 2000 chars for batch
-          if (msg.body && msg.body.length > 2000) {
-            msg.body = msg.body.substring(0, 2000) + '... [truncated for batch]';
-            msg.truncated = true;
-          }
-          
-          return msg;
         } catch (err) {
-          console.error(`Failed to read email ${id}:`, err.message);
+          console.error(`Failed to read ${id}:`, err.message);
           return { id, error: err.message };
         }
       });
@@ -406,23 +354,17 @@ async function batchRead(req, res) {
     };
 
     if (truncated) {
-      response.note = `Request truncated to ${BATCH_READ_MAX_IDS} items due to limit`;
-    }
-
-    // If auto-routed from readEmail
-    if (req.body._autoRouted) {
-      response.routed = 'batch';
+      response.note = `Request truncated to ${BATCH_READ_MAX_IDS} items`;
     }
 
     res.json(response);
-
   } catch (error) {
-    console.error('❌ Failed batch read');
+    console.error('❌ Batch read failed:', error.message);
     
-    if (error.code === 'AUTH_REQUIRED' || error.statusCode === 401) {
+    if (error.statusCode === 401) {
       return res.status(401).json({
         error: 'Authentication required',
-        message: 'Your session has expired. Please log in again.',
+        message: error.message,
         code: 'AUTH_REQUIRED'
       });
     }
@@ -434,70 +376,7 @@ async function batchRead(req, res) {
   }
 }
 
-/**
- * Get email snippet (quick preview)
- * GET /api/gmail/snippet/:messageId
- */
-async function getEmailSnippet(req, res) {
-  try {
-    const { messageId } = req.params;
-
-    console.log(`👀 Getting email snippet ${messageId}...`);
-
-    const result = await gmailService.readEmail(
-      req.user.googleSub, 
-      messageId,
-      { format: 'snippet' }
-    );
-
-    // ETag support
-    const etag = computeETag(result);
-    if (checkETagMatch(req.headers['if-none-match'], etag)) {
-      return res.status(304).end();
-    }
-
-    res.setHeader('ETag', etag);
-    res.json({
-      success: true,
-      snippet: result.snippet,
-      messageId: result.id,
-      sizeEstimate: result.sizeEstimate,
-      headers: result.headers
-    });
-
-  } catch (error) {
-    console.error('❌ Failed to get email snippet');
-    
-    if (error.code === 'AUTH_REQUIRED' || error.code === 'REFRESH_TOKEN_INVALID' || error.statusCode === 401) {
-      return res.status(401).json({
-        error: 'Authentication required',
-        message: error.message || 'Your session has expired. Please log in again.',
-        code: error.code || 'AUTH_REQUIRED',
-        requiresReauth: true
-      });
-    }
-    
-    res.status(500).json({
-      error: 'Email snippet retrieval failed',
-      message: error.message
-    });
-  }
-}
-
-/**
- * Search emails
- * GET /api/gmail/search?query=...&maxResults=100&pageToken=...&aggregate=true&include=summary&normalizeQuery=true&relative=today&snapshotToken=...
- * 
- * NEW Features:
- * - aggregate=true: paginate internally until AGGREGATE_CAP_MAIL or exhaustion
- * - include=summary: fetch summaries for ALL returned IDs (batched internally)
- * - normalizeQuery=true: normalize query (strip diacritics, alias expansion)
- * - relative=today|tomorrow|thisWeek|lastHour: translate to after/before
- * - snapshotToken: use existing snapshot for stable iteration
- * - ETag support for caching
- */
 async function searchEmails(req, res) {
-  // Apply heavy limiter if aggregate=true
   const runSearch = async (req, res) => {
     try {
       let { 
@@ -508,54 +387,44 @@ async function searchEmails(req, res) {
         include, 
         normalizeQuery: normalizeQueryFlag,
         relative,
-        snapshotToken
+        snapshotToken,
+        label,
+        labelIds
       } = req.query;
 
-      if (!query && !relative) {
-        return res.status(400).json({
-          error: 'Bad Request',
-          message: 'Missing required parameter: query (or relative)'
-        });
+      // Handle label filters
+      let labelFilter = '';
+      if (label) {
+        const labels = Array.isArray(label) ? label : [label];
+        labelFilter = labels.map(l => `label:${l}`).join(' ');
+      }
+      if (labelIds) {
+        const ids = Array.isArray(labelIds) ? labelIds : [labelIds];
+        labelFilter += ' ' + ids.map(id => `label:${id}`).join(' ');
       }
 
-      // Handle relative time
       if (relative) {
         const times = parseRelativeTime(relative);
         if (!times) {
           return res.status(400).json({
             error: 'Bad Request',
-            message: `Invalid relative time: ${relative}. Must be: today, tomorrow, thisWeek, or lastHour`
+            message: `Invalid relative time: ${relative}`
           });
         }
-        // Append to query using Unix timestamps
-        query = `${query || ''} after:${times.after} before:${times.before}`.trim();
+        query = `${query || ''} ${labelFilter} after:${times.after} before:${times.before}`.trim();
+      } else {
+        query = `${query || ''} ${labelFilter}`.trim();
       }
 
-      // Normalize query if requested
       let originalQuery = query;
       if (normalizeQueryFlag === 'true') {
         query = normalizeQueryUtil(query);
       }
 
-      // Handle snapshot token
-      let snapshot = null;
-      if (snapshotToken) {
-        snapshot = getSnapshot(snapshotToken);
-        if (!snapshot) {
-          return res.status(400).json({
-            error: 'Invalid or expired snapshot token',
-            message: 'Please start a new search'
-          });
-        }
-      }
-
       const aggregateMode = aggregate === 'true';
       const includeSummary = include === 'summary';
 
-      console.log(`🔍 Searching emails: "${query}" (aggregate: ${aggregateMode}, summary: ${includeSummary})`);
-
       if (aggregateMode) {
-        // Aggregate mode: paginate internally
         let allItems = [];
         let currentPageToken = pageToken;
         let pagesConsumed = 0;
@@ -573,7 +442,6 @@ async function searchEmails(req, res) {
           allItems = allItems.concat(items);
           pagesConsumed++;
 
-          // Check if we hit the cap
           if (allItems.length >= AGGREGATE_CAP_MAIL) {
             hasMore = true;
             partial = true;
@@ -581,7 +449,6 @@ async function searchEmails(req, res) {
             break;
           }
 
-          // Check if there are more pages
           if (result.nextPageToken) {
             currentPageToken = result.nextPageToken;
           } else {
@@ -590,7 +457,6 @@ async function searchEmails(req, res) {
           }
         }
 
-        // Fetch summaries if requested
         let summariesReturned = 0;
         let summariesPartial = false;
 
@@ -598,7 +464,6 @@ async function searchEmails(req, res) {
           const ids = allItems.map(item => item.id);
           const summaries = await fetchBatchPreview(req.user.googleSub, ids, 'summary');
           
-          // Merge summaries into items
           const summaryMap = new Map(summaries.map(s => [s.id, s]));
           allItems = allItems.map(item => ({
             ...item,
@@ -609,7 +474,6 @@ async function searchEmails(req, res) {
           summariesPartial = summariesReturned < ids.length;
         }
 
-        // Create snapshot token
         const newSnapshotToken = createSnapshot(query, { aggregate: true });
 
         const response = {
@@ -635,7 +499,6 @@ async function searchEmails(req, res) {
           response.normalizedQuery = query;
         }
 
-        // ETag support
         const etag = computeETag(response);
         if (checkETagMatch(req.headers['if-none-match'], etag)) {
           return res.status(304).end();
@@ -645,7 +508,6 @@ async function searchEmails(req, res) {
         return res.json(response);
 
       } else {
-        // Normal mode: single page
         const pageSize = Math.min(
           parseInt(maxResults) || PAGE_SIZE_DEFAULT,
           PAGE_SIZE_MAX
@@ -661,7 +523,6 @@ async function searchEmails(req, res) {
         const hasMore = !!result.nextPageToken;
         const nextPageToken = result.nextPageToken;
 
-        // Fetch summaries if requested
         let summariesReturned = 0;
         let summariesPartial = false;
 
@@ -669,7 +530,6 @@ async function searchEmails(req, res) {
           const ids = items.map(item => item.id);
           const summaries = await fetchBatchPreview(req.user.googleSub, ids, 'summary');
           
-          // Merge summaries into items
           const summaryMap = new Map(summaries.map(s => [s.id, s]));
           const itemsWithSummary = items.map(item => ({
             ...item,
@@ -697,7 +557,6 @@ async function searchEmails(req, res) {
             response.normalizedQuery = query;
           }
 
-          // ETag support
           const etag = computeETag(response);
           if (checkETagMatch(req.headers['if-none-match'], etag)) {
             return res.status(304).end();
@@ -720,7 +579,6 @@ async function searchEmails(req, res) {
           response.normalizedQuery = query;
         }
 
-        // ETag support
         const etag = computeETag(response);
         if (checkETagMatch(req.headers['if-none-match'], etag)) {
           return res.status(304).end();
@@ -729,15 +587,14 @@ async function searchEmails(req, res) {
         res.setHeader('ETag', etag);
         return res.json(response);
       }
-
     } catch (error) {
-      console.error('❌ Failed to search emails');
+      console.error('❌ Search failed:', error.message);
       
-      if (error.code === 'AUTH_REQUIRED' || error.code === 'REFRESH_TOKEN_INVALID' || error.statusCode === 401) {
+      if (error.statusCode === 401) {
         return res.status(401).json({
           error: 'Authentication required',
-          message: error.message || 'Your session has expired. Please log in again.',
-          code: error.code || 'AUTH_REQUIRED',
+          message: error.message,
+          code: error.code,
           requiresReauth: true
         });
       }
@@ -749,7 +606,6 @@ async function searchEmails(req, res) {
     }
   };
 
-  // Apply heavy limiter if aggregate mode
   if (req.query.aggregate === 'true') {
     heavyLimiter(req, res, () => runSearch(req, res));
   } else {
@@ -757,11 +613,6 @@ async function searchEmails(req, res) {
   }
 }
 
-/**
- * Create a draft
- * POST /api/gmail/draft
- * Body: { to, subject, body }
- */
 async function createDraft(req, res) {
   try {
     const { to, subject, body } = req.body;
@@ -773,8 +624,6 @@ async function createDraft(req, res) {
       });
     }
 
-    console.log(`📝 Creating draft to ${to}...`);
-
     const result = await gmailService.createDraft(req.user.googleSub, {
       to, subject, body
     });
@@ -784,14 +633,13 @@ async function createDraft(req, res) {
       draftId: result.id,
       message: 'Draft created successfully'
     });
-
   } catch (error) {
-    console.error('❌ Failed to create draft');
+    console.error('❌ Draft creation failed:', error.message);
     
-    if (error.code === 'AUTH_REQUIRED' || error.statusCode === 401) {
+    if (error.statusCode === 401) {
       return res.status(401).json({
         error: 'Authentication required',
-        message: 'Your session has expired or you need to grant additional permissions. Please log in again.',
+        message: error.message,
         code: 'AUTH_REQUIRED'
       });
     }
@@ -803,15 +651,9 @@ async function createDraft(req, res) {
   }
 }
 
-/**
- * Delete an email (move to trash)
- * DELETE /api/gmail/:messageId
- */
 async function deleteEmail(req, res) {
   try {
     const { messageId } = req.params;
-
-    console.log(`🗑️  Deleting email ${messageId}...`);
 
     const result = await gmailService.deleteEmail(req.user.googleSub, messageId);
 
@@ -820,15 +662,14 @@ async function deleteEmail(req, res) {
       messageId: result.messageId,
       message: 'Email moved to trash'
     });
-
   } catch (error) {
-    console.error('❌ Failed to delete email');
+    console.error('❌ Delete failed:', error.message);
     
-    if (error.code === 'AUTH_REQUIRED' || error.code === 'REFRESH_TOKEN_INVALID' || error.statusCode === 401) {
+    if (error.statusCode === 401) {
       return res.status(401).json({
         error: 'Authentication required',
-        message: error.message || 'Your session has expired. Please log in again.',
-        code: error.code || 'AUTH_REQUIRED',
+        message: error.message,
+        code: error.code,
         requiresReauth: true
       });
     }
@@ -840,11 +681,6 @@ async function deleteEmail(req, res) {
   }
 }
 
-/**
- * Star/unstar an email
- * PATCH /api/gmail/:messageId/star
- * Body: { star: true/false }
- */
 async function toggleStar(req, res) {
   try {
     const { messageId } = req.params;
@@ -857,25 +693,19 @@ async function toggleStar(req, res) {
       });
     }
 
-    console.log(`⭐ ${star ? 'Starring' : 'Unstarring'} email ${messageId}...`);
-
     const result = await gmailService.toggleStar(req.user.googleSub, messageId, star);
 
     res.json({
-      success: true,
-      messageId: result.messageId,
-      starred: result.starred,
-      message: `Email ${star ? 'starred' : 'unstarred'} successfully`
+      success: true
     });
-
   } catch (error) {
-    console.error('❌ Failed to toggle star');
+    console.error('❌ Toggle star failed:', error.message);
     
-    if (error.code === 'AUTH_REQUIRED' || error.code === 'REFRESH_TOKEN_INVALID' || error.statusCode === 401) {
+    if (error.statusCode === 401) {
       return res.status(401).json({
         error: 'Authentication required',
-        message: error.message || 'Your session has expired. Please log in again.',
-        code: error.code || 'AUTH_REQUIRED',
+        message: error.message,
+        code: error.code,
         requiresReauth: true
       });
     }
@@ -887,11 +717,6 @@ async function toggleStar(req, res) {
   }
 }
 
-/**
- * Mark email as read/unread
- * PATCH /api/gmail/:messageId/read
- * Body: { read: true/false }
- */
 async function markAsRead(req, res) {
   try {
     const { messageId } = req.params;
@@ -904,31 +729,306 @@ async function markAsRead(req, res) {
       });
     }
 
-    console.log(`✅ Marking email ${messageId} as ${read ? 'read' : 'unread'}...`);
-
     const result = await gmailService.markAsRead(req.user.googleSub, messageId, read);
 
     res.json({
-      success: true,
-      messageId: result.messageId,
-      read: result.read,
-      message: `Email marked as ${read ? 'read' : 'unread'}`
+      success: true
     });
-
   } catch (error) {
-    console.error('❌ Failed to mark as read');
+    console.error('❌ Mark as read failed:', error.message);
     
-    if (error.code === 'AUTH_REQUIRED' || error.code === 'REFRESH_TOKEN_INVALID' || error.statusCode === 401) {
+    if (error.statusCode === 401) {
       return res.status(401).json({
         error: 'Authentication required',
-        message: error.message || 'Your session has expired. Please log in again.',
-        code: error.code || 'AUTH_REQUIRED',
+        message: error.message,
+        code: error.code,
         requiresReauth: true
       });
     }
     
     res.status(500).json({
       error: 'Mark as read failed',
+      message: error.message
+    });
+  }
+}
+
+// ==================== NEW: LABELS ====================
+
+async function listLabels(req, res) {
+  try {
+    const labels = await gmailService.listLabels(req.user.googleSub);
+
+    res.json({
+      success: true,
+      labels
+    });
+  } catch (error) {
+    console.error('❌ List labels failed:', error.message);
+    
+    if (error.statusCode === 401) {
+      return res.status(401).json({
+        error: 'Authentication required',
+        message: error.message
+      });
+    }
+    
+    res.status(500).json({
+      error: 'Label listing failed',
+      message: error.message
+    });
+  }
+}
+
+async function modifyMessageLabels(req, res) {
+  try {
+    const { messageId } = req.params;
+    const { add = [], remove = [] } = req.body;
+
+    await gmailService.modifyMessageLabels(req.user.googleSub, messageId, { add, remove });
+
+    res.json({
+      success: true
+    });
+  } catch (error) {
+    console.error('❌ Modify labels failed:', error.message);
+    
+    if (error.statusCode === 401) {
+      return res.status(401).json({
+        error: 'Authentication required',
+        message: error.message
+      });
+    }
+    
+    res.status(500).json({
+      error: 'Label modification failed',
+      message: error.message
+    });
+  }
+}
+
+async function modifyThreadLabels(req, res) {
+  try {
+    const { threadId } = req.params;
+    const { add = [], remove = [] } = req.body;
+
+    await gmailService.modifyThreadLabels(req.user.googleSub, threadId, { add, remove });
+
+    res.json({
+      success: true
+    });
+  } catch (error) {
+    console.error('❌ Modify thread labels failed:', error.message);
+    
+    if (error.statusCode === 401) {
+      return res.status(401).json({
+        error: 'Authentication required',
+        message: error.message
+      });
+    }
+    
+    res.status(500).json({
+      error: 'Thread label modification failed',
+      message: error.message
+    });
+  }
+}
+
+// ==================== NEW: THREADS ====================
+
+async function getThread(req, res) {
+  try {
+    const { threadId } = req.params;
+
+    const thread = await gmailService.getThread(req.user.googleSub, threadId);
+
+    res.json({
+      success: true,
+      thread
+    });
+  } catch (error) {
+    console.error('❌ Get thread failed:', error.message);
+    
+    if (error.statusCode === 401) {
+      return res.status(401).json({
+        error: 'Authentication required',
+        message: error.message
+      });
+    }
+    
+    res.status(500).json({
+      error: 'Thread retrieval failed',
+      message: error.message
+    });
+  }
+}
+
+async function setThreadRead(req, res) {
+  try {
+    const { threadId } = req.params;
+    const { read } = req.body;
+
+    if (typeof read !== 'boolean') {
+      return res.status(400).json({
+        error: 'Bad Request',
+        message: 'Missing or invalid field: read (must be boolean)'
+      });
+    }
+
+    await gmailService.setThreadRead(req.user.googleSub, threadId, read);
+
+    res.json({
+      success: true
+    });
+  } catch (error) {
+    console.error('❌ Set thread read failed:', error.message);
+    
+    if (error.statusCode === 401) {
+      return res.status(401).json({
+        error: 'Authentication required',
+        message: error.message
+      });
+    }
+    
+    res.status(500).json({
+      error: 'Thread read status change failed',
+      message: error.message
+    });
+  }
+}
+
+async function replyToThread(req, res) {
+  try {
+    const { threadId } = req.params;
+    const { body, toSelf, confirmSelfSend } = req.body;
+
+    if (!body) {
+      return res.status(400).json({
+        error: 'Bad Request',
+        message: 'Missing required field: body'
+      });
+    }
+
+    if (toSelf && !confirmSelfSend) {
+      return res.status(400).json({
+        error: 'Confirmation required',
+        message: 'To reply to yourself, confirmSelfSend must be true',
+        code: 'CONFIRM_SELF_SEND_REQUIRED'
+      });
+    }
+
+    const result = await gmailService.replyToThread(req.user.googleSub, threadId, { body });
+
+    res.json({
+      success: true,
+      messageId: result.id,
+      threadId: result.threadId
+    });
+  } catch (error) {
+    console.error('❌ Reply to thread failed:', error.message);
+    
+    if (error.statusCode === 401) {
+      return res.status(401).json({
+        error: 'Authentication required',
+        message: error.message
+      });
+    }
+    
+    res.status(500).json({
+      error: 'Thread reply failed',
+      message: error.message
+    });
+  }
+}
+
+// ==================== NEW: ATTACHMENTS ====================
+
+async function getAttachmentMeta(req, res) {
+  try {
+    const { messageId, attachmentId } = req.params;
+
+    const attachment = await gmailService.getAttachmentMeta(
+      req.user.googleSub,
+      messageId,
+      attachmentId
+    );
+
+    res.json({
+      success: true,
+      attachment
+    });
+  } catch (error) {
+    console.error('❌ Get attachment meta failed:', error.message);
+    
+    if (error.statusCode === 401) {
+      return res.status(401).json({
+        error: 'Authentication required',
+        message: error.message
+      });
+    }
+    
+    res.status(500).json({
+      error: 'Attachment metadata retrieval failed',
+      message: error.message
+    });
+  }
+}
+
+async function previewAttachmentText(req, res) {
+  try {
+    const { messageId, attachmentId } = req.params;
+    const { maxKb = 256 } = req.query;
+
+    const preview = await gmailService.previewAttachmentText(
+      req.user.googleSub,
+      messageId,
+      attachmentId,
+      parseInt(maxKb)
+    );
+
+    res.json(preview);
+  } catch (error) {
+    console.error('❌ Preview attachment text failed:', error.message);
+    
+    if (error.statusCode === 401) {
+      return res.status(401).json({
+        error: 'Authentication required',
+        message: error.message
+      });
+    }
+    
+    res.status(500).json({
+      error: 'Attachment text preview failed',
+      message: error.message
+    });
+  }
+}
+
+async function previewAttachmentTable(req, res) {
+  try {
+    const { messageId, attachmentId } = req.params;
+    const { sheet = 0, maxRows = 50 } = req.query;
+
+    const preview = await gmailService.previewAttachmentTable(
+      req.user.googleSub,
+      messageId,
+      attachmentId,
+      { sheet, maxRows: parseInt(maxRows) }
+    );
+
+    res.json(preview);
+  } catch (error) {
+    console.error('❌ Preview attachment table failed:', error.message);
+    
+    if (error.statusCode === 401) {
+      return res.status(401).json({
+        error: 'Authentication required',
+        message: error.message
+      });
+    }
+    
+    res.status(500).json({
+      error: 'Attachment table preview failed',
       message: error.message
     });
   }
@@ -945,5 +1045,14 @@ export {
   createDraft,
   deleteEmail,
   toggleStar,
-  markAsRead
+  markAsRead,
+  listLabels,
+  modifyMessageLabels,
+  modifyThreadLabels,
+  getThread,
+  setThreadRead,
+  replyToThread,
+  getAttachmentMeta,
+  previewAttachmentText,
+  previewAttachmentTable
 };
