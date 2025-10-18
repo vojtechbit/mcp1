@@ -526,8 +526,8 @@ async function searchEmails(req, res) {
             message: `Invalid relative time: ${relative}. Must be: today, tomorrow, thisWeek, or lastHour`
           });
         }
-        // Append to query
-        query = `${query || ''} after:${times.after.split('T')[0]} before:${times.before.split('T')[0]}`.trim();
+        // Append to query using Unix timestamps
+        query = `${query || ''} after:${times.after} before:${times.before}`.trim();
       }
 
       // Normalize query if requested
