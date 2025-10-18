@@ -316,7 +316,8 @@ async function fetchBatchPreview(googleSub, ids, kind) {
             id,
             from: msg.from,
             subject: msg.subject,
-            internalDate: msg.internalDate
+            date: msg.date,      // ISO string
+            snippet: msg.snippet // Email preview
           };
         } else if (kind === 'snippet') {
           const msg = await gmailService.readEmail(googleSub, id, { format: 'snippet' });

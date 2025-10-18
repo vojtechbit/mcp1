@@ -391,7 +391,34 @@ async function readEmail(googleSub, messageId, options = {}) {
 
     if (format === 'metadata') {
       console.log('✅ Email metadata retrieved:', messageId, `(${sizeEstimate} bytes)`);
-      return metadataResult.data;
+      
+      // Extract and transform headers for easy access
+      const headers = metadataResult.data.payload.headers;
+      const fromHeader = headers.find(h => h.name.toLowerCase() === 'from')?.value || '';
+      const subjectHeader = headers.find(h => h.name.toLowerCase() === 'subject')?.value || '';
+      const dateHeader = headers.find(h => h.name.toLowerCase() === 'date')?.value || '';
+      
+      // Parse displayName and email from "Name <email>" format
+      let from = fromHeader;
+      let fromEmail = fromHeader;
+      let fromName = '';
+      
+      const emailMatch = fromHeader.match(/<(.+)>/);
+      if (emailMatch) {
+        fromEmail = emailMatch[1];
+        fromName = fromHeader.replace(/<.+>/, '').trim().replace(/^["']|["']$/g, '');
+      }
+      
+      return {
+        ...metadataResult.data,
+        // Transformed fields for easy access
+        from: from,
+        fromEmail: fromEmail,
+        fromName: fromName,
+        subject: subjectHeader,
+        date: new Date(parseInt(metadataResult.data.internalDate)).toISOString(),
+        snippet: snippet
+      };
     }
 
     // KROK 3: Kontrola velikosti - pokud je email příliš velký a máme autoTruncate
