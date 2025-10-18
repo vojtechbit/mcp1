@@ -2,6 +2,36 @@
 
 All notable changes to MCP1 OAuth Server will be documented in this file.
 
+## [3.2.1] - 2025-10-18
+
+### 🔧 Hotfix - Production Deployment
+
+Fixed critical issues preventing deployment on Render.
+
+#### Bug Fixes
+
+##### PDF Parse Import Error
+- Fixed `pdf-parse` library import issue causing "ENOENT: test file not found" error
+- Changed to dynamic import: `const pdfParse = (await import('pdf-parse')).default`
+- Import now happens only when processing PDF files
+- No performance impact, server starts successfully
+
+##### Security Vulnerability Fix
+- Replaced `xlsx@0.18.5` with `xlsx-js-style@1.2.0`
+- Fixes high severity vulnerabilities:
+  - Prototype Pollution (GHSA-4r6h-8v6p-xvw6)
+  - Regular Expression Denial of Service (GHSA-5pgg-2g8v-p4x9)
+- Drop-in replacement with same API
+- Actively maintained fork with security patches
+
+#### Technical Details
+- pdf-parse bug: Library tries to load test PDF at import time
+- Solution: Lazy loading via dynamic import
+- xlsx vulnerabilities: No fix available in original package
+- Solution: Switch to actively maintained fork
+
+---
+
 ## [3.2.0] - 2025-10-18
 
 ### ✅ Attachment Processing Complete

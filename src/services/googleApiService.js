@@ -2,7 +2,7 @@ import { google } from 'googleapis';
 import { refreshAccessToken } from '../config/oauth.js';
 import { getUserByGoogleSub, updateTokens, updateLastUsed } from './databaseService.js';
 import dotenv from 'dotenv';
-import pdfParse from 'pdf-parse';
+// pdf-parse má problém s importem - načteme až když je potřeba
 import XLSX from 'xlsx-js-style';
 
 dotenv.config();
@@ -872,6 +872,8 @@ async function previewAttachmentText(googleSub, messageId, attachmentId, maxKb =
     try {
       // Handle PDF files
       if (mimeType === 'application/pdf') {
+        // Dynamicky importuj pdf-parse až když je potřeba
+        const pdfParse = (await import('pdf-parse')).default;
         const pdfData = await pdfParse(data);
         text = pdfData.text;
         contentType = 'application/pdf';
