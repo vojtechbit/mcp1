@@ -85,6 +85,9 @@ router.get('/gmail/attachments/:messageId/:attachmentId/text', gmailController.p
 // Preview attachment table
 router.get('/gmail/attachments/:messageId/:attachmentId/table', gmailController.previewAttachmentTable);
 
+// Download attachment (signed URL)
+router.get('/gmail/attachments/:messageId/:attachmentId/download', gmailController.downloadAttachment);
+
 // ==================== CALENDAR ROUTES ====================
 
 router.post('/calendar/events', calendarController.createEvent);

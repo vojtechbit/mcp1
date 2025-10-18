@@ -1,6 +1,7 @@
 import { google } from 'googleapis';
 import { refreshAccessToken } from '../config/oauth.js';
 import { getUserByGoogleSub, updateTokens, updateLastUsed } from './databaseService.js';
+import { generateSignedAttachmentUrl } from '../utils/signedUrlGenerator.js';
 import dotenv from 'dotenv';
 // pdf-parse má problém s importem - načteme až když je potřeba
 import XLSX from 'xlsx-js-style';
@@ -804,10 +805,14 @@ async function getAttachmentMeta(googleSub, messageId, attachmentId) {
       throw new Error('Attachment not found');
     }
 
-    // Note: In production, generate signed URL with expiration
-    // For now, we'll just return metadata
-    attachmentMeta.downloadUrl = null;
-    attachmentMeta.expiresAt = null;
+    // Generate signed URL with 15-minute expiration
+    const { downloadUrl, expiresAt } = generateSignedAttachmentUrl(
+      messageId,
+      attachmentId
+    );
+    
+    attachmentMeta.downloadUrl = downloadUrl;
+    attachmentMeta.expiresAt = expiresAt;
 
     return attachmentMeta;
   });
@@ -1262,6 +1267,68 @@ async function checkConflicts(googleSub, { start, end, excludeEventId }) {
   });
 }
 
+/**
+ * Download attachment (for signed URL endpoint)
+ */
+async function downloadAttachment(googleSub, messageId, attachmentId) {
+  return await handleGoogleApiCall(googleSub, async () => {
+    const authClient = await getAuthenticatedClient(googleSub);
+    const gmail = google.gmail({ version: 'v1', auth: authClient });
+
+    // Get message to find attachment info
+    const message = await gmail.users.messages.get({
+      userId: 'me',
+      id: messageId,
+      format: 'full'
+    });
+
+    let attachmentInfo = null;
+    
+    function findAttachment(parts) {
+      for (const part of parts) {
+        if (part.body?.attachmentId === attachmentId) {
+          attachmentInfo = {
+            filename: part.filename || 'attachment',
+            mimeType: part.mimeType || 'application/octet-stream',
+            size: part.body.size || 0
+          };
+          return true;
+        }
+        if (part.parts) {
+          if (findAttachment(part.parts)) return true;
+        }
+      }
+      return false;
+    }
+
+    if (message.data.payload?.parts) {
+      findAttachment(message.data.payload.parts);
+    }
+
+    if (!attachmentInfo) {
+      const error = new Error('Attachment not found');
+      error.statusCode = 404;
+      throw error;
+    }
+
+    // Get attachment data
+    const attachment = await gmail.users.messages.attachments.get({
+      userId: 'me',
+      messageId: messageId,
+      id: attachmentId
+    });
+
+    const data = Buffer.from(attachment.data.data, 'base64url');
+
+    return {
+      filename: attachmentInfo.filename,
+      mimeType: attachmentInfo.mimeType,
+      size: attachmentInfo.size,
+      data: data
+    };
+  });
+}
+
 export {
   EMAIL_SIZE_LIMITS,
   getValidAccessToken,
@@ -1282,6 +1349,7 @@ export {
   getAttachmentMeta,
   previewAttachmentText,
   previewAttachmentTable,
+  downloadAttachment,
   createCalendarEvent,
   getCalendarEvent,
   listCalendarEvents,
