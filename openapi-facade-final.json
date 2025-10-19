@@ -45,7 +45,7 @@
                   },
                   "filters": {
                     "type": "object",
-                    "description": "Optional filters to narrow results. Use when user specifies sender or attachment requirements. Example: 'emails from John' -> {from:'john'}, 'emails with attachments' -> {hasAttachment:true}.",
+                    "description": "Optional filters to narrow results. Use when user specifies sender, attachment requirements, or inbox category. Example: 'emails from John' -> {from:'john'}, 'emails with attachments' -> {hasAttachment:true}, 'show Primary inbox' -> {category:'primary'}.",
                     "properties": {
                       "from": {
                         "type": "string",
@@ -54,6 +54,11 @@
                       "hasAttachment": {
                         "type": "boolean",
                         "description": "If true, ONLY emails with attachments. Use when user asks 'emails with files' or 'show me emails with attachments'. Omit (don't set false) for all emails regardless of attachments."
+                      },
+                      "category": {
+                        "type": "string",
+                        "enum": ["primary", "work", "promotions", "social", "updates", "forums"],
+                        "description": "Filter by inbox category/label. Use when user asks to view specific inbox sections. Examples: 'Show me my Primary inbox' -> {category:'primary'}, 'Check Promotions' -> {category:'promotions'}, 'Social notifications' -> {category:'social'}. This maps to Gmail's internal category labels (CATEGORY_PERSONAL, CATEGORY_PROMOTIONS, etc.). Omit to search all categories."
                       }
                     }
                   }

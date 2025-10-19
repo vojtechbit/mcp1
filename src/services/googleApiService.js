@@ -267,14 +267,20 @@ async function sendEmail(googleSub, { to, subject, body, cc, bcc }) {
 
 /**
  * Read email with optional includeAttachments parameter
+ * @param {string|object} options - format string OR options object
  */
 async function readEmail(googleSub, messageId, options = {}) {
   return await handleGoogleApiCall(googleSub, async () => {
+    // Handle string format parameter for backwards compatibility
+    const opts = typeof options === 'string' 
+      ? { format: options }
+      : (options || {});
+    
     const { 
       format = 'full',
       autoTruncate = true,
       includeAttachments = false
-    } = options;
+    } = opts;
 
     const authClient = await getAuthenticatedClient(googleSub);
     const gmail = google.gmail({ version: 'v1', auth: authClient });
