@@ -1,0 +1,625 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Custom GPT Facade API",
+    "version": "2.1.0",
+    "description": "BFF (Backend for Frontend) for Custom GPT actions. Provides high-level macros optimized for LLM consumption + unified RPC interface. Timezone: Europe/Prague. All relative time windows (today, lastHour, etc.) are resolved server-side."
+  },
+  "servers": [
+    {
+      "url": "https://mcp1-oauth-server.onrender.com/api",
+      "description": "Production (Render) - API prefix included"
+    }
+  ],
+  "paths": {
+    "/macros/inbox/overview": {
+      "post": {
+        "operationId": "macroInboxOverview",
+        "summary": "Lightweight inbox cards",
+        "description": "Get recent emails without snippets. Max 200 items.",
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "timeRange": {
+                    "type": "object",
+                    "properties": {
+                      "relative": {
+                        "type": "string",
+                        "enum": ["lastHour", "last3h", "last24h", "today", "yesterday", "thisWeek", "last7d"]
+                      }
+                    }
+                  },
+                  "maxItems": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 200,
+                    "default": 50
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Email card list",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "messageId": { "type": "string" },
+                          "senderName": { "type": "string" },
+                          "senderAddress": { "type": "string" },
+                          "subject": { "type": "string" },
+                          "receivedAt": { "type": "string" },
+                          "inboxCategory": { "type": "string" }
+                        }
+                      }
+                    },
+                    "subset": { "type": "boolean" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/macros/inbox/snippets": {
+      "post": {
+        "operationId": "macroInboxSnippets",
+        "summary": "Inbox with snippets",
+        "description": "Full inbox preview with body snippets and attachment URLs.",
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "timeRange": {
+                    "type": "object",
+                    "properties": {
+                      "relative": {
+                        "type": "string",
+                        "enum": ["lastHour", "last3h", "last24h", "today", "yesterday", "thisWeek", "last7d"]
+                      }
+                    }
+                  },
+                  "maxItems": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 200,
+                    "default": 50
+                  },
+                  "includeAttachments": {
+                    "type": "boolean",
+                    "default": true
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Email snippets",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "messageId": { "type": "string" },
+                          "senderName": { "type": "string" },
+                          "senderAddress": { "type": "string" },
+                          "subject": { "type": "string" },
+                          "receivedAt": { "type": "string" },
+                          "snippet": { "type": "string" },
+                          "attachmentUrls": {
+                            "type": "array",
+                            "items": { "type": "string" }
+                          }
+                        }
+                      }
+                    },
+                    "subset": { "type": "boolean" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/macros/email/quickRead": {
+      "post": {
+        "operationId": "macroEmailQuickRead",
+        "summary": "Read emails",
+        "description": "Fetch full email bodies with attachments.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "ids": {
+                    "type": "array",
+                    "items": { "type": "string" },
+                    "minItems": 1,
+                    "maxItems": 50
+                  },
+                  "searchQuery": {
+                    "type": "string",
+                    "maxLength": 255
+                  },
+                  "format": {
+                    "type": "string",
+                    "enum": ["snippet", "minimal", "full"],
+                    "default": "minimal"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Email details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "mode": { "type": "string" },
+                    "item": { "type": "object" },
+                    "items": { "type": "array" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/macros/calendar/plan": {
+      "post": {
+        "operationId": "macroCalendarPlan",
+        "summary": "Get calendar schedule",
+        "description": "Get events for a day or week.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["scope", "date"],
+                "properties": {
+                  "scope": {
+                    "type": "string",
+                    "enum": ["daily", "weekly"]
+                  },
+                  "date": {
+                    "type": "string",
+                    "format": "date",
+                    "description": "YYYY-MM-DD"
+                  },
+                  "includePast": {
+                    "type": "boolean",
+                    "default": false
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Event list",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "range": {
+                      "type": "object",
+                      "properties": {
+                        "start": { "type": "string" },
+                        "end": { "type": "string" }
+                      }
+                    },
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "eventId": { "type": "string" },
+                          "title": { "type": "string" },
+                          "start": { "type": "string" },
+                          "end": { "type": "string" },
+                          "status": { "type": "string" }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/macros/calendar/schedule": {
+      "post": {
+        "operationId": "macroCalendarSchedule",
+        "summary": "Create calendar event",
+        "description": "Schedule a meeting or event.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["title", "when"],
+                "properties": {
+                  "title": {
+                    "type": "string",
+                    "maxLength": 255
+                  },
+                  "when": {
+                    "type": "object",
+                    "properties": {
+                      "fixed": {
+                        "type": "object",
+                        "properties": {
+                          "start": { "type": "string", "format": "date-time" },
+                          "end": { "type": "string", "format": "date-time" }
+                        },
+                        "required": ["start", "end"]
+                      }
+                    }
+                  },
+                  "attendees": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "email": { "type": "string" },
+                        "name": { "type": "string" }
+                      },
+                      "required": ["email"]
+                    }
+                  },
+                  "location": { "type": "string" },
+                  "notes": { "type": "string" },
+                  "reminders": {
+                    "type": "array",
+                    "items": { "type": "integer" }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Event created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "event": {
+                      "type": "object",
+                      "properties": {
+                        "eventId": { "type": "string" },
+                        "title": { "type": "string" },
+                        "start": { "type": "string" },
+                        "end": { "type": "string" }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/macros/contacts/safeAdd": {
+      "post": {
+        "operationId": "macroContactsSafeAdd",
+        "summary": "Add contacts",
+        "description": "Bulk add contacts with deduplication.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["entries"],
+                "properties": {
+                  "entries": {
+                    "type": "array",
+                    "minItems": 1,
+                    "maxItems": 50,
+                    "items": {
+                      "type": "object",
+                      "required": ["name"],
+                      "properties": {
+                        "name": { "type": "string" },
+                        "email": { "type": "string" },
+                        "phone": { "type": "string" },
+                        "realestate": { "type": "string" },
+                        "notes": { "type": "string" }
+                      }
+                    }
+                  },
+                  "dedupeStrategy": {
+                    "type": "string",
+                    "enum": ["ask", "merge", "keepBoth"],
+                    "default": "ask"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Contacts added",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "created": { "type": "array" },
+                    "merged": { "type": "array" },
+                    "skipped": { "type": "array" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/macros/tasks/overview": {
+      "post": {
+        "operationId": "macroTasksOverview",
+        "summary": "Get tasks",
+        "description": "Get tasks grouped by status.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["scope"],
+                "properties": {
+                  "scope": {
+                    "type": "string",
+                    "enum": ["daily", "weekly"]
+                  },
+                  "includeCompleted": {
+                    "type": "boolean",
+                    "default": false
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Tasks grouped",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "sections": {
+                      "type": "object",
+                      "properties": {
+                        "today": { "type": "array" },
+                        "thisWeek": { "type": "array" },
+                        "overdue": { "type": "array" }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/rpc/mail": {
+      "post": {
+        "operationId": "mailRpc",
+        "summary": "Mail operations",
+        "description": "Unified mail RPC: search, read, send, reply, modify.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["op", "params"],
+                "properties": {
+                  "op": {
+                    "type": "string",
+                    "enum": ["search", "read", "send", "reply", "modify"]
+                  },
+                  "params": {
+                    "type": "object"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Operation result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": { "type": "boolean" },
+                    "data": { "type": "object" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/rpc/calendar": {
+      "post": {
+        "operationId": "calendarRpc",
+        "summary": "Calendar operations",
+        "description": "Low-level calendar RPC operations.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["op", "params"],
+                "properties": {
+                  "op": {
+                    "type": "string",
+                    "enum": ["list", "get", "create", "update", "delete"]
+                  },
+                  "params": {
+                    "type": "object"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Operation result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": { "type": "boolean" },
+                    "data": { "type": "object" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/rpc/contacts": {
+      "post": {
+        "operationId": "contactsRpc",
+        "summary": "Contacts operations",
+        "description": "Low-level contacts RPC operations.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["op", "params"],
+                "properties": {
+                  "op": {
+                    "type": "string",
+                    "enum": ["list", "search", "add", "update", "delete"]
+                  },
+                  "params": {
+                    "type": "object"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Operation result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": { "type": "boolean" },
+                    "data": { "type": "object" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/rpc/tasks": {
+      "post": {
+        "operationId": "tasksRpc",
+        "summary": "Tasks operations",
+        "description": "Low-level tasks RPC operations.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["op", "params"],
+                "properties": {
+                  "op": {
+                    "type": "string",
+                    "enum": ["list", "get", "create", "update", "delete", "complete"]
+                  },
+                  "params": {
+                    "type": "object"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Operation result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": { "type": "boolean" },
+                    "data": { "type": "object" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

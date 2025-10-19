@@ -359,6 +359,13 @@ export async function calendarSchedule(googleSub, params) {
     privacy = 'default'
   } = params;
 
+  // Validate attendees parameter
+  if (attendees && attendees.length > 20) {
+    const error = new Error('Too many attendees. Maximum 20 allowed.');
+    error.statusCode = 400;
+    throw error;
+  }
+
   // Validate reminders parameter
   if (reminders && reminders.length > 0) {
     if (reminders.length > 5) {
