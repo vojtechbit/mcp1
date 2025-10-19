@@ -12,7 +12,7 @@ import crypto from 'crypto';
  * - Short expiration time (15 minutes default)
  */
 
-const URL_EXPIRATION_TIME = 15 * 60 * 1000; // 15 minutes in milliseconds
+const URL_EXPIRATION_TIME = 60 * 60 * 1000; // 1 hour in milliseconds
 
 /**
  * Generate a signed URL for attachment download

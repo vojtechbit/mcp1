@@ -960,6 +960,14 @@ async function getAttachmentMeta(req, res) {
   } catch (error) {
     console.error('❌ Get attachment meta failed:', error.message);
     
+    if (error.statusCode === 451) {
+      return res.status(451).json({
+        error: 'Attachment blocked',
+        message: error.message,
+        code: error.code || 'ATTACHMENT_BLOCKED'
+      });
+    }
+    
     if (error.statusCode === 401) {
       return res.status(401).json({
         error: 'Authentication required',

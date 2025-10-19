@@ -2,6 +2,7 @@ import { google } from 'googleapis';
 import { refreshAccessToken } from '../config/oauth.js';
 import { getUserByGoogleSub, updateTokens, updateLastUsed } from './databaseService.js';
 import { generateSignedAttachmentUrl } from '../utils/signedUrlGenerator.js';
+import { isBlocked } from '../utils/attachmentSecurity.js';
 import dotenv from 'dotenv';
 // pdf-parse má problém s importem - načteme až když je potřeba
 import XLSX from 'xlsx-js-style';
@@ -478,6 +479,24 @@ async function createDraft(googleSub, { to, subject, body }) {
   });
 }
 
+/**
+ * Send an existing draft by ID
+ */
+async function sendDraft(googleSub, draftId) {
+  return await handleGoogleApiCall(googleSub, async () => {
+    const authClient = await getAuthenticatedClient(googleSub);
+    const gmail = google.gmail({ version: 'v1', auth: authClient });
+
+    const result = await gmail.users.drafts.send({
+      userId: 'me',
+      id: draftId
+    });
+
+    console.log('✅ Draft sent:', draftId);
+    return result.data;
+  });
+}
+
 async function deleteEmail(googleSub, messageId) {
   return await handleGoogleApiCall(googleSub, async () => {
     const authClient = await getAuthenticatedClient(googleSub);
@@ -805,7 +824,15 @@ async function getAttachmentMeta(googleSub, messageId, attachmentId) {
       throw new Error('Attachment not found');
     }
 
-    // Generate signed URL with 15-minute expiration
+    // Check if attachment is blocked by security policy
+    if (isBlocked(attachmentMeta)) {
+      const error = new Error(`Attachment blocked: ${attachmentMeta.filename} (security policy)`);
+      error.statusCode = 451;
+      error.code = 'ATTACHMENT_BLOCKED';
+      throw error;
+    }
+
+    // Generate signed URL with 1-hour expiration
     const { downloadUrl, expiresAt } = generateSignedAttachmentUrl(
       messageId,
       attachmentId
@@ -1337,6 +1364,7 @@ export {
   searchEmails,
   replyToEmail,
   createDraft,
+  sendDraft,
   deleteEmail,
   toggleStar,
   markAsRead,

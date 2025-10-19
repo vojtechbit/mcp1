@@ -8,6 +8,7 @@ import { RL_MAX_PER_IP, RL_MAX_HEAVY_PER_IP } from './config/limits.js';
 import { refreshAllTokensOnStartup, startBackgroundRefresh } from './services/backgroundRefreshService.js';
 import authRoutes from './routes/authRoutes.js';
 import apiRoutes from './routes/apiRoutes.js';
+import facadeRoutes from './routes/facadeRoutes.js';
 import oauthProxyRoutes from './routes/oauthProxyRoutes.js';
 import privacyRoutes from './routes/privacyRoutes.js';
 import debugRoutes from './routes/debugRoutes.js';
@@ -97,17 +98,23 @@ app.get('/health', (req, res) => {
 app.get('/', (req, res) => {
   res.json({
     name: 'Gmail & Calendar OAuth Server',
-    version: '2.2.0',
-    description: 'OAuth proxy server for Custom GPT Actions with advanced features',
+    version: '3.0.0',
+    description: 'OAuth proxy server for Custom GPT Actions with BFF facade',
     endpoints: {
       auth: '/auth/google',
       status: '/auth/status',
       api: '/api/*',
       mail: '/api/mail/*',
       contacts: '/api/contacts/*',
-      calendar: '/api/calendar/*'
+      calendar: '/api/calendar/*',
+      facade: '/api/macros/* & /api/rpc/*'
     },
     features: [
+      'BFF Facade with macros for GPT',
+      'Unified RPC interface',
+      'Relative time windows',
+      'Attachment security filtering',
+      'Signed URLs for attachments',
       'Pagination with aggregate mode',
       'Batch mail operations',
       'ETag caching',
@@ -131,6 +138,9 @@ app.use('/auth', authRoutes);
 
 // API routes (protected)
 app.use('/api', apiRoutes);
+
+// Facade routes (BFF for Custom GPT)
+app.use('/api', facadeRoutes);
 
 // Debug routes (protected)
 app.use('/api/debug', debugRoutes);
