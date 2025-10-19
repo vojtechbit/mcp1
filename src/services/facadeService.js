@@ -1093,18 +1093,6 @@ export async function calendarReminderDrafts(googleSub, params) {
 
 // ==================== HELPER FUNCTIONS ====================
 
-function extractSenderName(from) {
-  if (!from) return '';
-  const match = from.match(/^"?([^<"]+)"?\s*</);
-  return match ? match[1].trim() : extractEmail(from);
-}
-
-function extractEmail(from) {
-  if (!from) return '';
-  const match = from.match(/<([^>]+)>/);
-  return match ? match[1] : from;
-}
-
 function categorizeEmail(message) {
   const labels = message.labelIds || [];
   
