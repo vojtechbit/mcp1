@@ -913,11 +913,11 @@
                   "op": {
                     "type": "string",
                     "enum": ["search", "read", "send", "reply", "modify"],
-                    "description": "Operation: search (Gmail query), read (full email), send (new/draft), reply (to message), modify (mark read/star/labels)"
+                    "description": "search, read (full email), send (direct OR by draftId), reply, modify"
                   },
                   "params": {
                     "type": "object",
-                    "description": "Op params. search: {query, maxResults}. read: {ids, format}. send: {to, subject, bodyText} OR {draftId}. reply: {messageId, bodyText}. modify: {ids, actions}."
+                    "description": "For send DIRECT: {to, subject, bodyText}. For send DRAFT: {draftId}. Others: search {query}, read {ids}, reply {messageId, bodyText}, modify {ids, actions}."
                   }
                 }
               },
@@ -932,17 +932,26 @@
                     }
                   }
                 },
-                "sendNewEmail": {
-                  "summary": "Send email",
+                "sendDirectEmail": {
+                  "summary": "Send email directly",
                   "value": {
                     "op": "send",
                     "params": {
                       "to": ["recipient@example.com"],
-                      "subject": "Follow-up",
-                      "bodyText": "Hi, following up..."
+                      "subject": "Meeting tomorrow",
+                      "bodyText": "Hi, reminder about meeting at 7am"
                     }
                   }
-                }
+                },
+                "sendDraft": {
+                  "summary": "Send existing draft by ID",
+                  "value": {
+                    "op": "send",
+                    "params": {
+                      "draftId": "18abc123def456"
+                    }
+                  }
+                },
               }
             }
           }
