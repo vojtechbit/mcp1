@@ -205,7 +205,7 @@ export async function calendarRpc(req, res) {
         break;
         
       case 'update':
-        result = await calendarService.updateEvent(
+        result = await calendarService.updateCalendarEvent(
           req.user.googleSub,
           params.eventId,
           params.updates
