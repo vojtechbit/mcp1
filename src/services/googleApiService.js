@@ -3,6 +3,7 @@ import { refreshAccessToken } from '../config/oauth.js';
 import { getUserByGoogleSub, updateTokens, updateLastUsed } from './databaseService.js';
 import { generateSignedAttachmentUrl } from '../utils/signedUrlGenerator.js';
 import { isBlocked } from '../utils/attachmentSecurity.js';
+import { getPragueOffsetHours } from '../utils/helpers.js';
 import dotenv from 'dotenv';
 // pdf-parse má problém s importem - načteme až když je potřeba
 import XLSX from 'xlsx-js-style';
@@ -376,13 +377,21 @@ async function readEmail(googleSub, messageId, options = {}) {
         fromName = fromHeader.replace(/<.+>/, '').trim().replace(/^["']|["']$/g, '');
       }
       
+      // FIX 20.10.2025: Return Prague local time with timezone offset, not UTC
+      // Reason: UTC without timezone info (11:02Z) gets displayed wrong by GPT
+      // Now: Prague local time (13:02+02:00) so GPT knows the timezone
+      const utcDate = new Date(parseInt(metadataResult.data.internalDate));
+      const offsetHours = getPragueOffsetHours(utcDate);
+      const pragueDate = new Date(utcDate.getTime() + offsetHours * 60 * 60 * 1000);
+      const pragueIso = pragueDate.toISOString().replace('Z', `+${String(offsetHours).padStart(2, '0')}:00`);
+      
       return {
         ...metadataResult.data,
         from: from,
         fromEmail: fromEmail,
         fromName: fromName,
         subject: subjectHeader,
-        date: new Date(parseInt(metadataResult.data.internalDate)).toISOString(),
+        date: pragueIso,
         snippet: snippet
       };
     }

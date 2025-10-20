@@ -7,6 +7,11 @@ import { REFERENCE_TIMEZONE } from '../config/limits.js';
 
 /**
  * Get timezone offset for Europe/Prague in hours (accounts for DST)
+ * 
+ * FIX 20.10.2025: DST check was wrong (month >= 3 && <= 9 excluded October)
+ * DST in Europe runs: last Sunday March to last Sunday October (inclusive)
+ * So check should be month >= 2 && month <= 9 (March=2 through October=9)
+ * 
  * @param {Date} date 
  * @returns {number} Offset in hours (e.g., 1 or 2)
  */
@@ -26,29 +31,17 @@ export function getPragueOffsetHours(date) {
     return -parseInt(tzName.split('-')[1]);
   }
   
-  // Fallback: manually check
-  // Prague is UTC+1 in winter, UTC+2 in summer
-  const january = new Date(date.getFullYear(), 0, 1);
-  const july = new Date(date.getFullYear(), 6, 1);
+  // Fallback: check month
+  // Prague is UTC+1 in winter (November-February)
+  // Prague is UTC+2 in summer DST (March-October)
+  const month = date.getMonth(); // 0=Jan, 1=Feb, 2=Mar, ... 9=Oct, 10=Nov, 11=Dec
   
-  const formatter2 = new Intl.DateTimeFormat('en-US', {
-    timeZone: REFERENCE_TIMEZONE,
-    hour: '2-digit',
-    hour12: false
-  });
-  
-  // Check if it's DST by comparing with known values
-  const janHour = parseInt(formatter2.format(new Date(Date.UTC(date.getFullYear(), 0, 1, 12, 0, 0))));
-  const isDST = janHour === 13; // If 12 UTC shows as 13, it's UTC+1 (winter). If 14, it's UTC+2 (summer)
-  
-  // Actually, let's just check current month
-  const month = date.getMonth();
-  // DST in Europe: last Sunday of March to last Sunday of October
-  // Rough approximation: April-September is DST
-  if (month >= 3 && month <= 9) {
-    return 2; // Summer time UTC+2
+  // FIXED: Changed from (month >= 3 && month <= 9) to (month >= 2 && month <= 9)
+  // Now correctly includes October (month 9) in DST range
+  if (month >= 2 && month <= 9) {
+    return 2; // Summer time UTC+2 (DST: March through October)
   } else {
-    return 1; // Winter time UTC+1
+    return 1; // Winter time UTC+1 (November through February)
   }
 }
 
