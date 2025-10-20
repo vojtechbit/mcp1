@@ -1223,7 +1223,16 @@ async function createCalendarEvent(googleSub, eventData) {
     };
 
     if (eventData.attendees) {
-      event.attendees = eventData.attendees.map(email => ({ email }));
+      event.attendees = eventData.attendees.map(attendee => {
+        if (typeof attendee === 'string') {
+          return { email: attendee };
+        } else if (attendee && attendee.email) {
+          const obj = { email: attendee.email };
+          if (attendee.displayName) obj.displayName = attendee.displayName;
+          return obj;
+        }
+        return null;
+      }).filter(Boolean);
     }
 
     if (eventData.location) {
@@ -1294,10 +1303,25 @@ async function updateCalendarEvent(googleSub, eventId, updates) {
       ...updates
     };
 
+    // Transform attendees if provided
+    if (updatedEvent.attendees) {
+      updatedEvent.attendees = updatedEvent.attendees.map(attendee => {
+        if (typeof attendee === 'string') {
+          return { email: attendee };
+        } else if (attendee && attendee.email) {
+          const obj = { email: attendee.email };
+          if (attendee.displayName) obj.displayName = attendee.displayName;
+          return obj;
+        }
+        return null;
+      }).filter(Boolean);
+    }
+
     const result = await calendar.events.update({
       calendarId: 'primary',
       eventId: eventId,
-      requestBody: updatedEvent
+      requestBody: updatedEvent,
+      sendUpdates: updatedEvent.attendees ? 'all' : 'none'
     });
 
     return result.data;

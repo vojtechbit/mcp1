@@ -974,7 +974,7 @@
       "post": {
         "operationId": "calendarRpc",
         "summary": "Advanced calendar operations",
-        "description": "Low-level calendar RPC. Operations: list, get, create, update, delete. Use macros for schedule/plan, RPC for advanced CRUD and batch ops. Returns ALL matching events (within limits).",
+        "description": "Low-level calendar RPC. Operations: list, get, create, update, delete, checkConflicts. Use macros for schedule/plan, RPC for advanced CRUD. Always include eventId for update/delete.",
         "requestBody": {
           "required": true,
           "content": {
@@ -982,16 +982,42 @@
               "schema": {
                 "type": "object",
                 "required": ["op", "params"],
-                "description": "RPC for calendar CRUD. Ops: 'list'=get events with filters, 'get'=single by ID, 'create'=new event, 'update'=modify, 'delete'=remove. Use /macros/calendar/plan for schedules, /macros/calendar/schedule for creating. Use RPC for batch or precise control.",
+                "description": "RPC for calendar CRUD. Ops: 'list'=get events, 'get'=single event, 'create'=new event, 'update'=reschedule/modify, 'delete'=remove, 'checkConflicts'=find overlaps.",
                 "properties": {
                   "op": {
                     "type": "string",
-                    "enum": ["list", "get", "create", "update", "delete"],
-                    "description": "Operation: list (filtered events), get (single by ID), create, update, delete"
+                    "enum": ["list", "get", "create", "update", "delete", "checkConflicts"],
+                    "description": "Operation type. CRITICAL for update: must include eventId and updates fields."
                   },
                   "params": {
                     "type": "object",
-                    "description": "Op params. list: {timeMin, timeMax}. get: {eventId}. create: {summary, start, end}. update: {eventId, updates}. delete: {eventId}."
+                    "description": "Operation parameters. CRITICAL: Always provide eventId for update/delete/get. For update, provide 'updates' object with fields to change.",
+                    "properties": {
+                      "eventId": {
+                        "type": "string",
+                        "description": "Event ID (REQUIRED for: get, update, delete, checkConflicts). Get from list or previous response."
+                      },
+                      "updates": {
+                        "type": "object",
+                        "description": "Fields to update (for op=update). Can include: start, end, summary, description, attendees, location, reminders. Times must be ISO 8601 with timeZone."
+                      },
+                      "start": {
+                        "type": "string",
+                        "description": "Range start ISO 8601 (for list, checkConflicts). Example: 2025-10-20T00:00:00Z"
+                      },
+                      "end": {
+                        "type": "string",
+                        "description": "Range end ISO 8601 (for list, checkConflicts). Example: 2025-10-27T23:59:59Z"
+                      },
+                      "timeMin": {
+                        "type": "string",
+                        "description": "Alias for start (for list operation)"
+                      },
+                      "timeMax": {
+                        "type": "string",
+                        "description": "Alias for end (for list operation)"
+                      }
+                    }
                   }
                 }
               },
@@ -1003,6 +1029,36 @@
                     "params": {
                       "timeMin": "2025-10-20T00:00:00Z",
                       "timeMax": "2025-10-27T23:59:59Z"
+                    }
+                  }
+                },
+                "updateEvent": {
+                  "summary": "Reschedule event + add attendee",
+                  "value": {
+                    "op": "update",
+                    "params": {
+                      "eventId": "ntp5rmjh78fknui1m4rdk407uc",
+                      "updates": {
+                        "start": {
+                          "dateTime": "2025-10-21T07:00:00",
+                          "timeZone": "Europe/Prague"
+                        },
+                        "end": {
+                          "dateTime": "2025-10-21T08:00:00",
+                          "timeZone": "Europe/Prague"
+                        },
+                        "attendees": [{"email": "matyherm04@gmail.com"}]
+                      }
+                    }
+                  }
+                },
+                "checkConflicts": {
+                  "summary": "Check for conflicts in time slot",
+                  "value": {
+                    "op": "checkConflicts",
+                    "params": {
+                      "start": "2025-10-21T07:00:00Z",
+                      "end": "2025-10-21T08:00:00Z"
                     }
                   }
                 }
