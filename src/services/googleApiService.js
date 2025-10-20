@@ -1218,14 +1218,8 @@ async function createCalendarEvent(googleSub, eventData) {
     const event = {
       summary: eventData.summary,
       description: eventData.description || '',
-      start: {
-        dateTime: eventData.start,
-        timeZone: eventData.timeZone || 'Europe/Prague'
-      },
-      end: {
-        dateTime: eventData.end,
-        timeZone: eventData.timeZone || 'Europe/Prague'
-      }
+      start: eventData.start,
+      end: eventData.end
     };
 
     if (eventData.attendees) {
