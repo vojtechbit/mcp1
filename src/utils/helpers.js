@@ -193,10 +193,24 @@ export function parseRelativeTime(relative) {
     }
     
     case 'last7d': {
-      const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+      // FIX: Use Prague midnight (not UTC) - consistent with other relative filters
+      // Calculate 7 days ago in Prague time
+      const sevenDaysAgoPrague = new Date(
+        pragueNow.year,
+        pragueNow.month - 1,
+        pragueNow.day - 7
+      );
+      
+      const start = createPragueMidnight(
+        sevenDaysAgoPrague.getFullYear(),
+        sevenDaysAgoPrague.getMonth() + 1,
+        sevenDaysAgoPrague.getDate()
+      );
+      const end = new Date(start.getTime() + (7 * 24 * 60 * 60 * 1000) - 1000);
+      
       return {
-        after: toUnixSeconds(sevenDaysAgo),
-        before: toUnixSeconds(now)
+        after: toUnixSeconds(start),
+        before: toUnixSeconds(end)
       };
     }
     

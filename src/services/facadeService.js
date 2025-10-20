@@ -9,6 +9,7 @@ import * as gmailService from './googleApiService.js';
 import * as calendarService from './googleApiService.js';
 import * as contactsService from './googleApiService.js';
 import * as tasksService from './googleApiService.js';
+import { classifyEmailCategory } from './googleApiService.js';
 import { parseRelativeTime, getPragueOffsetHours } from '../utils/helpers.js';
 import { REFERENCE_TIMEZONE } from '../config/limits.js';
 import { processAttachments } from '../utils/attachmentSecurity.js';
@@ -122,7 +123,7 @@ export async function inboxOverview(googleSub, params) {
       senderAddress: fromEmail || fromHeader,
       subject: msg.subject || '(no subject)',
       receivedAt: msg.date || null,
-      inboxCategory: msg.inboxCategory || 'other',
+      inboxCategory: classifyEmailCategory(msg),
       snippet: msg.snippet || ''
     };
   });

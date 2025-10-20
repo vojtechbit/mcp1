@@ -191,6 +191,62 @@ function truncateText(text, maxLength) {
 }
 
 /**
+ * FIX: Classify email into inbox category based on Gmail labels
+ * @param {object} message - Gmail message object with labelIds
+ * @returns {string} Category: primary, work, promotions, social, updates, forums, other
+ */
+function classifyEmailCategory(message) {
+  if (!message || !message.labelIds) {
+    return 'other';
+  }
+
+  const labelIds = message.labelIds || [];
+  const labelIdLowercase = labelIds.map(l => l.toLowerCase());
+
+  // Gmail system labels (canonical names)
+  const hasLabel = (name) => labelIdLowercase.includes(name.toLowerCase());
+
+  // Check categories in priority order
+  // Note: Gmail category labels are internal - check by label name patterns
+  
+  // CATEGORY_PROMOTIONS
+  if (hasLabel('CATEGORY_PROMOTIONS')) {
+    return 'promotions';
+  }
+  
+  // CATEGORY_SOCIAL
+  if (hasLabel('CATEGORY_SOCIAL')) {
+    return 'social';
+  }
+  
+  // CATEGORY_UPDATES
+  if (hasLabel('CATEGORY_UPDATES')) {
+    return 'updates';
+  }
+  
+  // CATEGORY_FORUMS
+  if (hasLabel('CATEGORY_FORUMS')) {
+    return 'forums';
+  }
+  
+  // CATEGORY_PERSONAL/PRIMARY - these are "important" emails
+  // Check both IMPORTANT flag and CATEGORY_PERSONAL
+  if (hasLabel('IMPORTANT') || hasLabel('CATEGORY_PERSONAL')) {
+    return 'primary';
+  }
+  
+  // Check for work-related patterns (custom user labels containing 'work')
+  for (const label of labelIds) {
+    if (label.toLowerCase().includes('work')) {
+      return 'work';
+    }
+  }
+  
+  // If none matched, return other
+  return 'other';
+}
+
+/**
  * Extract attachments from email payload
  */
 function extractAttachments(payload, messageId) {
@@ -1384,6 +1440,7 @@ export {
   previewAttachmentText,
   previewAttachmentTable,
   downloadAttachment,
+  classifyEmailCategory,
   createCalendarEvent,
   getCalendarEvent,
   listCalendarEvents,
