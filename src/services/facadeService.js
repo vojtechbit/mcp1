@@ -7,8 +7,8 @@
 
 import * as gmailService from './googleApiService.js';
 import * as calendarService from './googleApiService.js';
-import * as contactsService from './googleApiService.js';
-import * as tasksService from './googleApiService.js';
+import * as contactsService from './contactsService.js';
+import * as tasksService from './tasksService.js';
 import { classifyEmailCategory } from './googleApiService.js';
 import { parseRelativeTime, getPragueOffsetHours } from '../utils/helpers.js';
 import { REFERENCE_TIMEZONE } from '../config/limits.js';
@@ -1033,7 +1033,7 @@ export async function calendarReminderDrafts(googleSub, params) {
   }
   
   // Fetch upcoming events with attendees
-  const events = await calendarService.listEvents(googleSub, {
+  const events = await calendarService.listCalendarEvents(googleSub, {
     timeMin: start.toISOString(),
     timeMax: end.toISOString(),
     orderBy: 'startTime',
