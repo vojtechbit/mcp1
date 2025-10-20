@@ -328,7 +328,7 @@ export async function calendarPlan(googleSub, params) {
   }
   
   // Fetch events
-  const events = await calendarService.listEvents(googleSub, {
+  const events = await calendarService.listCalendarEvents(googleSub, {
     timeMin: start.toISOString(),
     timeMax: end.toISOString(),
     orderBy: 'startTime',
@@ -631,8 +631,8 @@ export async function calendarSchedule(googleSub, params) {
   }
 
   // Create event in calendar
-  const event = await calendarService.createEvent(googleSub, eventData, {
-    conferenceDataVersion: conference === 'meet' ? 1 : 0
+  const event = await calendarService.createCalendarEvent(googleSub, eventData, {
+  conferenceDataVersion: conference === 'meet' ? 1 : 0
   });
 
   return {
@@ -698,7 +698,7 @@ export async function completeCalendarScheduleEnrichment(
   }
 
   // Create event
-  const event = await calendarService.createEvent(googleSub, {
+  const event = await calendarService.createCalendarEvent(googleSub, {
     summary: updatedEventData.title,
     start: {
       dateTime: updatedEventData.when.start,
