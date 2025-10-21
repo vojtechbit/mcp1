@@ -85,8 +85,7 @@ async function getAddressSuggestions(req, res) {
       success: true,
       count: suggestions.length,
       suggestions: suggestions.map(s => ({
-        name: s.name,
-        email: s.email,
+        realEstate: s.realEstate,
         // Include score internally but don't emphasize it
         _score: s.score
       }))

@@ -449,8 +449,7 @@ export async function contactsRpc(req, res) {
         break;
         
       case 'dedupe':
-        // TODO: Implement deduplication
-        result = { duplicates: [] };
+        result = await contactsService.findDuplicates(req.user.googleSub);
         break;
         
       case 'bulkUpsert':

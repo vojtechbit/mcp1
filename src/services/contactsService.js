@@ -339,8 +339,9 @@ async function searchContacts(googleSub, searchQuery) {
 }
 
 /**
- * Get address suggestions (fuzzy match on name/email)
- * Returns up to 3 canonical address suggestions with scores
+ * Get address suggestions (fuzzy match on realEstate field only)
+ * Matches partial addresses and returns up to 3 complete addresses with scores
+ * Only searches realEstate column - not for names/emails
  */
 async function getAddressSuggestions(googleSub, query) {
   try {
@@ -359,43 +360,49 @@ async function getAddressSuggestions(googleSub, query) {
     }
 
     const normalizedQuery = stripDiacritics(query.toLowerCase().trim());
-    const tokens = normalizedQuery.split(/\s+/);
+    const tokens = normalizedQuery.split(/\s+/).filter(t => t.length > 0);
 
-    // Score each contact
+    if (tokens.length === 0) {
+      return [];
+    }
+
+    // Score each contact based on realEstate field only
     const scored = rows.map(row => {
-      const name = row[0] || '';
-      const email = row[1] || '';
-      const normalizedName = stripDiacritics(name.toLowerCase());
-      const normalizedEmail = stripDiacritics(email.toLowerCase());
+      const realEstate = row[3] || ''; // realEstate is column 3 (0-indexed)
+      
+      // Skip empty realEstate values
+      if (!realEstate) {
+        return { realEstate, score: 0 };
+      }
 
-      // Token-based matching
+      const normalizedAddress = stripDiacritics(realEstate.toLowerCase());
+
+      // Token-based matching (how many tokens appear in address)
       let tokenScore = 0;
       for (const token of tokens) {
-        if (normalizedName.includes(token)) tokenScore += 2;
-        if (normalizedEmail.includes(token)) tokenScore += 1;
+        if (normalizedAddress.includes(token)) {
+          tokenScore += 2;
+        }
       }
 
       // Jaro-Winkler similarity
-      const nameSim = jaroWinkler(normalizedQuery, normalizedName);
-      const emailSim = jaroWinkler(normalizedQuery, normalizedEmail.split('@')[0]);
-      const maxSim = Math.max(nameSim, emailSim);
+      const addressSim = jaroWinkler(normalizedQuery, normalizedAddress);
 
-      const score = tokenScore + maxSim * 10;
+      // Combined score: token matches + similarity
+      const score = tokenScore + addressSim * 10;
 
       return {
-        name,
-        email,
+        realEstate,
         score
       };
     });
 
-    // Sort by score and take top 3
+    // Sort by score and take top 3 (only those with score > 0)
     scored.sort((a, b) => b.score - a.score);
     const top3 = scored.filter(c => c.score > 0).slice(0, 3);
 
     return top3.map(c => ({
-      name: c.name,
-      email: c.email,
+      realEstate: c.realEstate,
       score: Math.round(c.score * 100) / 100
     }));
 
@@ -782,6 +789,62 @@ async function deleteContact(googleSub, { email, name }) {
   }
 }
 
+/**
+ * Find duplicate contacts in Google Sheet
+ * Groups contacts by email (primary key)
+ * Returns groups with 2+ matching emails
+ */
+async function findDuplicates(googleSub) {
+  try {
+    const sheets = await getSheetsClient(googleSub);
+    const spreadsheetId = await getOrCreateContactsSheet(googleSub);
+
+    const response = await sheets.spreadsheets.values.get({
+      spreadsheetId,
+      range: CONTACTS_RANGE,
+    });
+
+    const rows = response.data.values || [];
+    const emailMap = {}; // email -> [contacts with that email]
+
+    // Group contacts by email
+    for (let i = 0; i < rows.length; i++) {
+      const email = (rows[i][1] || '').toLowerCase().trim();
+      
+      if (email) { // Only process if email exists
+        const contact = {
+          name: rows[i][0] || '',
+          email: rows[i][1] || '',
+          notes: rows[i][2] || '',
+          realestate: rows[i][3] || '',
+          phone: rows[i][4] || '',
+          rowIndex: i + 2 // Sheet row number (1-indexed, starting from row 2)
+        };
+
+        if (!emailMap[email]) {
+          emailMap[email] = [];
+        }
+        emailMap[email].push(contact);
+      }
+    }
+
+    // Extract only actual duplicates (email appears 2+ times)
+    const duplicates = Object.values(emailMap)
+      .filter(group => group.length > 1)
+      .sort((a, b) => b.length - a.length); // Sort by group size descending
+
+    return {
+      duplicates,
+      count: duplicates.length,
+      totalDuplicateContacts: duplicates.reduce((sum, group) => sum + group.length, 0)
+    };
+
+  } catch (error) {
+    console.error('❌ Failed to find duplicates:', error.message);
+    throw error;
+  }
+}
+
 export {
   searchContacts,
   getAddressSuggestions,
@@ -790,5 +853,6 @@ export {
   bulkUpsert,
   bulkDelete,
   updateContact,
-  deleteContact
+  deleteContact,
+  findDuplicates
 };

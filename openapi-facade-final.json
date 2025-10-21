@@ -812,8 +812,8 @@
     "/macros/contacts/safeAdd": {
       "post": {
         "operationId": "macroContactsSafeAdd",
-        "summary": "Add contacts with deduplication",
-        "description": "Bulk add contacts (max 50) with auto duplicate detection. Strategies: ask (confirm duplicates), merge (auto >70% match), keepBoth. Use 'realestate' for company. Returns created/merged/skipped counts.",
+        "summary": "Add contacts with safe deduplication workflow",
+        "description": "Bulk add 1-50 contacts with automatic duplicate detection based on email/name/phone matching. Supports three strategies: 'ask' (ask user to decide), 'skip' (skip duplicates), 'merge' (auto-merge into existing). Default 'ask' is safest - returns duplicates for user confirmation. For bulk imports, use 'merge' to auto-consolidate. Use 'realestate' field for company/organization.",
         "requestBody": {
           "required": true,
           "content": {
@@ -821,7 +821,7 @@
               "schema": {
                 "type": "object",
                 "required": ["entries"],
-                "description": "Add 1-50 contacts with duplicate checking. Each needs name (required), optional email/phone/company/notes. Three strategies: 'ask'=safe default (returns duplicates for decision), 'merge'=auto-merge >70% match, 'keepBoth'=always add (may duplicate).",
+                "description": "Bulk add contacts (1-50) with duplicate detection. Each entry needs 'name' (required), optional 'email'/'phone'/'realestate'/'notes'. Three deduping strategies: 'ask' (default, safe - ask user), 'skip' (skip if duplicate found), 'merge' (auto-merge if match found). Matching logic: email exact match > phone match > name exact match > partial name match. When duplicates found with strategy='ask', returns confirmToken for user to decide action.",
                 "properties": {
                   "entries": {
                     "type": "array",
@@ -862,42 +862,59 @@
                   },
                   "dedupeStrategy": {
                     "type": "string",
-                    "enum": ["ask", "merge", "keepBoth"],
+                    "enum": ["ask", "skip", "merge", "create"],
                     "default": "ask",
-                    "description": "Duplicate handling: 'ask'=return in skipped for decision (safest), 'merge'=auto-merge >70% match, 'keepBoth'=always add new."
+                    "description": "Duplicate handling strategy: 'ask' (default, safest) = detect duplicates and return confirmToken for user to decide, 'skip' = skip entries with duplicates (don't add), 'merge' = auto-merge into existing (preserve existing, add new fields), 'create' = always add (may create duplicates). For safest experience, use 'ask' (requires user confirmation). For bulk imports, use 'merge'."
                   }
                 }
               },
               "examples": {
                 "singleContact": {
-                  "summary": "Add one contact",
-                  "value": {
-                    "entries": [
-                      {
-                        "name": "John Smith",
-                        "email": "john@example.com",
-                        "phone": "+420 123 456 789",
-                        "realestate": "Acme Corp"
-                      }
-                    ]
+                "summary": "Add single contact (safest: asks if duplicate)",
+                "value": {
+                "entries": [
+                {
+                "name": "John Smith",
+                "email": "john@example.com",
+                "phone": "+420 123 456 789",
+                "realestate": "Acme Corp"
+                }
+                ],
+                  "dedupeStrategy": "ask"
                   }
                 },
-                "bulkImport": {
-                  "summary": "Import 3 contacts with auto-merge",
-                  "value": {
-                    "entries": [
-                      {
-                        "name": "Jane Doe",
-                        "email": "jane@company.com"
-                      },
-                      {
-                        "name": "Bob Wilson",
-                        "email": "bob@startup.io"
-                      }
-                    ],
-                    "dedupeStrategy": "merge"
+                "bulkImportAutoMerge": {
+                "summary": "Import 3 contacts with auto-merge into existing",
+                "value": {
+                "entries": [
+                {
+                "name": "Jane Doe",
+                  "email": "jane@company.com"
+                },
+                {
+                "name": "Bob Wilson",
+                  "email": "bob@startup.io"
+                  },
+                  {
+                      "name": "Alice Brown",
+                        "phone": "+420 999 888 777"
+                        }
+                      ],
+                      "dedupeStrategy": "merge"
+                    }
+                  },
+                  "bulkImportSkip": {
+                    "summary": "Import but skip any duplicates found",
+                    "value": {
+                      "entries": [
+                        {
+                          "name": "Bob Wilson",
+                          "email": "bob@startup.io"
+                        }
+                      ],
+                      "dedupeStrategy": "skip"
+                    }
                   }
-                }
               }
             }
           }
@@ -912,15 +929,48 @@
                   "properties": {
                     "created": {
                       "type": "array",
-                      "description": "Successfully created contacts"
+                      "description": "Successfully created new contacts. Each item: {name, email}",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "name": {"type": "string"},
+                          "email": {"type": "string"}
+                        }
+                      }
                     },
                     "merged": {
                       "type": "array",
-                      "description": "Merged contacts (when strategy=merge)"
+                      "description": "Successfully merged into existing contacts (when strategy=merge). Each item: {merged_into (email), from (name), fields_updated (array of field names)}. Preserve existing contact data, add new fields from entry.",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "merged_into": {"type": "string", "description": "Email of existing contact that was merged into"},
+                          "from": {"type": "string", "description": "Name of new contact that was merged"},
+                          "fields_updated": {"type": "array", "description": "Which fields were updated (phone, notes, etc)"}
+                        }
+                      }
                     },
                     "skipped": {
                       "type": "array",
-                      "description": "Skipped due to duplicates (when strategy=ask)"
+                      "description": "Entries that could not be processed. Reason: 'found duplicates' (strategy=ask or skip), 'merge failed', 'add failed'. Each item: {email, name, reason, existing (duplicate contacts if found)}.",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "email": {"type": "string"},
+                          "name": {"type": "string"},
+                          "reason": {"type": "string"},
+                          "existing": {"type": "array", "description": "Existing contacts that matched (if duplicates found)"}
+                        }
+                      }
+                    },
+                    "confirmToken": {
+                      "type": "string",
+                      "description": "Present ONLY if strategy='ask' and duplicates found. User must call /api/macros/confirm with this token and action (create/skip/merge) to proceed."
+                    },
+                    "warnings": {
+                      "type": "array",
+                      "description": "Informational messages for user (e.g., 'Found 2 duplicates. Call /api/macros/confirm...')",
+                      "items": {"type": "string"}
                     }
                   }
                 }
@@ -1009,6 +1059,107 @@
               }
             }
           }
+        }
+      }
+    },
+    "/rpc/contacts": {
+      "post": {
+        "operationId": "contactsRpc",
+        "summary": "Advanced contact RPC operations (9 operations)",
+        "description": "Low-level RPC for contacts management. Nine operations: list (get all), search (by query), add (single contact), update (existing), delete (by email), dedupe (find duplicates), bulkUpsert (batch add), bulkDelete (batch delete), addressSuggest (address suggestions from realEstate field). Use /macros/contacts/safeAdd for safe workflow with user confirmation, use /rpc/contacts for direct control.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["op"],
+                "description": "RPC request: specify operation and parameters. Each op has different params structure.",
+                "properties": {
+                  "op": {
+                    "type": "string",
+                    "enum": ["list", "search", "add", "update", "delete", "dedupe", "bulkUpsert", "bulkDelete", "addressSuggest"],
+                    "description": "Contact operation to perform"
+                  },
+                  "params": {
+                    "type": "object",
+                    "description": "Operation-specific parameters. See examples for each operation's structure."
+                  }
+                }
+              },
+              "examples": {
+                "list": {
+                  "summary": "Get all contacts",
+                  "value": {"op": "list"}
+                },
+                "search": {
+                  "summary": "Search for 'john'",
+                  "value": {"op": "search", "params": {"query": "john"}}
+                },
+                "add": {
+                  "summary": "Add single contact",
+                  "value": {"op": "add", "params": {"name": "John Smith", "email": "john@example.com"}}
+                },
+                "update": {
+                  "summary": "Update existing contact",
+                  "value": {"op": "update", "params": {"name": "John Smith", "email": "john@example.com", "phone": "+420 999 999 999"}}
+                },
+                "delete": {
+                  "summary": "Delete by email",
+                  "value": {"op": "delete", "params": {"email": "old@example.com"}}
+                },
+                "dedupe": {
+                  "summary": "Find duplicate contacts",
+                  "value": {"op": "dedupe"}
+                },
+                "bulkUpsert": {
+                  "summary": "Batch add contacts",
+                  "value": {"op": "bulkUpsert", "params": {"contacts": [{"name": "Alice", "email": "alice@example.com"}, {"name": "Bob", "email": "bob@example.com"}]}}
+                },
+                "bulkDelete": {
+                  "summary": "Delete 2 by email",
+                  "value": {"op": "bulkDelete", "params": {"emails": ["old1@example.com", "old2@example.com"]}}
+                },
+                "addressSuggest": {
+                  "summary": "Get address suggestions from realEstate field",
+                  "value": {"op": "addressSuggest", "params": {"query": "Vrchlického"}}
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Operation successful",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {"type": "boolean", "description": "Always true on success"},
+                    "data": {"type": "object", "description": "Response data (varies by operation)"}
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request - missing or invalid parameters",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {"type": "string"},
+                    "message": {"type": "string"},
+                    "code": {"type": "string", "enum": ["INVALID_PARAM"]}
+                  }
+                }
+              }
+            }
+          },
+          "401": {"description": "Authentication required"},
+          "500": {"description": "Server error"}
         }
       }
     },
@@ -1322,7 +1473,7 @@
       "post": {
         "operationId": "contactsRpc",
         "summary": "Advanced contacts operations",
-        "description": "Low-level contacts RPC. Operations: list, search, add, update, delete, bulkUpsert, bulkDelete, addressSuggest. Contacts stored in Google Sheet: columns Name | Email | Notes | RealEstate | Phone. RPC returns ALL matching results (within limits).",
+        "description": "Low-level contacts RPC. Operations: list, search, add, update, delete, bulkUpsert, bulkDelete, addressSuggest (searches realEstate column only). Contacts stored in Google Sheet: columns Name | Email | Notes | RealEstate | Phone. RPC returns ALL matching results (within limits).",
         "requestBody": {
           "required": true,
           "content": {
@@ -1334,7 +1485,7 @@
                   "op": {
                     "type": "string",
                     "enum": ["list", "search", "add", "update", "delete", "bulkUpsert", "bulkDelete", "addressSuggest", "dedupe"],
-                    "description": "Operation: list (all contacts), search (query), add (single), update, delete, bulkUpsert (batch add), bulkDelete (batch delete), addressSuggest (fuzzy match for autocomplete), dedupe (find duplicates)"
+                    "description": "Operation: list (all contacts), search (query), add (single), update, delete, bulkUpsert (batch add), bulkDelete (batch delete), addressSuggest (address suggestions from realEstate field only), dedupe (find duplicates)"
                   },
                   "params": {
                     "type": "object",
@@ -1441,13 +1592,13 @@
                       },
                       {
                         "type": "object",
-                        "title": "addressSuggest - Fuzzy match for autocomplete",
+                        "title": "addressSuggest - Address suggestions from realEstate field",
                         "required": ["query"],
                         "properties": {
                           "query": {
                             "type": "string",
-                            "example": "john",
-                            "description": "Partial name or email for fuzzy matching. Returns top 3 scored matches."
+                            "example": "Vrchlického 334",
+                            "description": "Partial address for fuzzy matching in realEstate field ONLY. When user types partial address, returns top 3 complete addresses from existing contacts. Example: typing 'Vrchlického' will suggest 'Vrchlického 334, Praha' if it exists."
                           }
                         },
                         "additionalProperties": false

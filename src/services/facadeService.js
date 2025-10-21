@@ -746,92 +746,99 @@ export async function completeCalendarScheduleEnrichment(
 // ==================== CONTACTS MACROS ====================
 
 /**
- * Safe Add Contacts - with deduplication workflow
+ * Safe Add Contacts - with deduplication detection
  * 
- * WORKFLOW FOR dedupeStrategy='ask':
- * 1. For each entry, search existing contacts for duplicates
- * 2. If duplicates found → return confirmToken + candidates
- * 3. User confirms with /api/macros/confirm endpoint
- * 4. Complete operation based on user choice
+ * WORKFLOW:
+ * 1. Get all existing contacts from Google Contacts Sheet
+ * 2. For each new entry, check for duplicates by email/name/phone
+ * 3. If duplicates found AND dedupeStrategy='ask' → return confirmToken for user decision
+ * 4. Otherwise → add according to strategy (create/skip/merge)
+ * 
+ * dedupeStrategy options:
+ * - 'ask' (default): Return duplicates for user confirmation
+ * - 'create': Always add (may create duplicates)
+ * - 'skip': Skip entries with duplicates
+ * - 'merge': Auto-merge into existing contacts (>70% match)
  */
 export async function contactsSafeAdd(googleSub, params) {
   const { entries, dedupeStrategy = 'ask' } = params;
 
-  if (!entries || entries.length === 0) {
-    throw { statusCode: 400, message: 'No entries provided' };
+  if (!entries || !Array.isArray(entries) || entries.length === 0) {
+    const error = new Error('entries parameter required: array of {name, email, phone?, notes?, realestate?}');
+    error.statusCode = 400;
+    throw error;
   }
 
-  // ========== STEP 1: Check for duplicates ==========
+  // ========== STEP 1: Get all existing contacts from Sheet ==========
+  
+  let existingContacts = [];
+  try {
+    existingContacts = await contactsService.listAllContacts(googleSub) || [];
+  } catch (error) {
+    console.warn('⚠️ Failed to list existing contacts:', error.message);
+    existingContacts = [];
+  }
+
+  // ========== STEP 2: Find duplicates for each entry ==========
 
   const duplicateFindings = [];
 
   for (const entry of entries) {
-    try {
-      // Search for existing contacts with similar name/email
-      const searchQuery = entry.email || entry.name;
-      const searchResult = await contactsService.searchContacts(
-        googleSub,
-        searchQuery
-      );
+    const entryEmail = (entry.email || '').toLowerCase().trim();
+    const entryName = (entry.name || '').toLowerCase().trim();
+    const entryPhone = (entry.phone || '').replace(/\D/g, '');
 
-      const candidates = [];
+    // Find duplicates in existing contacts
+    const candidates = existingContacts.filter(contact => {
+      const contactEmail = (contact.email || '').toLowerCase().trim();
+      const contactName = (contact.name || '').toLowerCase().trim();
+      const contactPhone = (contact.phone || '').replace(/\D/g, '');
 
-      if (
-        searchResult &&
-        searchResult.connections &&
-        searchResult.connections.length > 0
-      ) {
-        for (const connection of searchResult.connections) {
-          const similarity = calculateSimilarity(entry, connection);
+      // Match by email (highest confidence)
+      if (entryEmail && contactEmail && entryEmail === contactEmail) {
+        return true;
+      }
 
-          if (similarity > 0.7) {
-            candidates.push({
-              id: connection.resourceName,
-              name:
-                connection.names && connection.names[0]
-                  ? connection.names[0].displayName
-                  : '',
-              email:
-                connection.emailAddresses &&
-                connection.emailAddresses[0]
-                  ? connection.emailAddresses[0].value
-                  : '',
-              phone:
-                connection.phoneNumbers &&
-                connection.phoneNumbers[0]
-                  ? connection.phoneNumbers[0].value
-                  : '',
-              similarity: Math.round(similarity * 100)
-            });
-          }
+      // Match by phone (high confidence)
+      if (entryPhone && contactPhone && entryPhone === contactPhone && entryPhone.length > 5) {
+        return true;
+      }
+
+      // Match by name (lower confidence)
+      if (entryName && contactName && entryName === contactName) {
+        return true;
+      }
+
+      // Partial name match (first + last name in common)
+      if (entryName && contactName) {
+        const entryParts = entryName.split(/\s+/).filter(p => p.length > 2);
+        const contactParts = contactName.split(/\s+/).filter(p => p.length > 2);
+        const commonParts = entryParts.filter(p => contactParts.includes(p));
+        if (commonParts.length > 0 && Math.max(entryParts.length, contactParts.length) > 1) {
+          return true;
         }
       }
 
-      duplicateFindings.push({
-        entry,
-        candidates
-      });
-    } catch (error) {
-      console.warn(
-        `❌ Deduplication search failed for ${entry.email || entry.name}:`,
-        error.message
-      );
-      duplicateFindings.push({
-        entry,
-        candidates: []
-      });
-    }
+      return false;
+    });
+
+    duplicateFindings.push({
+      entry,
+      candidates: candidates.map(c => ({
+        ...c,
+        rowIndex: c.rowIndex
+      }))
+    });
   }
 
-  // ========== STEP 2: Check if any duplicates found ==========
+  // ========== STEP 3: Check if any duplicates found ==========
 
-  const hasAnyDuplicates = duplicateFindings.some(
-    f => f.candidates.length > 0
-  );
+  const hasAnyDuplicates = duplicateFindings.some(f => f.candidates.length > 0);
 
-  // ========== STEP 3: Handle dedupeStrategy ==========
+  // ========== STEP 4: Handle dedupeStrategy ==========
 
   if (hasAnyDuplicates && dedupeStrategy === 'ask') {
+    // Return pending confirmation for user to decide
     const confirmation = await createPendingConfirmation(
       googleSub,
       'deduplication',
@@ -847,63 +854,53 @@ export async function contactsSafeAdd(googleSub, params) {
       merged: [],
       skipped: duplicateFindings
         .filter(f => f.candidates.length > 0)
-        .map(f => f.entry.email || f.entry.name),
+        .map(f => ({
+          email: f.entry.email,
+          name: f.entry.name,
+          reason: `Found ${f.candidates.length} existing contact(s)`,
+          existing: f.candidates
+        })),
       confirmToken: confirmation.confirmToken,
       warnings: [
-        `Found potential duplicates for ${duplicateFindings.filter(f => f.candidates.length > 0).length} contact(s)`,
-        'Call /api/macros/confirm with confirmToken to decide what to do'
+        `Found potential duplicates for ${duplicateFindings.filter(f => f.candidates.length > 0).length}/${entries.length} contact(s)`,
+        `Call /api/macros/confirm with confirmToken and action: 'create' (add all), 'skip' (skip duplicates), or 'merge' (merge)`
       ]
     };
   }
 
-  // ========== STEP 4: Perform bulk operation ==========
+  // ========== STEP 5: Perform bulk operation based on strategy ==========
 
-  if (hasAnyDuplicates && dedupeStrategy === 'merge') {
-    return await performContactsUpsert(
-      googleSub,
-      entries,
-      duplicateFindings,
-      'merge'
-    );
-  } else if (hasAnyDuplicates && dedupeStrategy === 'keepBoth') {
-    return await performContactsUpsert(
-      googleSub,
-      entries,
-      duplicateFindings,
-      'keepBoth'
-    );
-  } else {
-    return await performContactsUpsert(
-      googleSub,
-      entries,
-      duplicateFindings,
-      'create'
-    );
-  }
+  return await performContactsBulkAdd(
+    googleSub,
+    entries,
+    duplicateFindings,
+    dedupeStrategy
+  );
 }
 
 /**
- * Complete deduplication workflow (after user confirms)
+ * Complete deduplication workflow (after user confirms via confirmToken)
  */
 export async function completeContactsDeduplication(
   googleSub,
   confirmToken,
-  action
+  action // 'create', 'skip', or 'merge'
 ) {
   const confirmation = await getPendingConfirmation(confirmToken);
 
   if (!confirmation) {
-    throw { statusCode: 400, message: 'Confirmation expired or not found' };
+    const error = new Error('Confirmation expired or not found');
+    error.statusCode = 400;
+    throw error;
   }
 
   if (confirmation.type !== 'deduplication') {
     throw new Error('Invalid confirmation type');
   }
 
-  await confirmPendingConfirmation(confirmToken, action);
-
   const { entriesToAdd, duplicateFindings } = confirmation.data;
-  const result = await performContactsUpsert(
+  
+  const result = await performContactsBulkAdd(
     googleSub,
     entriesToAdd,
     duplicateFindings,
@@ -1286,9 +1283,13 @@ function extractContactFields(contact) {
 }
 
 /**
- * Perform bulk contact upsert with specified strategy
+ * Perform bulk contact add/merge with specified strategy
+ * Strategy:
+ * - 'create': Always add new contact (may duplicate)
+ * - 'skip': Skip entries that have duplicates
+ * - 'merge': Merge into existing contact
  */
-async function performContactsUpsert(
+async function performContactsBulkAdd(
   googleSub,
   entries,
   duplicateFindings,
@@ -1304,116 +1305,74 @@ async function performContactsUpsert(
     const entry = entries[i];
     const finding = duplicateFindings[i];
 
-    if (finding.candidates.length === 0 || strategy === 'keepBoth') {
+    // If no duplicates OR strategy='create' → ADD
+    if (finding.candidates.length === 0 || strategy === 'create') {
       try {
         const created = await contactsService.addContact(googleSub, {
           name: entry.name,
           email: entry.email,
           phone: entry.phone,
-          organization: entry.realestate,
+          realestate: entry.realestate,
           notes: entry.notes
         });
 
         result.created.push({
-          contactId: created.resourceName || created.id,
           name: entry.name,
           email: entry.email
         });
       } catch (error) {
-        console.error(`Failed to create contact ${entry.name}:`, error.message);
-        result.skipped.push(entry.email || entry.name);
-      }
-    } else if (strategy === 'merge' && finding.candidates.length > 0) {
-      const bestMatch = finding.candidates.reduce((a, b) =>
-        a.similarity > b.similarity ? a : b
-      );
-
-      try {
-        const merged = await contactsService.updateContact(googleSub, {
-          id: bestMatch.id,
+        console.error(`❌ Failed to create contact ${entry.name}:`, error.message);
+        result.skipped.push({
+          email: entry.email,
           name: entry.name,
-          email: entry.email || bestMatch.email,
-          phone: entry.phone || bestMatch.phone,
-          organization: entry.realestate || bestMatch.company,
-          notes: entry.notes
+          reason: `Add failed: ${error.message}`
         });
-
+      }
+    }
+    // If duplicates exist and strategy='skip' → SKIP
+    else if (strategy === 'skip') {
+      result.skipped.push({
+        email: entry.email,
+        name: entry.name,
+        reason: `Skipped: ${finding.candidates.length} duplicate(s) found`,
+        existing: finding.candidates
+      });
+    }
+    // If duplicates exist and strategy='merge' → MERGE
+    else if (strategy === 'merge' && finding.candidates.length > 0) {
+      const existingContact = finding.candidates[0]; // Use first match
+      
+      try {
+        // Merge: update existing contact with new data (preserve existing values)
+        const updated = await contactsService.updateContact(googleSub, {
+          rowIndex: existingContact.rowIndex,
+          name: existingContact.name, // Keep existing name
+          email: existingContact.email, // Keep existing email
+          phone: entry.phone || existingContact.phone, // Prefer new phone if provided
+          notes: entry.notes || existingContact.notes,
+          realestate: entry.realestate || existingContact.realestate
+        });
+        
         result.merged.push({
-          into: bestMatch.id,
+          merged_into: existingContact.email,
           from: entry.name,
-          mergeScore: bestMatch.similarity
+          fields_updated: Object.keys(entry).filter(k => entry[k] && !existingContact[k])
         });
       } catch (error) {
-        console.error(`Failed to merge contact ${entry.name}:`, error.message);
-        result.skipped.push(entry.email || entry.name);
+        console.error(`❌ Failed to merge contact ${entry.name}:`, error.message);
+        result.skipped.push({
+          email: entry.email,
+          name: entry.name,
+          reason: `Merge failed: ${error.message}`
+        });
       }
-    } else if (strategy === 'skip') {
-      result.skipped.push(entry.email || entry.name);
     }
   }
 
   return result;
 }
 
-/**
- * Calculate similarity between entry and existing contact (0-1)
- * Uses: name match + email match (weighted)
- */
-function calculateSimilarity(entry, existingContact) {
-  let score = 0;
 
-  // Name similarity
-  if (entry.name && existingContact.names && existingContact.names.length > 0) {
-    const entryName = entry.name.toLowerCase();
-    const existingName =
-      existingContact.names[0].displayName.toLowerCase();
-
-    if (entryName === existingName) {
-      score += 0.6;
-    } else if (
-      entryName.includes(existingName) ||
-      existingName.includes(entryName)
-    ) {
-      score += 0.3;
-    }
-  }
-
-  // Email similarity (highest weight)
-  if (
-    entry.email &&
-    existingContact.emailAddresses &&
-    existingContact.emailAddresses.length > 0
-  ) {
-    const entryEmail = entry.email.toLowerCase();
-    const existingEmail =
-      existingContact.emailAddresses[0].value.toLowerCase();
-
-    if (entryEmail === existingEmail) {
-      score += 0.4;
-    } else if (
-      entryEmail.split('@')[0] === existingEmail.split('@')[0]
-    ) {
-      score += 0.1;
-    }
-  }
-
-  // Phone similarity
-  if (
-    entry.phone &&
-    existingContact.phoneNumbers &&
-    existingContact.phoneNumbers.length > 0
-  ) {
-    const entryPhone = entry.phone.replace(/\D/g, '');
-    const existingPhone =
-      existingContact.phoneNumbers[0].value.replace(/\D/g, '');
-
-    if (entryPhone === existingPhone) {
-      score += 0.3;
-    }
-  }
-
-  return Math.min(score, 1);
-}
 
 /**
  * Helper: Extract email from "Name <email@example.com>" format
