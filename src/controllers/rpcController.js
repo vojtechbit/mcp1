@@ -383,7 +383,7 @@ export async function calendarRpc(req, res) {
 
 export async function contactsRpc(req, res) {
   try {
-    const { op, params } = req.body;
+    let { op, params } = req.body;
     
     if (!op) {
       return res.status(400).json({
@@ -391,6 +391,25 @@ export async function contactsRpc(req, res) {
         message: 'Missing required field: op',
         code: 'INVALID_PARAM'
       });
+    }
+
+    // ✅ FALLBACK: If params not provided, try to extract from root level
+    // This handles both:
+    // 1. {op: 'add', params: {name, email, ...}}
+    // 2. {op: 'add', name, email, ...}
+    if (!params) {
+      params = {};
+      const possibleParamKeys = [
+        'email', 'name', 'phone', 'realestate', 'notes',
+        'query', 'contacts', 'emails', 'rowIds',
+        'eventId', 'updates', 'taskListId', 'taskId'
+      ];
+      
+      for (const key of possibleParamKeys) {
+        if (key in req.body && key !== 'op') {
+          params[key] = req.body[key];
+        }
+      }
     }
     
     let result;
