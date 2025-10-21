@@ -525,10 +525,19 @@ async function updateContact(accessToken, contactData) {
 }
 
 /**
- * Delete contact
+ * Delete contact by email OR by name
+ * - If email provided: delete by email
+ * - If only name provided: find contact with that name and delete it
+ * - If both: delete exact match (email + name)
  */
 async function deleteContact(accessToken, { email, name }) {
   try {
+    if (!email && !name) {
+      const error = new Error('Must provide either email or name');
+      error.statusCode = 400;
+      throw error;
+    }
+
     const sheets = await getSheetsClient(accessToken);
     const spreadsheetId = await getOrCreateContactsSheet(accessToken);
 
@@ -541,22 +550,68 @@ async function deleteContact(accessToken, { email, name }) {
     let rowIndex = -1;
     let deletedContact = null;
 
-    for (let i = 0; i < rows.length; i++) {
-      const rowEmail = (rows[i][1] || '').toLowerCase().trim();
-      const rowName = (rows[i][0] || '').toLowerCase().trim();
-      
-      if ((name && rowEmail === email.toLowerCase().trim() && rowName === name.toLowerCase().trim()) ||
-          (!name && rowEmail === email.toLowerCase().trim())) {
-        rowIndex = i + 2;
-        deletedContact = {
-          name: rows[i][0] || '',
-          email: rows[i][1] || '',
-          notes: rows[i][2] || '',
-          realEstate: rows[i][3] || '',
-          phone: rows[i][4] || ''
-        };
-        break;
+    if (email) {
+      // EMAIL MODE: Find by email (with optional name confirmation)
+      for (let i = 0; i < rows.length; i++) {
+        const rowEmail = (rows[i][1] || '').toLowerCase().trim();
+        const rowName = (rows[i][0] || '').toLowerCase().trim();
+        
+        if (rowEmail === email.toLowerCase().trim()) {
+          // If name also provided, must match both
+          if (name && rowName !== name.toLowerCase().trim()) {
+            continue;
+          }
+          rowIndex = i + 2;
+          deletedContact = {
+            name: rows[i][0] || '',
+            email: rows[i][1] || '',
+            notes: rows[i][2] || '',
+            realEstate: rows[i][3] || '',
+            phone: rows[i][4] || ''
+          };
+          break;
+        }
       }
+    } else {
+      // NAME ONLY MODE: Find by name
+      const nameToFind = name.toLowerCase().trim();
+      const matches = [];
+      
+      for (let i = 0; i < rows.length; i++) {
+        const rowName = (rows[i][0] || '').toLowerCase().trim();
+        if (rowName === nameToFind) {
+          matches.push({
+            rowIndex: i + 2,
+            contact: {
+              name: rows[i][0] || '',
+              email: rows[i][1] || '',
+              notes: rows[i][2] || '',
+              realEstate: rows[i][3] || '',
+              phone: rows[i][4] || ''
+            }
+          });
+        }
+      }
+      
+      if (matches.length === 0) {
+        const error = new Error(`Contact not found: ${name}`);
+        error.code = 'CONTACT_NOT_FOUND';
+        error.statusCode = 404;
+        throw error;
+      }
+      
+      if (matches.length > 1) {
+        // Multiple matches - cannot delete ambiguously
+        const error = new Error(`Found ${matches.length} contacts with name "${name}". Please provide email to disambiguate.`);
+        error.code = 'AMBIGUOUS_DELETE';
+        error.statusCode = 409;
+        error.candidates = matches.map(m => m.contact);
+        throw error;
+      }
+      
+      // Single match - use it
+      rowIndex = matches[0].rowIndex;
+      deletedContact = matches[0].contact;
     }
 
     if (rowIndex === -1) {
@@ -585,7 +640,9 @@ async function deleteContact(accessToken, { email, name }) {
     return { success: true, deleted: deletedContact };
 
   } catch (error) {
-    if (error.code === 'CONTACT_NOT_FOUND') throw error;
+    if (error.code === 'CONTACT_NOT_FOUND' || error.code === 'AMBIGUOUS_DELETE') {
+      throw error;
+    }
     console.error('❌ [SHEETS_ERROR] Failed to delete contact');
     throw error;
   }

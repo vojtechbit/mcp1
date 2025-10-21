@@ -456,12 +456,16 @@ export async function contactsRpc(req, res) {
         break;
         
       case 'delete':
-        if (!params || !params.email) {
+        if (!params || (!params.email && !params.name)) {
           return res.status(400).json({
             error: 'Bad request',
-            message: 'delete requires params: {email, name?}',
+            message: 'delete requires params: {email?, name?} - at least one of email or name must be provided',
             code: 'INVALID_PARAM',
-            expectedFormat: { op: 'delete', params: { email: 'string', name: 'string?' } }
+            examples: {
+              byEmail: { op: 'delete', params: { email: 'john@example.com' } },
+              byName: { op: 'delete', params: { name: 'John Smith' } },
+              byBoth: { op: 'delete', params: { email: 'john@example.com', name: 'John Smith' } }
+            }
           });
         }
         result = await contactsService.deleteContact(req.user.accessToken, params);

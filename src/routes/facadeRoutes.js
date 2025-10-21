@@ -21,6 +21,10 @@ router.use(verifyToken);
 // Apply idempotency middleware to mutation routes
 router.use(idempotencyMiddleware);
 
+// Apply RPC normalizer GLOBALLY to all routes
+// This ensures both formats work: {op, params: {...}} and {op, field1, field2, ...}
+router.use(normalizeRpcRequest);
+
 // ==================== MACRO ENDPOINTS ====================
 
 // Inbox Macros
@@ -54,13 +58,10 @@ router.post('/macros/confirm/:confirmToken/cancel', confirmationController.cance
 
 // ==================== RPC ENDPOINTS ====================
 
-// Apply normalizer BEFORE RPC controllers
-// This transforms requests from multiple formats into unified internal format
-
-// Unified RPC endpoints with normalization
-router.post('/rpc/mail', normalizeRpcRequest, rpcController.mailRpc);
-router.post('/rpc/calendar', normalizeRpcRequest, rpcController.calendarRpc);
-router.post('/rpc/contacts', normalizeRpcRequest, rpcController.contactsRpc);
-router.post('/rpc/tasks', normalizeRpcRequest, rpcController.tasksRpc);
+// Unified RPC endpoints (normalizer applied globally above)
+router.post('/rpc/mail', rpcController.mailRpc);
+router.post('/rpc/calendar', rpcController.calendarRpc);
+router.post('/rpc/contacts', rpcController.contactsRpc);
+router.post('/rpc/tasks', rpcController.tasksRpc);
 
 export default router;
