@@ -560,8 +560,8 @@ export async function contactsRpc(req, res) {
 
 export async function tasksRpc(req, res) {
   try {
-    const { op, params } = req.body;
-    
+    let { op, params } = req.body;
+
     if (!op) {
       return res.status(400).json({
         error: 'Bad request',
@@ -569,9 +569,38 @@ export async function tasksRpc(req, res) {
         code: 'INVALID_PARAM'
       });
     }
-    
+
+    if (!params || typeof params !== 'object') {
+      const fallbackKeys = {
+        list: ['taskListId', 'maxResults', 'pageToken', 'showCompleted'],
+        get: ['taskListId', 'taskId'],
+        create: ['title', 'notes', 'due'],
+        update: ['taskListId', 'taskId', 'updates'],
+        delete: ['taskListId', 'taskId'],
+        complete: ['taskListId', 'taskId'],
+        reopen: ['taskListId', 'taskId']
+      }[op] || [];
+
+      if (fallbackKeys.length > 0) {
+        const fallback = {};
+        for (const key of fallbackKeys) {
+          if (Object.prototype.hasOwnProperty.call(req.body, key)) {
+            fallback[key] = req.body[key];
+          }
+        }
+
+        if (Object.keys(fallback).length > 0 || op === 'list') {
+          params = fallback;
+        }
+      }
+    }
+
+    if (!params) {
+      params = {};
+    }
+
     let result;
-    
+
     switch (op) {
       case 'list':
         result = await tasksSvc.listTasks(req.user.googleSub, params);
