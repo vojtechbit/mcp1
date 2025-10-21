@@ -1117,21 +1117,171 @@
           "content": {
             "application/json": {
               "schema": {
-                "type": "object",
-                "required": ["op"],
-                "additionalProperties": true,
-                "description": "Contact RPC operations. KEY WORKFLOWS:\n\n**WORKFLOW 1 - REMOVE DUPLICATES (keep best contact, delete extras):**\n  Step 1: Call {\"op\": \"dedupe\"} → Returns groups like {rowIndex: [2, 3, 5]} meaning 3 duplicates\n  Step 2: Analyze which rowIndex is BEST (most recent/complete data)\n  Step 3: Call bulkDelete with rowIds of EXTRAS ONLY: {\"op\": \"bulkDelete\", \"params\": {\"rowIds\": [3, 5]}} (keep 2)\n\n**WORKFLOW 2 - DELETE ENTIRE CONTACT (all occurrences):**\n  Call {\"op\": \"bulkDelete\", \"params\": {\"emails\": [\"john@example.com\"]}} → Deletes ALL rows with that email\n\n**IMPORTANT:** bulkDelete has TWO modes:\n  - emails mode: Deletes COMPLETE contact (all rows with email)\n  - rowIds mode: Deletes SPECIFIC rows (surgical, keeps others with same email)\n\nAlways use rowIds mode for duplicate cleanup (keeps one), emails mode for complete removal.",
-                "properties": {
-                  "op": {
-                    "type": "string",
-                    "enum": ["list", "search", "add", "update", "delete", "dedupe", "bulkUpsert", "bulkDelete", "addressSuggest"],
-                    "description": "Contact operation to perform"
-                  },
-                  "params": {
+                "oneOf": [
+                  {
                     "type": "object",
-                    "description": "Operation-specific parameters. See examples for each operation's structure."
+                    "title": "List Operation",
+                    "required": ["op"],
+                    "properties": {
+                      "op": { "type": "string", "enum": ["list"] },
+                      "params": { "type": "object" }
+                    },
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "object",
+                    "title": "Search Operation",
+                    "required": ["op", "params"],
+                    "properties": {
+                      "op": { "type": "string", "enum": ["search"] },
+                      "params": {
+                        "type": "object",
+                        "required": ["query"],
+                        "properties": {
+                          "query": { "type": "string" }
+                        },
+                        "additionalProperties": false
+                      }
+                    },
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "object",
+                    "title": "Add Operation",
+                    "required": ["op", "params"],
+                    "properties": {
+                      "op": { "type": "string", "enum": ["add"] },
+                      "params": {
+                        "type": "object",
+                        "required": ["name"],
+                        "properties": {
+                          "name": { "type": "string" },
+                          "email": { "type": "string" },
+                          "phone": { "type": "string" },
+                          "realestate": { "type": "string" },
+                          "notes": { "type": "string" }
+                        },
+                        "additionalProperties": false
+                      }
+                    },
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "object",
+                    "title": "Update Operation",
+                    "required": ["op", "params"],
+                    "properties": {
+                      "op": { "type": "string", "enum": ["update"] },
+                      "params": {
+                        "type": "object",
+                        "required": ["email"],
+                        "properties": {
+                          "email": { "type": "string" },
+                          "name": { "type": "string" },
+                          "phone": { "type": "string" },
+                          "realestate": { "type": "string" },
+                          "notes": { "type": "string" }
+                        },
+                        "additionalProperties": false
+                      }
+                    },
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "object",
+                    "title": "Delete Operation",
+                    "required": ["op", "params"],
+                    "properties": {
+                      "op": { "type": "string", "enum": ["delete"] },
+                      "params": {
+                        "type": "object",
+                        "properties": {
+                          "email": { "type": "string" },
+                          "name": { "type": "string" }
+                        },
+                        "additionalProperties": false
+                      }
+                    },
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "object",
+                    "title": "Dedupe Operation",
+                    "required": ["op"],
+                    "properties": {
+                      "op": { "type": "string", "enum": ["dedupe"] },
+                      "params": { "type": "object" }
+                    },
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "object",
+                    "title": "BulkUpsert Operation",
+                    "required": ["op", "params"],
+                    "properties": {
+                      "op": { "type": "string", "enum": ["bulkUpsert"] },
+                      "params": {
+                        "type": "object",
+                        "required": ["contacts"],
+                        "properties": {
+                          "contacts": {
+                            "type": "array",
+                            "items": { "type": "object" }
+                          }
+                        },
+                        "additionalProperties": false
+                      }
+                    },
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "object",
+                    "title": "BulkDelete Operation",
+                    "required": ["op", "params"],
+                    "properties": {
+                      "op": { "type": "string", "enum": ["bulkDelete"] },
+                      "params": {
+                        "type": "object",
+                        "properties": {
+                          "emails": {
+                            "type": "array",
+                            "items": { "type": "string" },
+                            "description": "Mode 1: Delete entire contact by email (deletes ALL rows with this email)"
+                          },
+                          "rowIds": {
+                            "type": "array",
+                            "items": { "type": "integer" },
+                            "description": "Mode 2: Delete specific rows (surgical delete, keeps others with same email)"
+                          }
+                        },
+                        "oneOf": [
+                          { "required": ["emails"] },
+                          { "required": ["rowIds"] }
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "object",
+                    "title": "AddressSuggest Operation",
+                    "required": ["op", "params"],
+                    "properties": {
+                      "op": { "type": "string", "enum": ["addressSuggest"] },
+                      "params": {
+                        "type": "object",
+                        "required": ["query"],
+                        "properties": {
+                          "query": { "type": "string" }
+                        },
+                        "additionalProperties": false
+                      }
+                    },
+                    "additionalProperties": false
                   }
-                }
+                ],
+                "description": "Contact RPC operations with strict operation-level validation. KEY WORKFLOWS:\n\n**WORKFLOW 1 - REMOVE DUPLICATES (keep best contact, delete extras):**\n  Step 1: Call {\"op\": \"dedupe\"} → Returns groups like {rowIndex: [2, 3, 5]} meaning 3 duplicates\n  Step 2: Analyze which rowIndex is BEST (most recent/complete data)\n  Step 3: Call bulkDelete with rowIds of EXTRAS ONLY: {\"op\": \"bulkDelete\", \"params\": {\"rowIds\": [3, 5]}} (keep 2)\n\n**WORKFLOW 2 - DELETE ENTIRE CONTACT (all occurrences):**\n  Call {\"op\": \"bulkDelete\", \"params\": {\"emails\": [\"john@example.com\"]}} → Deletes ALL rows with that email\n\n**IMPORTANT:** bulkDelete has TWO modes:\n  - emails mode: Deletes COMPLETE contact (all rows with email)\n  - rowIds mode: Deletes SPECIFIC rows (surgical, keeps others with same email)\n\nAlways use rowIds mode for duplicate cleanup (keeps one), emails mode for complete removal."
               },
               "examples": {
                 "list": {
@@ -1152,7 +1302,7 @@
                 },
                 "delete": {
                   "summary": "Delete by email",
-                  "value": {"op": "delete", "email": "old@example.com"}
+                  "value": {"op": "delete", "params": {"email": "old@example.com"}}
                 },
                 "dedupe": {
                   "summary": "Find duplicate contacts",
@@ -1162,9 +1312,13 @@
                   "summary": "Batch add contacts",
                   "value": {"op": "bulkUpsert", "params": {"contacts": [{"name": "Alice", "email": "alice@example.com"}, {"name": "Bob", "email": "bob@example.com"}]}}
                 },
-                "bulkDelete": {
-                  "summary": "Delete contacts by email (mode 1) or specific rows (mode 2)",
+                "bulkDeleteByRowIds": {
+                  "summary": "Delete specific rows (keep one, remove duplicates)",
                   "value": {"op": "bulkDelete", "params": {"rowIds": [3, 5]}}
+                },
+                "bulkDeleteByEmails": {
+                  "summary": "Delete entire contact by email",
+                  "value": {"op": "bulkDelete", "params": {"emails": ["john@example.com"]}}
                 },
                 "addressSuggest": {
                   "summary": "Get address suggestions from realEstate field",
