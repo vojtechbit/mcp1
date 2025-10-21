@@ -590,7 +590,15 @@ async function bulkUpsert(googleSub, contacts) {
 
 /**
  * Bulk delete contacts
- * Can delete by emails array or rowIds array
+ * Can delete by emails array OR rowIds array
+ * 
+ * MODES:
+ * 1. emails mode: Deletes ALL rows with specified emails (removes entire contact)
+ * 2. rowIds mode: Deletes exactly those row IDs (surgical deletion, keeps others)
+ * 
+ * ChatGPT usage examples:
+ * - Delete contact completely: {emails: ["john@example.com"]}
+ * - Delete specific duplicates: {rowIds: [3, 5]} (keeps row 2 if it has same email)
  */
 async function bulkDelete(googleSub, { emails, rowIds }) {
   try {
@@ -600,7 +608,7 @@ async function bulkDelete(googleSub, { emails, rowIds }) {
     let rowsToDelete = [];
 
     if (emails && emails.length > 0) {
-      // Find rows by emails
+      // EMAIL MODE: Find all rows with specified emails and delete ALL
       const response = await sheets.spreadsheets.values.get({
         spreadsheetId,
         range: CONTACTS_RANGE,
@@ -616,6 +624,7 @@ async function bulkDelete(googleSub, { emails, rowIds }) {
         }
       });
     } else if (rowIds && rowIds.length > 0) {
+      // ROWID MODE: Delete exact row IDs (no searching)
       rowsToDelete = rowIds;
     }
 
@@ -623,8 +632,12 @@ async function bulkDelete(googleSub, { emails, rowIds }) {
       return { deleted: 0 };
     }
 
+    console.log(`📊 Deleting rows: ${rowsToDelete.join(', ')}`);
+
     // Sort in descending order to delete from bottom to top
+    // CRITICAL: Must delete highest row first to avoid index shifts
     rowsToDelete.sort((a, b) => b - a);
+    console.log(`📍 Delete order (bottom-to-top): ${rowsToDelete.join(', ')}`);
 
     // Build delete requests
     const requests = rowsToDelete.map(rowIndex => ({

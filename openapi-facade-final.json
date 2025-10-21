@@ -1119,7 +1119,8 @@
               "schema": {
                 "type": "object",
                 "required": ["op"],
-                "description": "RPC request: specify operation and parameters. Each op has different params structure.",
+                "additionalProperties": false,
+                "description": "Contact RPC operations. KEY WORKFLOWS:\n\n**WORKFLOW 1 - REMOVE DUPLICATES (keep best contact, delete extras):**\n  Step 1: Call {\"op\": \"dedupe\"} → Returns groups like {rowIndex: [2, 3, 5]} meaning 3 duplicates\n  Step 2: Analyze which rowIndex is BEST (most recent/complete data)\n  Step 3: Call bulkDelete with rowIds of EXTRAS ONLY: {\"op\": \"bulkDelete\", \"params\": {\"rowIds\": [3, 5]}} (keep 2)\n\n**WORKFLOW 2 - DELETE ENTIRE CONTACT (all occurrences):**\n  Call {\"op\": \"bulkDelete\", \"params\": {\"emails\": [\"john@example.com\"]}} → Deletes ALL rows with that email\n\n**IMPORTANT:** bulkDelete has TWO modes:\n  - emails mode: Deletes COMPLETE contact (all rows with email)\n  - rowIds mode: Deletes SPECIFIC rows (surgical, keeps others with same email)\n\nAlways use rowIds mode for duplicate cleanup (keeps one), emails mode for complete removal.",
                 "properties": {
                   "op": {
                     "type": "string",
@@ -1162,8 +1163,8 @@
                   "value": {"op": "bulkUpsert", "params": {"contacts": [{"name": "Alice", "email": "alice@example.com"}, {"name": "Bob", "email": "bob@example.com"}]}}
                 },
                 "bulkDelete": {
-                  "summary": "Delete 2 by email",
-                  "value": {"op": "bulkDelete", "params": {"emails": ["old1@example.com", "old2@example.com"]}}
+                  "summary": "Delete contacts by email (mode 1) or specific rows (mode 2)",
+                  "value": {"op": "bulkDelete", "params": {"rowIds": [3, 5]}}
                 },
                 "addressSuggest": {
                   "summary": "Get address suggestions from realEstate field",
@@ -1649,13 +1650,20 @@
                       {
                         "type": "object",
                         "title": "bulkDelete by emails",
-                        "required": ["emails"],
+                        "required": ["params"],
                         "properties": {
-                          "emails": {
-                            "type": "array",
-                            "items": { "type": "string", "format": "email" },
-                            "example": ["john@example.com", "jane@example.com"],
-                            "description": "Array of email addresses to delete. Use this OR rowIds."
+                          "params": {
+                            "type": "object",
+                            "required": ["emails"],
+                            "properties": {
+                              "emails": {
+                                "type": "array",
+                                "items": { "type": "string", "format": "email" },
+                                "example": ["john@example.com", "jane@example.com"],
+                                "description": "Array of email addresses to delete. Use this OR rowIds."
+                              }
+                            },
+                            "additionalProperties": false
                           }
                         },
                         "description": "Delete contacts by email addresses.",
@@ -1664,13 +1672,20 @@
                       {
                         "type": "object",
                         "title": "bulkDelete by rowIds",
-                        "required": ["rowIds"],
+                        "required": ["params"],
                         "properties": {
-                          "rowIds": {
-                            "type": "array",
-                            "items": { "type": "integer" },
-                            "example": [2, 3, 5],
-                            "description": "Array of row IDs to delete (1-based sheet row indices). Use this OR emails."
+                          "params": {
+                            "type": "object",
+                            "required": ["rowIds"],
+                            "properties": {
+                              "rowIds": {
+                                "type": "array",
+                                "items": { "type": "integer" },
+                                "example": [2, 3, 5],
+                                "description": "Array of row IDs to delete (1-based sheet row indices). Use this OR emails."
+                              }
+                            },
+                            "additionalProperties": false
                           }
                         },
                         "description": "Delete contacts by sheet row IDs (1-based).",

@@ -465,12 +465,18 @@ export async function contactsRpc(req, res) {
         break;
         
       case 'bulkDelete':
+        // TWO MODES for flexibility:
+        // 1. emails mode: Pass emails to DELETE ENTIRE CONTACT (all rows with that email)
+        // 2. rowIds mode: Pass rowIds to DELETE SPECIFIC ROWS (surgical delete, keep others)
         if (!params || (!params.emails && !params.rowIds)) {
           return res.status(400).json({
             error: 'Bad request',
             message: 'bulkDelete requires params: {emails: [string]} OR {rowIds: [number]}',
             code: 'INVALID_PARAM',
-            expectedFormat: { op: 'bulkDelete', params: { emails: ['email1@example.com', 'email2@example.com'] } }
+            examples: {
+              deleteContact: { op: 'bulkDelete', params: { emails: ['john@example.com'] }, note: 'Deletes ALL rows with this email' },
+              deleteDuplicates: { op: 'bulkDelete', params: { rowIds: [3, 5] }, note: 'Deletes only rows 3 and 5, keeps row 2 if same email' }
+            }
           });
         }
         result = await contactsService.bulkDelete(req.user.googleSub, {
