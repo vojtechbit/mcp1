@@ -1113,141 +1113,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "description": "Contacts RPC payload backed 100% by Google Sheets (no MongoDB writes). Always include an 'op' plus optional 'params' that describe how to update the sheet rows.\n\n**WORKFLOW 1 – REMOVE DUPLICATES (keep best contact, delete extras):**\n  Step 1: Call {\"op\": \"dedupe\"} → Returns groups like {rowIndex: [2,3,5]} meaning 3 duplicates\n  Step 2: Pick the best rowIndex (most complete data)\n  Step 3: Call bulkDelete with the extra rowIds only: {\"op\": \"bulkDelete\", \"params\": {\"rowIds\": [3,5]}} to keep row 2\n\n**WORKFLOW 2 – DELETE ENTIRE CONTACT (all occurrences):**\n  Call {\"op\": \"bulkDelete\", \"params\": {\"emails\": [\"john@example.com\"]}} → Deletes ALL rows with that email\n\n**IMPORTANT:** bulkDelete has TWO modes:\n  • emails mode: Deletes COMPLETE contact (all rows with email)\n  • rowIds mode: Deletes SPECIFIC rows (surgical, keeps others with same email)\n\nAlways use rowIds mode for duplicate cleanup (keeps one), emails mode for complete removal.",
-                "oneOf": [
-                  { "$ref": "#/components/schemas/ContactsListRequest" },
-                  { "$ref": "#/components/schemas/ContactsDedupeRequest" },
-                  { "$ref": "#/components/schemas/ContactsSearchRequest" },
-                  { "$ref": "#/components/schemas/ContactsAddRequest" },
-                  { "$ref": "#/components/schemas/ContactsUpdateRequest" },
-                  { "$ref": "#/components/schemas/ContactsDeleteRequest" },
-                  { "$ref": "#/components/schemas/ContactsBulkUpsertRequest" },
-                  { "$ref": "#/components/schemas/ContactsBulkDeleteByEmailsRequest" },
-                  { "$ref": "#/components/schemas/ContactsBulkDeleteByRowIdsRequest" },
-                  { "$ref": "#/components/schemas/ContactsAddressSuggestRequest" }
-                ],
-                "x-googleSheetsParams": {
-                  "list": {
-                    "description": "List all contacts – no params needed (omit or {})."
-                  },
-                  "dedupe": {
-                    "description": "Find duplicate groups in Google Sheets. No params required."
-                  },
-                  "search": {
-                    "description": "Search contacts. Params: {query}",
-                    "schema": {
-                      "type": "object",
-                      "required": ["query"],
-                      "properties": {
-                        "query": { "type": "string", "description": "Search expression (diacritics stripped)." }
-                      }
-                    }
-                  },
-                  "add": {
-                    "description": "Add a single contact row. Params: {name, email?, phone?, realestate?, notes?}",
-                    "schema": {
-                      "type": "object",
-                      "required": ["name"],
-                      "properties": {
-                        "name": { "type": "string" },
-                        "email": { "type": "string" },
-                        "phone": { "type": "string" },
-                        "realestate": { "type": "string" },
-                        "notes": { "type": "string" }
-                      }
-                    }
-                  },
-                  "update": {
-                    "description": "Update an existing contact (matched by email). Params: {email, name?, phone?, realestate?, notes?}",
-                    "schema": {
-                      "type": "object",
-                      "required": ["email"],
-                      "properties": {
-                        "email": { "type": "string" },
-                        "name": { "type": "string" },
-                        "phone": { "type": "string" },
-                        "realestate": { "type": "string" },
-                        "notes": { "type": "string" }
-                      }
-                    }
-                  },
-                  "delete": {
-                    "description": "Delete contacts by email or name. Params: {email? | name?}",
-                    "schema": {
-                      "type": "object",
-                      "properties": {
-                        "email": { "type": "string" },
-                        "name": { "type": "string" }
-                      }
-                    }
-                  },
-                  "bulkUpsert": {
-                    "description": "Upsert up to 50 contacts. Params: {contacts: Contact[]} where Contact={name, email?, phone?, realestate?, notes?}",
-                    "schema": {
-                      "type": "object",
-                      "required": ["contacts"],
-                      "properties": {
-                        "contacts": {
-                          "type": "array",
-                          "minItems": 1,
-                          "maxItems": 50,
-                          "items": {
-                            "type": "object",
-                            "required": ["name"],
-                            "properties": {
-                              "name": { "type": "string" },
-                              "email": { "type": "string" },
-                              "phone": { "type": "string" },
-                              "realestate": { "type": "string" },
-                              "notes": { "type": "string" }
-                            }
-                          }
-                        }
-                      }
-                    }
-                  },
-                  "bulkDelete": {
-                    "description": "Delete by emails (all rows) or rowIds (specific duplicates). Params: {emails?: string[], rowIds?: number[]}",
-                    "schema": {
-                      "oneOf": [
-                        {
-                          "type": "object",
-                          "required": ["emails"],
-                          "properties": {
-                            "emails": {
-                              "type": "array",
-                              "minItems": 1,
-                              "items": { "type": "string" }
-                            }
-                          },
-                          "additionalProperties": false
-                        },
-                        {
-                          "type": "object",
-                          "required": ["rowIds"],
-                          "properties": {
-                            "rowIds": {
-                              "type": "array",
-                              "minItems": 1,
-                              "items": { "type": "integer" }
-                            }
-                          },
-                          "additionalProperties": false
-                        }
-                      ]
-                    }
-                  },
-                  "addressSuggest": {
-                    "description": "Get address suggestions for the realEstate column. Params: {query}",
-                    "schema": {
-                      "type": "object",
-                      "required": ["query"],
-                      "properties": {
-                        "query": { "type": "string" }
-                      }
-                    }
-                  }
-                }
+                "$ref": "#/components/schemas/ContactsRpcRequest"
               },
               "examples": {
                 "list": {
@@ -1642,15 +1508,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "description": "Tasks RPC payload. Choose the shape that matches the desired operation so the Actions runtime can validate params correctly.",
-                "oneOf": [
-                  { "$ref": "#/components/schemas/TasksListRequest" },
-                  { "$ref": "#/components/schemas/TasksGetRequest" },
-                  { "$ref": "#/components/schemas/TasksCreateRequest" },
-                  { "$ref": "#/components/schemas/TasksUpdateRequest" },
-                  { "$ref": "#/components/schemas/TasksDeleteRequest" },
-                  { "$ref": "#/components/schemas/TasksCompleteRequest" }
-                ]
+                "$ref": "#/components/schemas/TasksRpcRequest"
               },
               "examples": {
                 "createTask": {
@@ -1677,6 +1535,146 @@
   },
   "components": {
     "schemas": {
+      "ContactsRpcRequest": {
+        "type": "object",
+        "required": ["op"],
+        "description": "Contacts RPC payload backed 100% by Google Sheets (no MongoDB writes). Always include an 'op' plus optional 'params' that describe how to update the sheet rows.\n\n**WORKFLOW 1 – REMOVE DUPLICATES (keep best contact, delete extras):**\n  Step 1: Call {\"op\": \"dedupe\"} → Returns groups like {rowIndex: [2,3,5]} meaning 3 duplicates\n  Step 2: Pick the best rowIndex (most complete data)\n  Step 3: Call bulkDelete with the extra rowIds only: {\"op\": \"bulkDelete\", \"params\": {\"rowIds\": [3,5]}} to keep row 2\n\n**WORKFLOW 2 – DELETE ENTIRE CONTACT (all occurrences):**\n  Call {\"op\": \"bulkDelete\", \"params\": {\"emails\": [\"john@example.com\"]}} → Deletes ALL rows with that email\n\n**IMPORTANT:** bulkDelete has TWO modes:\n  • emails mode: Deletes COMPLETE contact (all rows with email)\n  • rowIds mode: Deletes SPECIFIC rows (surgical, keeps others with same email)\n\nAlways use rowIds mode for duplicate cleanup (keeps one), emails mode for complete removal.",
+        "oneOf": [
+          { "$ref": "#/components/schemas/ContactsListRequest" },
+          { "$ref": "#/components/schemas/ContactsDedupeRequest" },
+          { "$ref": "#/components/schemas/ContactsSearchRequest" },
+          { "$ref": "#/components/schemas/ContactsAddRequest" },
+          { "$ref": "#/components/schemas/ContactsUpdateRequest" },
+          { "$ref": "#/components/schemas/ContactsDeleteRequest" },
+          { "$ref": "#/components/schemas/ContactsBulkUpsertRequest" },
+          { "$ref": "#/components/schemas/ContactsBulkDeleteByEmailsRequest" },
+          { "$ref": "#/components/schemas/ContactsBulkDeleteByRowIdsRequest" },
+          { "$ref": "#/components/schemas/ContactsAddressSuggestRequest" }
+        ],
+        "x-googleSheetsParams": {
+          "list": {
+            "description": "List all contacts – no params needed (omit or {})."
+          },
+          "dedupe": {
+            "description": "Find duplicate groups in Google Sheets. No params required."
+          },
+          "search": {
+            "description": "Search contacts. Params: {query}",
+            "schema": {
+              "type": "object",
+              "required": ["query"],
+              "properties": {
+                "query": { "type": "string", "description": "Search expression (diacritics stripped)." }
+              }
+            }
+          },
+          "add": {
+            "description": "Add a single contact row. Params: {name, email?, phone?, realestate?, notes?}",
+            "schema": {
+              "type": "object",
+              "required": ["name"],
+              "properties": {
+                "name": { "type": "string" },
+                "email": { "type": "string" },
+                "phone": { "type": "string" },
+                "realestate": { "type": "string" },
+                "notes": { "type": "string" }
+              }
+            }
+          },
+          "update": {
+            "description": "Update an existing contact (matched by email). Params: {email, name?, phone?, realestate?, notes?}",
+            "schema": {
+              "type": "object",
+              "required": ["email"],
+              "properties": {
+                "email": { "type": "string" },
+                "name": { "type": "string" },
+                "phone": { "type": "string" },
+                "realestate": { "type": "string" },
+                "notes": { "type": "string" }
+              }
+            }
+          },
+          "delete": {
+            "description": "Delete contacts by email or name. Params: {email? | name?}",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "email": { "type": "string" },
+                "name": { "type": "string" }
+              }
+            }
+          },
+          "bulkUpsert": {
+            "description": "Upsert up to 50 contacts. Params: {contacts: Contact[]} where Contact={name, email?, phone?, realestate?, notes?}",
+            "schema": {
+              "type": "object",
+              "required": ["contacts"],
+              "properties": {
+                "contacts": {
+                  "type": "array",
+                  "minItems": 1,
+                  "maxItems": 50,
+                  "items": {
+                    "type": "object",
+                    "required": ["name"],
+                    "properties": {
+                      "name": { "type": "string" },
+                      "email": { "type": "string" },
+                      "phone": { "type": "string" },
+                      "realestate": { "type": "string" },
+                      "notes": { "type": "string" }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "bulkDelete": {
+            "description": "Delete by emails (all rows) or rowIds (specific duplicates). Params: {emails?: string[], rowIds?: number[]}",
+            "schema": {
+              "oneOf": [
+                {
+                  "type": "object",
+                  "required": ["emails"],
+                  "properties": {
+                    "emails": {
+                      "type": "array",
+                      "minItems": 1,
+                      "items": { "type": "string" }
+                    }
+                  },
+                  "additionalProperties": false
+                },
+                {
+                  "type": "object",
+                  "required": ["rowIds"],
+                  "properties": {
+                    "rowIds": {
+                      "type": "array",
+                      "minItems": 1,
+                      "items": { "type": "integer" }
+                    }
+                  },
+                  "additionalProperties": false
+                }
+              ]
+            }
+          },
+          "addressSuggest": {
+            "description": "Get address suggestions for the realEstate column. Params: {query}",
+            "schema": {
+              "type": "object",
+              "required": ["query"],
+              "properties": {
+                "query": { "type": "string" }
+              }
+            }
+          }
+        },
+        "additionalProperties": false
+      },
       "ContactsBaseRequest": {
         "type": "object",
         "required": ["op"],
@@ -1907,6 +1905,20 @@
             }
           }
         ]
+      },
+      "TasksRpcRequest": {
+        "type": "object",
+        "required": ["op"],
+        "description": "Tasks RPC payload. Choose the shape that matches the desired operation so the Actions runtime can validate params correctly.",
+        "oneOf": [
+          { "$ref": "#/components/schemas/TasksListRequest" },
+          { "$ref": "#/components/schemas/TasksGetRequest" },
+          { "$ref": "#/components/schemas/TasksCreateRequest" },
+          { "$ref": "#/components/schemas/TasksUpdateRequest" },
+          { "$ref": "#/components/schemas/TasksDeleteRequest" },
+          { "$ref": "#/components/schemas/TasksCompleteRequest" }
+        ],
+        "additionalProperties": false
       },
       "TasksBaseRequest": {
         "type": "object",
