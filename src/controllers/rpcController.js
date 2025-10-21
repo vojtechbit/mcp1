@@ -397,27 +397,55 @@ export async function contactsRpc(req, res) {
     
     switch (op) {
       case 'list':
-        result = await contactsService.listAllContacts(req.user.googleSub, params);
+        result = await contactsService.listAllContacts(req.user.googleSub);
         break;
         
       case 'search':
+        if (!params || !params.query) {
+          return res.status(400).json({
+            error: 'Bad request',
+            message: 'search requires params.query',
+            code: 'INVALID_PARAM',
+            expectedFormat: { op: 'search', params: { query: 'string' } }
+          });
+        }
         result = await contactsService.searchContacts(req.user.googleSub, params.query);
         break;
         
       case 'add':
+        if (!params || !params.email || !params.name) {
+          return res.status(400).json({
+            error: 'Bad request',
+            message: 'add requires params: {name, email, notes?, realEstate?, phone?}',
+            code: 'INVALID_PARAM',
+            expectedFormat: { op: 'add', params: { name: 'string', email: 'string', notes: 'string?', realEstate: 'string?', phone: 'string?' } }
+          });
+        }
         result = await contactsService.addContact(req.user.googleSub, params);
         break;
         
       case 'update':
-        result = await contactsService.updateContact(
-          req.user.googleSub,
-          params.contactId,
-          params.updates
-        );
+        if (!params || !params.email || !params.name) {
+          return res.status(400).json({
+            error: 'Bad request',
+            message: 'update requires params: {name, email, notes?, realEstate?, phone?}',
+            code: 'INVALID_PARAM',
+            expectedFormat: { op: 'update', params: { name: 'string', email: 'string', notes: 'string?', realEstate: 'string?', phone: 'string?' } }
+          });
+        }
+        result = await contactsService.updateContact(req.user.googleSub, params);
         break;
         
       case 'delete':
-        result = await contactsService.deleteContact(req.user.googleSub, params.contactId);
+        if (!params || !params.email) {
+          return res.status(400).json({
+            error: 'Bad request',
+            message: 'delete requires params: {email, name?}',
+            code: 'INVALID_PARAM',
+            expectedFormat: { op: 'delete', params: { email: 'string', name: 'string?' } }
+          });
+        }
+        result = await contactsService.deleteContact(req.user.googleSub, params);
         break;
         
       case 'dedupe':
@@ -426,7 +454,42 @@ export async function contactsRpc(req, res) {
         break;
         
       case 'bulkUpsert':
-        result = await contactsService.bulkUpsert(req.user.googleSub, params.entries);
+        if (!params || !params.contacts || !Array.isArray(params.contacts)) {
+          return res.status(400).json({
+            error: 'Bad request',
+            message: 'bulkUpsert requires params: {contacts: [{name, email, notes?, realEstate?, phone?}]}',
+            code: 'INVALID_PARAM',
+            expectedFormat: { op: 'bulkUpsert', params: { contacts: [{ name: 'string', email: 'string' }] } }
+          });
+        }
+        result = await contactsService.bulkUpsert(req.user.googleSub, params.contacts);
+        break;
+        
+      case 'bulkDelete':
+        if (!params || (!params.emails && !params.rowIds)) {
+          return res.status(400).json({
+            error: 'Bad request',
+            message: 'bulkDelete requires params: {emails: [string]} OR {rowIds: [number]}',
+            code: 'INVALID_PARAM',
+            expectedFormat: { op: 'bulkDelete', params: { emails: ['email1@example.com', 'email2@example.com'] } }
+          });
+        }
+        result = await contactsService.bulkDelete(req.user.googleSub, {
+          emails: params.emails,
+          rowIds: params.rowIds
+        });
+        break;
+        
+      case 'addressSuggest':
+        if (!params || !params.query) {
+          return res.status(400).json({
+            error: 'Bad request',
+            message: 'addressSuggest requires params.query',
+            code: 'INVALID_PARAM',
+            expectedFormat: { op: 'addressSuggest', params: { query: 'partial name or email' } }
+          });
+        }
+        result = await contactsService.getAddressSuggestions(req.user.googleSub, params.query);
         break;
         
       default:

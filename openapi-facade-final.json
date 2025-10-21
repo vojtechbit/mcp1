@@ -1322,7 +1322,7 @@
       "post": {
         "operationId": "contactsRpc",
         "summary": "Advanced contacts operations",
-        "description": "Low-level contacts RPC. Operations: list, search, add, update, delete. Use /macros/contacts/safeAdd for bulk adds. RPC returns ALL matching contacts (within limits). Max 100 items/bulk.",
+        "description": "Low-level contacts RPC. Operations: list, search, add, update, delete, bulkUpsert, bulkDelete, addressSuggest. Contacts stored in Google Sheet: columns Name | Email | Notes | RealEstate | Phone. RPC returns ALL matching results (within limits).",
         "requestBody": {
           "required": true,
           "content": {
@@ -1333,22 +1333,207 @@
                 "properties": {
                   "op": {
                     "type": "string",
-                    "enum": ["list", "search", "add", "update", "delete"],
-                    "description": "Operation: list (all), search (by query), add (single), update, delete"
+                    "enum": ["list", "search", "add", "update", "delete", "bulkUpsert", "bulkDelete", "addressSuggest", "dedupe"],
+                    "description": "Operation: list (all contacts), search (query), add (single), update, delete, bulkUpsert (batch add), bulkDelete (batch delete), addressSuggest (fuzzy match for autocomplete), dedupe (find duplicates)"
                   },
                   "params": {
                     "type": "object",
-                    "description": "Op params. list: {}. search: {query}. add: {name, email, phone}. update: {contactId, updates}. delete: {contactId}."
+                    "description": "Operation parameters. Structure depends on op value. See examples and oneOf for each operation type.",
+                    "oneOf": [
+                      {
+                        "type": "object",
+                        "title": "list - Get all contacts",
+                        "properties": {},
+                        "additionalProperties": false,
+                        "description": "No params needed for list operation"
+                      },
+                      {
+                        "type": "object",
+                        "title": "search - Search contacts",
+                        "required": ["query"],
+                        "properties": {
+                          "query": {
+                            "type": "string",
+                            "example": "john",
+                            "description": "Search query. Matches against name, email, notes, realEstate, phone fields."
+                          }
+                        },
+                        "additionalProperties": false
+                      },
+                      {
+                        "type": "object",
+                        "title": "add - Add single contact",
+                        "required": ["name", "email"],
+                        "properties": {
+                          "name": { "type": "string", "example": "John Smith" },
+                          "email": { "type": "string", "format": "email", "example": "john@example.com" },
+                          "notes": { "type": "string" },
+                          "realEstate": { "type": "string" },
+                          "phone": { "type": "string" }
+                        },
+                        "additionalProperties": false
+                      },
+                      {
+                        "type": "object",
+                        "title": "update - Update contact",
+                        "required": ["name", "email"],
+                        "properties": {
+                          "name": { "type": "string", "description": "Contact name (used to identify which row to update)" },
+                          "email": { "type": "string", "format": "email", "description": "Contact email (used to identify which row to update)" },
+                          "notes": { "type": "string" },
+                          "realEstate": { "type": "string" },
+                          "phone": { "type": "string" }
+                        },
+                        "additionalProperties": false
+                      },
+                      {
+                        "type": "object",
+                        "title": "delete - Delete contact",
+                        "required": ["email"],
+                        "properties": {
+                          "email": { "type": "string", "format": "email", "example": "john@example.com", "description": "Contact email (required to identify which row to delete)" },
+                          "name": { "type": "string", "description": "Contact name (optional, for additional validation)" }
+                        },
+                        "additionalProperties": false
+                      },
+                      {
+                        "type": "object",
+                        "title": "bulkUpsert - Batch add contacts",
+                        "required": ["contacts"],
+                        "properties": {
+                          "contacts": {
+                            "type": "array",
+                            "minItems": 1,
+                            "items": {
+                              "type": "object",
+                              "required": ["name", "email"],
+                              "properties": {
+                                "name": { "type": "string" },
+                                "email": { "type": "string", "format": "email" },
+                                "notes": { "type": "string" },
+                                "realEstate": { "type": "string" },
+                                "phone": { "type": "string" }
+                              }
+                            },
+                            "description": "Array of contacts to add. Always appends (no auto-merge). Duplicates by email are detected and reported."
+                          }
+                        },
+                        "additionalProperties": false
+                      },
+                      {
+                        "type": "object",
+                        "title": "bulkDelete - Batch delete contacts",
+                        "properties": {
+                          "emails": {
+                            "type": "array",
+                            "items": { "type": "string", "format": "email" },
+                            "example": ["john@example.com", "jane@example.com"],
+                            "description": "Array of email addresses to delete"
+                          },
+                          "rowIds": {
+                            "type": "array",
+                            "items": { "type": "integer" },
+                            "description": "Alternative: array of row IDs (1-based sheet row indices)"
+                          }
+                        },
+                        "description": "Provide EITHER emails array OR rowIds array. Returns count of deleted contacts.",
+                        "additionalProperties": false
+                      },
+                      {
+                        "type": "object",
+                        "title": "addressSuggest - Fuzzy match for autocomplete",
+                        "required": ["query"],
+                        "properties": {
+                          "query": {
+                            "type": "string",
+                            "example": "john",
+                            "description": "Partial name or email for fuzzy matching. Returns top 3 scored matches."
+                          }
+                        },
+                        "additionalProperties": false
+                      }
+                    ]
                   }
                 }
               },
               "examples": {
+                "listAllContacts": {
+                  "summary": "Get all contacts",
+                  "value": {
+                    "op": "list",
+                    "params": {}
+                  }
+                },
                 "searchContacts": {
                   "summary": "Search for ALL matching contacts",
                   "value": {
                     "op": "search",
                     "params": {
                       "query": "john"
+                    }
+                  }
+                },
+                "addContact": {
+                  "summary": "Add single contact",
+                  "value": {
+                    "op": "add",
+                    "params": {
+                      "name": "John Smith",
+                      "email": "john@example.com",
+                      "phone": "+420728123456",
+                      "notes": "Friend from Prague"
+                    }
+                  }
+                },
+                "updateContact": {
+                  "summary": "Update existing contact (finds by name+email)",
+                  "value": {
+                    "op": "update",
+                    "params": {
+                      "name": "John Smith",
+                      "email": "john@example.com",
+                      "phone": "+420728999999",
+                      "notes": "Updated phone number"
+                    }
+                  }
+                },
+                "deleteContact": {
+                  "summary": "Delete contact by email",
+                  "value": {
+                    "op": "delete",
+                    "params": {
+                      "email": "john@example.com",
+                      "name": "John Smith"
+                    }
+                  }
+                },
+                "bulkAddContacts": {
+                  "summary": "Batch add multiple contacts",
+                  "value": {
+                    "op": "bulkUpsert",
+                    "params": {
+                      "contacts": [
+                        { "name": "John Smith", "email": "john@example.com", "phone": "+420728123456" },
+                        { "name": "Jane Doe", "email": "jane@example.com", "phone": "+420728999999" }
+                      ]
+                    }
+                  }
+                },
+                "bulkDeleteContacts": {
+                  "summary": "Batch delete contacts by email",
+                  "value": {
+                    "op": "bulkDelete",
+                    "params": {
+                      "emails": ["john@example.com", "jane@example.com"]
+                    }
+                  }
+                },
+                "addressSuggestions": {
+                  "summary": "Get fuzzy-matched suggestions (for autocomplete)",
+                  "value": {
+                    "op": "addressSuggest",
+                    "params": {
+                      "query": "joh"
                     }
                   }
                 }
@@ -1358,7 +1543,37 @@
         },
         "responses": {
           "200": {
-            "description": "Operation completed"
+            "description": "Operation completed successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": { "type": "boolean" },
+                    "data": {
+                      "type": "object",
+                      "description": "Response data. Structure depends on operation. Contacts always returned as array with fields: {name, email, notes, realEstate, phone}."
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request format - detailed error with expected format",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": { "type": "boolean" },
+                    "error": { "type": "string" },
+                    "code": { "type": "string" },
+                    "expectedFormat": { "type": "object", "description": "Expected request structure" }
+                  }
+                }
+              }
+            }
           }
         }
       }
