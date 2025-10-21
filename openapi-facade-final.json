@@ -538,8 +538,8 @@
     "/macros/calendar/schedule": {
       "post": {
         "operationId": "macroCalendarSchedule",
-        "summary": "Create new calendar event",
-        "description": "Create meeting/event with fixed time. Supports Google Meet/Zoom links. Max 20 attendees. Use for 'Schedule meeting with John tomorrow at 2pm'. Europe/Prague timezone.",
+        "summary": "Create new calendar event (CREATE ONLY)",
+        "description": "CREATE new events only. For MODIFYING existing events, use /rpc/calendar with op:update instead. Creates meeting/event with fixed time. Supports Google Meet/Zoom links. Max 20 attendees. Use for 'Schedule meeting with John tomorrow at 2pm'. Europe/Prague timezone.",
         "requestBody": {
           "required": true,
           "content": {
@@ -907,17 +907,16 @@
             "application/json": {
               "schema": {
                 "type": "object",
-                "required": ["op", "params"],
-                "description": "RPC for granular Gmail control. Five ops: 'search'=find emails, 'read'=get full content, 'send'=new email or draft, 'reply'=reply to message, 'modify'=change properties. Use macros when possible. Use RPC for advanced queries or batch ops.",
+                "required": ["op"],
                 "properties": {
                   "op": {
                     "type": "string",
                     "enum": ["search", "read", "send", "reply", "modify"],
-                    "description": "search, read (full email), send (direct OR by draftId), reply, modify"
+                    "description": "Operation: search, read (full email), send (direct OR by draftId), reply, modify"
                   },
                   "params": {
                     "type": "object",
-                    "description": "For send DIRECT: {to, subject, bodyText}. For send DRAFT: {draftId}. Others: search {query}, read {ids}, reply {messageId, bodyText}, modify {ids, actions}."
+                    "description": "FIXED: Operation parameters structure. For 'send' DIRECT: params must have {to, subject, body}. For 'send' DRAFT: params must have {draftId}. For other ops: depends on operation."
                   }
                 }
               },
@@ -933,13 +932,13 @@
                   }
                 },
                 "sendDirectEmail": {
-                  "summary": "Send email directly",
+                  "summary": "Send email directly (FIXED: All fields required in params)",
                   "value": {
                     "op": "send",
                     "params": {
-                      "to": ["recipient@example.com"],
+                      "to": "recipient@example.com",
                       "subject": "Meeting tomorrow",
-                      "bodyText": "Hi, reminder about meeting at 7am"
+                      "body": "Hi, reminder about meeting at 7am"
                     }
                   }
                 },
@@ -951,26 +950,28 @@
                       "draftId": "18abc123def456"
                     }
                   }
-                },
+                }
               }
             }
           }
         },
         "responses": {
           "200": {
-            "description": "Operation completed",
+            "description": "Operation completed"
+          },
+          "400": {
+            "description": "Invalid request format - detailed error with expected format",
             "content": {
               "application/json": {
                 "schema": {
                   "type": "object",
                   "properties": {
-                    "ok": {
-                      "type": "boolean"
-                    },
-                    "data": {
-                      "type": "object",
-                      "description": "Result varies by op. search: {messages}. read: {messages}. send: {messageId}. reply: {messageId}. modify: {updated:count}."
-                    }
+                    "error": { "type": "string" },
+                    "message": { "type": "string" },
+                    "code": { "type": "string" },
+                    "details": { "type": "string", "description": "Specific format requirements" },
+                    "option1": { "type": "object" },
+                    "option2": { "type": "object" }
                   }
                 }
               }
@@ -990,17 +991,16 @@
             "application/json": {
               "schema": {
                 "type": "object",
-                "required": ["op", "params"],
-                "description": "RPC for calendar CRUD. Ops: 'list'=get events, 'get'=single event, 'create'=new event, 'update'=reschedule/modify, 'delete'=remove, 'checkConflicts'=find overlaps.",
+                "required": ["op"],
                 "properties": {
                   "op": {
                     "type": "string",
                     "enum": ["list", "get", "create", "update", "delete", "checkConflicts"],
-                    "description": "Operation type. CRITICAL for update: must include eventId and updates fields."
+                    "description": "Operation type. CRITICAL for update: must include eventId and updates fields with proper start/end structure."
                   },
                   "params": {
                     "type": "object",
-                    "description": "Operation parameters. CRITICAL: Always provide eventId for update/delete/get. For update, provide 'updates' object with fields to change.",
+                    "description": "FIXED: Operation parameters. CRITICAL for update: eventId (required) + updates object with start/end as objects containing {dateTime, timeZone}.",
                     "properties": {
                       "eventId": {
                         "type": "string",
@@ -1008,23 +1008,55 @@
                       },
                       "updates": {
                         "type": "object",
-                        "description": "Fields to update (for op=update). Can include: start, end, summary, description, attendees, location, reminders. Times must be ISO 8601 with timeZone."
-                      },
-                      "start": {
-                        "type": "string",
-                        "description": "Range start ISO 8601 (for list, checkConflicts). Example: 2025-10-20T00:00:00Z"
-                      },
-                      "end": {
-                        "type": "string",
-                        "description": "Range end ISO 8601 (for list, checkConflicts). Example: 2025-10-27T23:59:59Z"
-                      },
-                      "timeMin": {
-                        "type": "string",
-                        "description": "Alias for start (for list operation)"
-                      },
-                      "timeMax": {
-                        "type": "string",
-                        "description": "Alias for end (for list operation)"
+                        "description": "Fields to update (for op=update). Can include: start, end, summary, description, attendees, location, reminders. CRITICAL: start and end must be objects with {dateTime, timeZone}.",
+                        "properties": {
+                          "start": {
+                            "type": "object",
+                            "description": "FIXED: start is an OBJECT with required fields dateTime and timeZone",
+                            "required": ["dateTime", "timeZone"],
+                            "properties": {
+                              "dateTime": {
+                                "type": "string",
+                                "format": "date-time",
+                                "example": "2025-10-21T15:00:00",
+                                "description": "ISO 8601 datetime (without +HH:MM in string, that's in timeZone)"
+                              },
+                              "timeZone": {
+                                "type": "string",
+                                "example": "Europe/Prague",
+                                "description": "REQUIRED: Timezone identifier. Use 'Europe/Prague' or valid IANA timezone."
+                              }
+                            }
+                          },
+                          "end": {
+                            "type": "object",
+                            "description": "FIXED: end is an OBJECT with required fields dateTime and timeZone",
+                            "required": ["dateTime", "timeZone"],
+                            "properties": {
+                              "dateTime": {
+                                "type": "string",
+                                "format": "date-time",
+                                "example": "2025-10-21T16:00:00"
+                              },
+                              "timeZone": {
+                                "type": "string",
+                                "example": "Europe/Prague"
+                              }
+                            }
+                          },
+                          "summary": { "type": "string" },
+                          "description": { "type": "string" },
+                          "location": { "type": "string" },
+                          "attendees": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "email": { "type": "string", "format": "email" }
+                              }
+                            }
+                          }
+                        }
                       }
                     }
                   }
@@ -1041,22 +1073,24 @@
                     }
                   }
                 },
-                "updateEvent": {
-                  "summary": "Reschedule event + add attendee",
+                "updateEventTime": {
+                  "summary": "Reschedule event (FIXED: Proper structure with {dateTime, timeZone})",
                   "value": {
                     "op": "update",
                     "params": {
-                      "eventId": "ntp5rmjh78fknui1m4rdk407uc",
+                      "eventId": "uemjv6bneskjfej5t9onrlikq0",
                       "updates": {
                         "start": {
-                          "dateTime": "2025-10-21T07:00:00",
+                          "dateTime": "2025-10-21T15:00:00",
                           "timeZone": "Europe/Prague"
                         },
                         "end": {
-                          "dateTime": "2025-10-21T08:00:00",
+                          "dateTime": "2025-10-21T16:00:00",
                           "timeZone": "Europe/Prague"
                         },
-                        "attendees": [{"email": "matyherm04@gmail.com"}]
+                        "attendees": [
+                          { "email": "user@example.com" }
+                        ]
                       }
                     }
                   }
@@ -1077,18 +1111,20 @@
         },
         "responses": {
           "200": {
-            "description": "Operation completed",
+            "description": "Operation completed"
+          },
+          "400": {
+            "description": "Invalid request format - detailed error with expected structure",
             "content": {
               "application/json": {
                 "schema": {
                   "type": "object",
                   "properties": {
-                    "ok": {
-                      "type": "boolean"
-                    },
-                    "data": {
-                      "type": "object"
-                    }
+                    "error": { "type": "string" },
+                    "message": { "type": "string" },
+                    "code": { "type": "string" },
+                    "details": { "type": "string" },
+                    "expectedFormat": { "type": "object" }
                   }
                 }
               }
@@ -1108,8 +1144,7 @@
             "application/json": {
               "schema": {
                 "type": "object",
-                "required": ["op", "params"],
-                "description": "RPC for Google Contacts CRUD. Ops: 'list'=all contacts, 'search'=find by query, 'add'=create one, 'update'=modify, 'delete'=remove. Use /macros/contacts/safeAdd for bulk adds with deduplication. Use RPC for precise control.",
+                "required": ["op"],
                 "properties": {
                   "op": {
                     "type": "string",
@@ -1138,22 +1173,7 @@
         },
         "responses": {
           "200": {
-            "description": "Operation completed",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "ok": {
-                      "type": "boolean"
-                    },
-                    "data": {
-                      "type": "object"
-                    }
-                  }
-                }
-              }
-            }
+            "description": "Operation completed"
           }
         }
       }
@@ -1169,8 +1189,7 @@
             "application/json": {
               "schema": {
                 "type": "object",
-                "required": ["op", "params"],
-                "description": "RPC for Google Tasks CRUD. Ops: 'list'=all tasks, 'get'=single by ID, 'create'=new, 'update'=modify, 'delete'=remove, 'complete'=mark done. Use /macros/tasks/overview for daily/weekly grouped views. Use RPC for batch or precise control.",
+                "required": ["op"],
                 "properties": {
                   "op": {
                     "type": "string",
@@ -1179,7 +1198,7 @@
                   },
                   "params": {
                     "type": "object",
-                    "description": "Op params. list: {}. get: {taskId}. create: {title, due, notes}. update: {taskId, updates}. delete: {taskId}. complete: {taskId}."
+                    "description": "Op params. list: {}. get: {taskListId, taskId}. create: {title, due, notes}. update: {taskListId, taskId, updates}. delete: {taskListId, taskId}. complete: {taskListId, taskId}."
                   }
                 }
               },
@@ -1200,22 +1219,7 @@
         },
         "responses": {
           "200": {
-            "description": "Operation completed",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "ok": {
-                      "type": "boolean"
-                    },
-                    "data": {
-                      "type": "object"
-                    }
-                  }
-                }
-              }
-            }
+            "description": "Operation completed"
           }
         }
       }

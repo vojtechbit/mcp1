@@ -67,10 +67,22 @@ export async function mailRpc(req, res) {
         break;
         
       case 'send':
+        // FIXED: Better validation for send operation
+        if (!params) {
+          return res.status(400).json({
+            error: 'Invalid request format',
+            message: 'params object is required for send operation',
+            code: 'INVALID_PARAM',
+            details: 'Expected one of:',
+            option1: { params: { draftId: 'string' } },
+            option2: { params: { to: 'email@example.com', subject: 'string', body: 'string' } }
+          });
+        }
+        
         if (params.draftId) {
           // Send existing draft
           result = await gmailService.sendDraft(req.user.googleSub, params.draftId);
-        } else {
+        } else if (params.to && params.subject && params.body) {
           // Create and send new email
           if (params.toSelf && !params.confirmSelfSend) {
             return res.status(400).json({
@@ -80,6 +92,14 @@ export async function mailRpc(req, res) {
             });
           }
           result = await gmailService.sendEmail(req.user.googleSub, params);
+        } else {
+          return res.status(400).json({
+            error: 'Invalid request format',
+            message: 'Missing required fields for send operation',
+            code: 'INVALID_PARAM',
+            details: 'Must provide EITHER draftId OR (to + subject + body)',
+            providedFields: Object.keys(params || {})
+          });
         }
         break;
         
@@ -205,6 +225,63 @@ export async function calendarRpc(req, res) {
         break;
         
       case 'update':
+        // FIXED: Validate calendar update structure
+        if (!params || !params.eventId) {
+          return res.status(400).json({
+            error: 'Invalid request format',
+            message: 'params.eventId is required for update operation',
+            code: 'INVALID_PARAM'
+          });
+        }
+        
+        if (!params.updates) {
+          return res.status(400).json({
+            error: 'Invalid request format',
+            message: 'params.updates object is required',
+            code: 'INVALID_PARAM'
+          });
+        }
+        
+        // Validate start/end structure if present
+        if (params.updates.start || params.updates.end) {
+          const validateTimeField = (field, fieldName) => {
+            if (!field) return null; // Optional
+            if (!field.dateTime) {
+              return `${fieldName}.dateTime is required (ISO 8601 format, e.g., "2025-10-21T15:00:00")`;
+            }
+            if (!field.timeZone) {
+              return `${fieldName}.timeZone is required (e.g., "Europe/Prague")`;
+            }
+            return null;
+          };
+          
+          const startError = validateTimeField(params.updates.start, 'start');
+          if (startError) {
+            return res.status(400).json({
+              error: 'Invalid request format',
+              message: startError,
+              code: 'INVALID_TIME_FORMAT',
+              expectedFormat: {
+                start: { dateTime: 'ISO8601 string', timeZone: 'string' },
+                end: { dateTime: 'ISO8601 string', timeZone: 'string' }
+              }
+            });
+          }
+          
+          const endError = validateTimeField(params.updates.end, 'end');
+          if (endError) {
+            return res.status(400).json({
+              error: 'Invalid request format',
+              message: endError,
+              code: 'INVALID_TIME_FORMAT',
+              expectedFormat: {
+                start: { dateTime: 'ISO8601 string', timeZone: 'string' },
+                end: { dateTime: 'ISO8601 string', timeZone: 'string' }
+              }
+            });
+          }
+        }
+        
         result = await calendarService.updateCalendarEvent(
           req.user.googleSub,
           params.eventId,
