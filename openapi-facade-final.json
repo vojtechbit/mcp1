@@ -1113,11 +1113,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "type": "object",
                 "description": "Contacts RPC payload backed 100% by Google Sheets (no MongoDB writes). Always include an 'op' plus optional 'params' that describe how to update the sheet rows.\n\n**WORKFLOW 1 – REMOVE DUPLICATES (keep best contact, delete extras):**\n  Step 1: Call {\"op\": \"dedupe\"} → Returns groups like {rowIndex: [2,3,5]} meaning 3 duplicates\n  Step 2: Pick the best rowIndex (most complete data)\n  Step 3: Call bulkDelete with the extra rowIds only: {\"op\": \"bulkDelete\", \"params\": {\"rowIds\": [3,5]}} to keep row 2\n\n**WORKFLOW 2 – DELETE ENTIRE CONTACT (all occurrences):**\n  Call {\"op\": \"bulkDelete\", \"params\": {\"emails\": [\"john@example.com\"]}} → Deletes ALL rows with that email\n\n**IMPORTANT:** bulkDelete has TWO modes:\n  • emails mode: Deletes COMPLETE contact (all rows with email)\n  • rowIds mode: Deletes SPECIFIC rows (surgical, keeps others with same email)\n\nAlways use rowIds mode for duplicate cleanup (keeps one), emails mode for complete removal.",
-                "discriminator": {
-                  "propertyName": "op"
-                },
                 "oneOf": [
                   { "$ref": "#/components/schemas/ContactsListRequest" },
                   { "$ref": "#/components/schemas/ContactsDedupeRequest" },
@@ -1646,11 +1642,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "type": "object",
                 "description": "Tasks RPC payload. Choose the shape that matches the desired operation so the Actions runtime can validate params correctly.",
-                "discriminator": {
-                  "propertyName": "op"
-                },
                 "oneOf": [
                   { "$ref": "#/components/schemas/TasksListRequest" },
                   { "$ref": "#/components/schemas/TasksGetRequest" },
