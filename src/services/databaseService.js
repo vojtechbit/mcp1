@@ -2,12 +2,45 @@ import { getDatabase } from '../config/database.js';
 import { encryptToken, decryptToken } from './tokenService.js';
 
 /**
+ * Retry wrapper for database operations
+ */
+async function withDbRetry(operation, operationName = 'db operation', maxAttempts = 3) {
+  let lastError;
+  
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      return await operation();
+    } catch (error) {
+      lastError = error;
+      
+      // If database not ready, retry
+      if (
+        error.message?.includes('collection') || 
+        error.message?.includes('not a function') ||
+        error.message?.includes('not initialized')
+      ) {
+        if (attempt < maxAttempts) {
+          console.warn(`⏳ ${operationName} attempt ${attempt}/${maxAttempts} failed, retrying in 300ms...`);
+          await new Promise(resolve => setTimeout(resolve, 300));
+          continue;
+        }
+      }
+      
+      throw error;
+    }
+  }
+  
+  throw lastError;
+}
+
+/**
  * Save or update user with encrypted tokens
  */
 async function saveUser(userData) {
   try {
-    const db = await getDatabase();
-    const users = db.collection('users');
+    const result = await withDbRetry(async () => {
+      const db = await getDatabase();
+      const users = db.collection('users');
 
     const { googleSub, email, accessToken, refreshToken, expiryDate } = userData;
 
@@ -28,14 +61,15 @@ async function saveUser(userData) {
       last_used: new Date()
     };
 
-    const result = await users.updateOne(
-      { google_sub: googleSub },
-      { 
-        $set: userDoc,
-        $setOnInsert: { created_at: new Date() }
-      },
-      { upsert: true }
-    );
+      return await users.updateOne(
+        { google_sub: googleSub },
+        { 
+          $set: userDoc,
+          $setOnInsert: { created_at: new Date() }
+        },
+        { upsert: true }
+      );
+    }, 'saveUser');
 
     console.log('✅ User saved to database:', email);
     return result;
@@ -55,37 +89,43 @@ async function saveUser(userData) {
  */
 async function getUserByGoogleSub(googleSub) {
   try {
-    const db = await getDatabase();
-    const users = db.collection('users');
-
-    const user = await users.findOne({ google_sub: googleSub });
+    const user = await withDbRetry(async () => {
+      const db = await getDatabase();
+      const users = db.collection('users');
+      return await users.findOne({ google_sub: googleSub });
+    }, 'getUserByGoogleSub');
 
     if (!user) {
       console.log('⚠️  User not found:', googleSub);
       return null;
     }
 
-    const accessToken = decryptToken(
+    try {
+      const accessToken = decryptToken(
       user.encrypted_access_token,
       user.access_token_iv,
       user.access_token_auth_tag
     );
 
-    const refreshToken = decryptToken(
-      user.encrypted_refresh_token,
-      user.refresh_token_iv,
-      user.refresh_token_auth_tag
-    );
+      const refreshToken = decryptToken(
+        user.encrypted_refresh_token,
+        user.refresh_token_iv,
+        user.refresh_token_auth_tag
+      );
 
-    return {
-      googleSub: user.google_sub,
-      email: user.email,
-      accessToken,
-      refreshToken,
-      tokenExpiry: user.token_expiry,
-      createdAt: user.created_at,
-      lastUsed: user.last_used
-    };
+      return {
+        googleSub: user.google_sub,
+        email: user.email,
+        accessToken,
+        refreshToken,
+        tokenExpiry: user.token_expiry,
+        createdAt: user.created_at,
+        lastUsed: user.last_used
+      };
+    } catch (decryptError) {
+      console.error('❌ Token decryption failed:', decryptError.message);
+      throw decryptError;
+    }
   } catch (error) {
     console.error('❌ [DATABASE_ERROR] Failed to get user');
     console.error('Details:', {
@@ -102,31 +142,33 @@ async function getUserByGoogleSub(googleSub) {
  */
 async function updateTokens(googleSub, tokens) {
   try {
-    const db = await getDatabase();
-    const users = db.collection('users');
+    await withDbRetry(async () => {
+      const db = await getDatabase();
+      const users = db.collection('users');
 
-    const encryptedAccess = encryptToken(tokens.accessToken);
+      const encryptedAccess = encryptToken(tokens.accessToken);
 
-    const updateDoc = {
-      encrypted_access_token: encryptedAccess.encryptedToken,
-      access_token_iv: encryptedAccess.iv,
-      access_token_auth_tag: encryptedAccess.authTag,
-      token_expiry: tokens.expiryDate,
-      updated_at: new Date(),
-      last_used: new Date()
-    };
+      const updateDoc = {
+        encrypted_access_token: encryptedAccess.encryptedToken,
+        access_token_iv: encryptedAccess.iv,
+        access_token_auth_tag: encryptedAccess.authTag,
+        token_expiry: tokens.expiryDate,
+        updated_at: new Date(),
+        last_used: new Date()
+      };
 
-    if (tokens.refreshToken) {
-      const encryptedRefresh = encryptToken(tokens.refreshToken);
-      updateDoc.encrypted_refresh_token = encryptedRefresh.encryptedToken;
-      updateDoc.refresh_token_iv = encryptedRefresh.iv;
-      updateDoc.refresh_token_auth_tag = encryptedRefresh.authTag;
-    }
+      if (tokens.refreshToken) {
+        const encryptedRefresh = encryptToken(tokens.refreshToken);
+        updateDoc.encrypted_refresh_token = encryptedRefresh.encryptedToken;
+        updateDoc.refresh_token_iv = encryptedRefresh.iv;
+        updateDoc.refresh_token_auth_tag = encryptedRefresh.authTag;
+      }
 
-    await users.updateOne(
-      { google_sub: googleSub },
-      { $set: updateDoc }
-    );
+      return await users.updateOne(
+        { google_sub: googleSub },
+        { $set: updateDoc }
+      );
+    }, 'updateTokens');
 
     console.log('✅ Tokens updated for user:', googleSub);
   } catch (error) {
@@ -145,10 +187,11 @@ async function updateTokens(googleSub, tokens) {
  */
 async function deleteUser(googleSub) {
   try {
-    const db = await getDatabase();
-    const users = db.collection('users');
-
-    const result = await users.deleteOne({ google_sub: googleSub });
+    const result = await withDbRetry(async () => {
+      const db = await getDatabase();
+      const users = db.collection('users');
+      return await users.deleteOne({ google_sub: googleSub });
+    }, 'deleteUser');
 
     if (result.deletedCount > 0) {
       console.log('✅ User deleted:', googleSub);
@@ -173,13 +216,14 @@ async function deleteUser(googleSub) {
  */
 async function updateLastUsed(googleSub) {
   try {
-    const db = await getDatabase();
-    const users = db.collection('users');
-
-    await users.updateOne(
-      { google_sub: googleSub },
-      { $set: { last_used: new Date() } }
-    );
+    await withDbRetry(async () => {
+      const db = await getDatabase();
+      const users = db.collection('users');
+      return await users.updateOne(
+        { google_sub: googleSub },
+        { $set: { last_used: new Date() } }
+      );
+    }, 'updateLastUsed', 2); // Only 2 attempts for this non-critical operation
   } catch (error) {
     console.error('⚠️  Failed to update last_used:', error.message);
   }

@@ -17,6 +17,34 @@ const CONTACTS_SHEET_NAME = 'MCP1 Contacts'; // Name of the Google Sheet
 const CONTACTS_RANGE = 'A2:E'; // Fixed range for all operations
 
 /**
+ * Retry helper - if database not ready, wait and retry
+ */
+async function withDatabaseRetry(operation, maxAttempts = 3) {
+  let lastError;
+  
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      return await operation();
+    } catch (error) {
+      lastError = error;
+      
+      // If it's a database connection error, retry
+      if (error.message && error.message.includes('db.collection') || error.message.includes('not a function')) {
+        if (attempt < maxAttempts) {
+          console.log(`⏳ Database not ready (attempt ${attempt}/${maxAttempts}), retrying in 500ms...`);
+          await new Promise(resolve => setTimeout(resolve, 500));
+          continue;
+        }
+      }
+      
+      throw error;
+    }
+  }
+  
+  throw lastError;
+}
+
+/**
  * Get valid access token (auto-refresh if expired)
  */
 async function getValidAccessToken(googleSub) {
