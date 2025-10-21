@@ -1115,32 +1115,21 @@
               "schema": {
                 "type": "object",
                 "description": "Contacts RPC payload backed 100% by Google Sheets (no MongoDB writes). Always include an 'op' plus optional 'params' that describe how to update the sheet rows.\n\n**WORKFLOW 1 – REMOVE DUPLICATES (keep best contact, delete extras):**\n  Step 1: Call {\"op\": \"dedupe\"} → Returns groups like {rowIndex: [2,3,5]} meaning 3 duplicates\n  Step 2: Pick the best rowIndex (most complete data)\n  Step 3: Call bulkDelete with the extra rowIds only: {\"op\": \"bulkDelete\", \"params\": {\"rowIds\": [3,5]}} to keep row 2\n\n**WORKFLOW 2 – DELETE ENTIRE CONTACT (all occurrences):**\n  Call {\"op\": \"bulkDelete\", \"params\": {\"emails\": [\"john@example.com\"]}} → Deletes ALL rows with that email\n\n**IMPORTANT:** bulkDelete has TWO modes:\n  • emails mode: Deletes COMPLETE contact (all rows with email)\n  • rowIds mode: Deletes SPECIFIC rows (surgical, keeps others with same email)\n\nAlways use rowIds mode for duplicate cleanup (keeps one), emails mode for complete removal.",
-                "required": [
-                  "op"
-                ],
-                "properties": {
-                  "op": {
-                    "type": "string",
-                    "enum": [
-                      "list",
-                      "search",
-                      "add",
-                      "update",
-                      "delete",
-                      "dedupe",
-                      "bulkUpsert",
-                      "bulkDelete",
-                      "addressSuggest"
-                    ],
-                    "description": "Contacts operation to run against Google Sheets rows."
-                  },
-                  "params": {
-                    "type": "object",
-                    "description": "Operation-specific parameters (Google Sheets row data). Omit or pass {} for list/dedupe.",
-                    "default": {}
-                  }
+                "discriminator": {
+                  "propertyName": "op"
                 },
-                "additionalProperties": false,
+                "oneOf": [
+                  { "$ref": "#/components/schemas/ContactsListRequest" },
+                  { "$ref": "#/components/schemas/ContactsDedupeRequest" },
+                  { "$ref": "#/components/schemas/ContactsSearchRequest" },
+                  { "$ref": "#/components/schemas/ContactsAddRequest" },
+                  { "$ref": "#/components/schemas/ContactsUpdateRequest" },
+                  { "$ref": "#/components/schemas/ContactsDeleteRequest" },
+                  { "$ref": "#/components/schemas/ContactsBulkUpsertRequest" },
+                  { "$ref": "#/components/schemas/ContactsBulkDeleteByEmailsRequest" },
+                  { "$ref": "#/components/schemas/ContactsBulkDeleteByRowIdsRequest" },
+                  { "$ref": "#/components/schemas/ContactsAddressSuggestRequest" }
+                ],
                 "x-googleSheetsParams": {
                   "list": {
                     "description": "List all contacts – no params needed (omit or {})."
@@ -1224,17 +1213,32 @@
                   "bulkDelete": {
                     "description": "Delete by emails (all rows) or rowIds (specific duplicates). Params: {emails?: string[], rowIds?: number[]}",
                     "schema": {
-                      "type": "object",
-                      "properties": {
-                        "emails": {
-                          "type": "array",
-                          "items": { "type": "string" }
+                      "oneOf": [
+                        {
+                          "type": "object",
+                          "required": ["emails"],
+                          "properties": {
+                            "emails": {
+                              "type": "array",
+                              "minItems": 1,
+                              "items": { "type": "string" }
+                            }
+                          },
+                          "additionalProperties": false
                         },
-                        "rowIds": {
-                          "type": "array",
-                          "items": { "type": "integer" }
+                        {
+                          "type": "object",
+                          "required": ["rowIds"],
+                          "properties": {
+                            "rowIds": {
+                              "type": "array",
+                              "minItems": 1,
+                              "items": { "type": "integer" }
+                            }
+                          },
+                          "additionalProperties": false
                         }
-                      }
+                      ]
                     }
                   },
                   "addressSuggest": {
@@ -1643,18 +1647,18 @@
             "application/json": {
               "schema": {
                 "type": "object",
-                "required": ["op"],
-                "properties": {
-                  "op": {
-                    "type": "string",
-                    "enum": ["list", "get", "create", "update", "delete", "complete"],
-                    "description": "Operation: list (all), get (by ID), create, update, delete, complete (mark done)"
-                  },
-                  "params": {
-                    "type": "object",
-                    "description": "Op params. list: {}. get: {taskListId, taskId}. create: {title, due, notes}. update: {taskListId, taskId, updates}. delete: {taskListId, taskId}. complete: {taskListId, taskId}."
-                  }
-                }
+                "description": "Tasks RPC payload. Choose the shape that matches the desired operation so the Actions runtime can validate params correctly.",
+                "discriminator": {
+                  "propertyName": "op"
+                },
+                "oneOf": [
+                  { "$ref": "#/components/schemas/TasksListRequest" },
+                  { "$ref": "#/components/schemas/TasksGetRequest" },
+                  { "$ref": "#/components/schemas/TasksCreateRequest" },
+                  { "$ref": "#/components/schemas/TasksUpdateRequest" },
+                  { "$ref": "#/components/schemas/TasksDeleteRequest" },
+                  { "$ref": "#/components/schemas/TasksCompleteRequest" }
+                ]
               },
               "examples": {
                 "createTask": {
@@ -1676,6 +1680,380 @@
             "description": "Operation completed"
           }
         }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "ContactsBaseRequest": {
+        "type": "object",
+        "required": ["op"],
+        "properties": {
+          "op": { "type": "string" },
+          "params": { "type": "object" }
+        },
+        "additionalProperties": false
+      },
+      "ContactsListRequest": {
+        "allOf": [
+          { "$ref": "#/components/schemas/ContactsBaseRequest" },
+          {
+            "properties": {
+              "op": { "const": "list" },
+              "params": {
+                "type": "object",
+                "description": "No params required. Omit entirely or send {}.",
+                "maxProperties": 0
+              }
+            }
+          }
+        ]
+      },
+      "ContactsDedupeRequest": {
+        "allOf": [
+          { "$ref": "#/components/schemas/ContactsBaseRequest" },
+          {
+            "properties": {
+              "op": { "const": "dedupe" },
+              "params": {
+                "type": "object",
+                "description": "No params required. Omit entirely or send {}.",
+                "maxProperties": 0
+              }
+            }
+          }
+        ]
+      },
+      "ContactsSearchRequest": {
+        "allOf": [
+          { "$ref": "#/components/schemas/ContactsBaseRequest" },
+          {
+            "required": ["params"],
+            "properties": {
+              "op": { "const": "search" },
+              "params": {
+                "type": "object",
+                "required": ["query"],
+                "properties": {
+                  "query": {
+                    "type": "string",
+                    "description": "Search expression for contact sheet rows."
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        ]
+      },
+      "ContactsAddRequest": {
+        "allOf": [
+          { "$ref": "#/components/schemas/ContactsBaseRequest" },
+          {
+            "required": ["params"],
+            "properties": {
+              "op": { "const": "add" },
+              "params": {
+                "type": "object",
+                "required": ["name", "email"],
+                "properties": {
+                  "name": { "type": "string" },
+                  "email": { "type": "string", "format": "email" },
+                  "phone": { "type": "string" },
+                  "realestate": { "type": "string" },
+                  "notes": { "type": "string" }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        ]
+      },
+      "ContactsUpdateRequest": {
+        "allOf": [
+          { "$ref": "#/components/schemas/ContactsBaseRequest" },
+          {
+            "required": ["params"],
+            "properties": {
+              "op": { "const": "update" },
+              "params": {
+                "type": "object",
+                "required": ["name", "email"],
+                "properties": {
+                  "name": { "type": "string" },
+                  "email": { "type": "string", "format": "email" },
+                  "phone": { "type": "string" },
+                  "realestate": { "type": "string" },
+                  "notes": { "type": "string" }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        ]
+      },
+      "ContactsDeleteRequest": {
+        "allOf": [
+          { "$ref": "#/components/schemas/ContactsBaseRequest" },
+          {
+            "required": ["params"],
+            "properties": {
+              "op": { "const": "delete" },
+              "params": {
+                "type": "object",
+                "properties": {
+                  "email": { "type": "string", "format": "email" },
+                  "name": { "type": "string" }
+                },
+                "additionalProperties": false,
+                "oneOf": [
+                  { "required": ["email"] },
+                  { "required": ["name"] },
+                  { "required": ["email", "name"] }
+                ]
+              }
+            }
+          }
+        ]
+      },
+      "ContactsBulkUpsertRequest": {
+        "allOf": [
+          { "$ref": "#/components/schemas/ContactsBaseRequest" },
+          {
+            "required": ["params"],
+            "properties": {
+              "op": { "const": "bulkUpsert" },
+              "params": {
+                "type": "object",
+                "required": ["contacts"],
+                "properties": {
+                  "contacts": {
+                    "type": "array",
+                    "minItems": 1,
+                    "maxItems": 50,
+                    "items": {
+                      "type": "object",
+                      "required": ["name"],
+                      "properties": {
+                        "name": { "type": "string" },
+                        "email": { "type": "string", "format": "email" },
+                        "phone": { "type": "string" },
+                        "realestate": { "type": "string" },
+                        "notes": { "type": "string" }
+                      },
+                      "additionalProperties": false
+                    }
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        ]
+      },
+      "ContactsBulkDeleteByEmailsRequest": {
+        "allOf": [
+          { "$ref": "#/components/schemas/ContactsBaseRequest" },
+          {
+            "required": ["params"],
+            "properties": {
+              "op": { "const": "bulkDelete" },
+              "params": {
+                "type": "object",
+                "required": ["emails"],
+                "properties": {
+                  "emails": {
+                    "type": "array",
+                    "minItems": 1,
+                    "items": { "type": "string", "format": "email" }
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        ]
+      },
+      "ContactsBulkDeleteByRowIdsRequest": {
+        "allOf": [
+          { "$ref": "#/components/schemas/ContactsBaseRequest" },
+          {
+            "required": ["params"],
+            "properties": {
+              "op": { "const": "bulkDelete" },
+              "params": {
+                "type": "object",
+                "required": ["rowIds"],
+                "properties": {
+                  "rowIds": {
+                    "type": "array",
+                    "minItems": 1,
+                    "items": { "type": "integer" }
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        ]
+      },
+      "ContactsAddressSuggestRequest": {
+        "allOf": [
+          { "$ref": "#/components/schemas/ContactsBaseRequest" },
+          {
+            "required": ["params"],
+            "properties": {
+              "op": { "const": "addressSuggest" },
+              "params": {
+                "type": "object",
+                "required": ["query"],
+                "properties": {
+                  "query": { "type": "string" }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        ]
+      },
+      "TasksBaseRequest": {
+        "type": "object",
+        "required": ["op"],
+        "properties": {
+          "op": { "type": "string" },
+          "params": { "type": "object" }
+        },
+        "additionalProperties": false
+      },
+      "TasksListRequest": {
+        "allOf": [
+          { "$ref": "#/components/schemas/TasksBaseRequest" },
+          {
+            "properties": {
+              "op": { "const": "list" },
+              "params": {
+                "type": "object",
+                "properties": {
+                  "taskListId": { "type": "string" },
+                  "maxResults": { "type": "integer", "minimum": 1, "maximum": 100 },
+                  "pageToken": { "type": "string" },
+                  "showCompleted": { "type": "boolean" }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        ]
+      },
+      "TasksGetRequest": {
+        "allOf": [
+          { "$ref": "#/components/schemas/TasksBaseRequest" },
+          {
+            "required": ["params"],
+            "properties": {
+              "op": { "const": "get" },
+              "params": {
+                "type": "object",
+                "required": ["taskListId", "taskId"],
+                "properties": {
+                  "taskListId": { "type": "string" },
+                  "taskId": { "type": "string" }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        ]
+      },
+      "TasksCreateRequest": {
+        "allOf": [
+          { "$ref": "#/components/schemas/TasksBaseRequest" },
+          {
+            "required": ["params"],
+            "properties": {
+              "op": { "const": "create" },
+              "params": {
+                "type": "object",
+                "required": ["title"],
+                "properties": {
+                  "title": { "type": "string" },
+                  "notes": { "type": "string" },
+                  "due": { "type": "string", "format": "date-time" }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        ]
+      },
+      "TasksUpdateRequest": {
+        "allOf": [
+          { "$ref": "#/components/schemas/TasksBaseRequest" },
+          {
+            "required": ["params"],
+            "properties": {
+              "op": { "const": "update" },
+              "params": {
+                "type": "object",
+                "required": ["taskListId", "taskId", "updates"],
+                "properties": {
+                  "taskListId": { "type": "string" },
+                  "taskId": { "type": "string" },
+                  "updates": {
+                    "type": "object",
+                    "properties": {
+                      "title": { "type": "string" },
+                      "notes": { "type": "string" },
+                      "due": { "type": "string", "format": "date-time" },
+                      "status": { "type": "string", "enum": ["needsAction", "completed"] }
+                    }
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        ]
+      },
+      "TasksDeleteRequest": {
+        "allOf": [
+          { "$ref": "#/components/schemas/TasksBaseRequest" },
+          {
+            "required": ["params"],
+            "properties": {
+              "op": { "const": "delete" },
+              "params": {
+                "type": "object",
+                "required": ["taskListId", "taskId"],
+                "properties": {
+                  "taskListId": { "type": "string" },
+                  "taskId": { "type": "string" }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        ]
+      },
+      "TasksCompleteRequest": {
+        "allOf": [
+          { "$ref": "#/components/schemas/TasksBaseRequest" },
+          {
+            "required": ["params"],
+            "properties": {
+              "op": { "const": "complete" },
+              "params": {
+                "type": "object",
+                "required": ["taskListId", "taskId"],
+                "properties": {
+                  "taskListId": { "type": "string" },
+                  "taskId": { "type": "string" }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        ]
       }
     }
   }
