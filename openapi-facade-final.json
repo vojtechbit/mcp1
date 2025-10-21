@@ -1119,7 +1119,6 @@
               "schema": {
                 "type": "object",
                 "required": ["op"],
-                "additionalProperties": false,
                 "description": "Contact RPC operations. KEY WORKFLOWS:\n\n**WORKFLOW 1 - REMOVE DUPLICATES (keep best contact, delete extras):**\n  Step 1: Call {\"op\": \"dedupe\"} → Returns groups like {rowIndex: [2, 3, 5]} meaning 3 duplicates\n  Step 2: Analyze which rowIndex is BEST (most recent/complete data)\n  Step 3: Call bulkDelete with rowIds of EXTRAS ONLY: {\"op\": \"bulkDelete\", \"params\": {\"rowIds\": [3, 5]}} (keep 2)\n\n**WORKFLOW 2 - DELETE ENTIRE CONTACT (all occurrences):**\n  Call {\"op\": \"bulkDelete\", \"params\": {\"emails\": [\"john@example.com\"]}} → Deletes ALL rows with that email\n\n**IMPORTANT:** bulkDelete has TWO modes:\n  - emails mode: Deletes COMPLETE contact (all rows with email)\n  - rowIds mode: Deletes SPECIFIC rows (surgical, keeps others with same email)\n\nAlways use rowIds mode for duplicate cleanup (keeps one), emails mode for complete removal.",
                 "properties": {
                   "op": {
@@ -1515,11 +1514,7 @@
         }
       }
     },
-    "/rpc/contacts": {
-      "post": {
-        "operationId": "contactsRpc",
-        "summary": "Advanced contacts operations",
-        "description": "Low-level contacts RPC. Operations: list, search, add, update, delete, bulkUpsert, bulkDelete, addressSuggest (searches realEstate column only). Contacts stored in Google Sheet: columns Name | Email | Notes | RealEstate | Phone. RPC returns ALL matching results (within limits).",
+    "/rpc/tasks": {
         "requestBody": {
           "required": true,
           "content": {
