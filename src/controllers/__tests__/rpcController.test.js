@@ -72,6 +72,32 @@ test('contactsRpc bulkDelete accepts rowIds payload', async () => {
   ]);
 });
 
+test('contactsRpc bulkDelete also accepts root-level rowIds', async () => {
+  bulkDeleteCalls.length = 0;
+  const request = {
+    body: {
+      op: 'bulkDelete',
+      rowIds: [7]
+    },
+    user: { accessToken: 'token-456' }
+  };
+  const response = new MockResponse();
+
+  await contactsRpc(request, response);
+
+  assert.equal(response.statusCode, 200);
+  assert.deepEqual(response.body, {
+    ok: true,
+    data: { removed: 1, emails: undefined }
+  });
+  assert.deepEqual(bulkDeleteCalls, [
+    {
+      token: 'token-456',
+      payload: { emails: undefined, rowIds: [7] }
+    }
+  ]);
+});
+
 test('tasksRpc complete delegates to updateTask with completed status', async () => {
   updateTaskCalls.length = 0;
   const request = {
@@ -95,6 +121,35 @@ test('tasksRpc complete delegates to updateTask with completed status', async ()
       sub: 'user-42',
       taskListId: 'list-1',
       taskId: 'task-9',
+      updates: { status: 'completed' }
+    }
+  ]);
+});
+
+test('tasksRpc complete accepts root-level identifiers', async () => {
+  updateTaskCalls.length = 0;
+  const request = {
+    body: {
+      op: 'complete',
+      taskListId: 'list-2',
+      taskId: 'task-3'
+    },
+    user: { googleSub: 'user-99' }
+  };
+  const response = new MockResponse();
+
+  await tasksRpc(request, response);
+
+  assert.equal(response.statusCode, 200);
+  assert.deepEqual(response.body, {
+    ok: true,
+    data: { id: 'task-3', status: 'completed' }
+  });
+  assert.deepEqual(updateTaskCalls, [
+    {
+      sub: 'user-99',
+      taskListId: 'list-2',
+      taskId: 'task-3',
       updates: { status: 'completed' }
     }
   ]);
