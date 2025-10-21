@@ -8,6 +8,7 @@
 import express from 'express';
 import { verifyToken } from '../middleware/authMiddleware.js';
 import { idempotencyMiddleware } from '../middleware/idempotencyMiddleware.js';
+import { normalizeRpcRequest } from '../middleware/rpcNormalizer.js';
 import * as facadeController from '../controllers/facadeController.js';
 import * as rpcController from '../controllers/rpcController.js';
 import * as confirmationController from '../controllers/confirmationController.js';
@@ -53,10 +54,13 @@ router.post('/macros/confirm/:confirmToken/cancel', confirmationController.cance
 
 // ==================== RPC ENDPOINTS ====================
 
-// Unified RPC endpoints
-router.post('/rpc/mail', rpcController.mailRpc);
-router.post('/rpc/calendar', rpcController.calendarRpc);
-router.post('/rpc/contacts', rpcController.contactsRpc);
-router.post('/rpc/tasks', rpcController.tasksRpc);
+// Apply normalizer BEFORE RPC controllers
+// This transforms requests from multiple formats into unified internal format
+
+// Unified RPC endpoints with normalization
+router.post('/rpc/mail', normalizeRpcRequest, rpcController.mailRpc);
+router.post('/rpc/calendar', normalizeRpcRequest, rpcController.calendarRpc);
+router.post('/rpc/contacts', normalizeRpcRequest, rpcController.contactsRpc);
+router.post('/rpc/tasks', normalizeRpcRequest, rpcController.tasksRpc);
 
 export default router;

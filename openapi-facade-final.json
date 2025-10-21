@@ -1151,7 +1151,7 @@
                 },
                 "delete": {
                   "summary": "Delete by email",
-                  "value": {"op": "delete", "params": {"email": "old@example.com"}}
+                  "value": {"op": "delete", "email": "old@example.com"}
                 },
                 "dedupe": {
                   "summary": "Find duplicate contacts",
