@@ -556,8 +556,8 @@
     "/macros/calendar/schedule": {
       "post": {
         "operationId": "macroCalendarSchedule",
-        "summary": "Create new calendar event (CREATE ONLY)",
-        "description": "CREATE new events only. For MODIFYING existing events, use /rpc/calendar with op:update instead. Creates meeting/event with fixed time. Supports Google Meet/Zoom links. Max 20 attendees. Use for 'Schedule meeting with John tomorrow at 2pm'. Europe/Prague timezone.",
+        "summary": "Create new calendar event (create-only flow)",
+        "description": "CREATE new events only. For MODIFYING existing events, use /rpc/calendar with op:update instead. Accepts either a fixed time or proposals[] (macro checks conflicts and picks first free). When enrichFromContacts='ask', returns confirmToken so you can call /macros/confirm before creating the event. Supports Google Meet links (auto-generated) or adds placeholder text for Zoom. Max 20 attendees. Europe/Prague timezone.",
         "requestBody": {
           "required": true,
           "content": {
@@ -565,7 +565,7 @@
               "schema": {
                 "type": "object",
                 "required": ["title", "when"],
-                "description": "Create calendar event with attendees, location, notes, conference links, reminders. Sends calendar invites to all attendees. Max 20 attendees, max 5 reminders. Times in ISO 8601 format (Europe/Prague).",
+                "description": "Create calendar event with attendees, location, notes, optional contact enrichment, conference links, reminders. Sends calendar invites to all attendees. Max 20 attendees, max 5 reminders. Times in ISO 8601 format (Europe/Prague).",
                 "properties": {
                   "title": {
                     "type": "string",
@@ -574,7 +574,7 @@
                   },
                   "when": {
                     "type": "object",
-                    "description": "Event timing. Use fixed.start and fixed.end for specific time.",
+                    "description": "Event timing. Provide either fixed.start/end for a specific slot or proposals[] for alternatives (macro checks conflicts in order and picks the first free slot).",
                     "properties": {
                       "fixed": {
                         "type": "object",
@@ -591,8 +591,36 @@
                           }
                         },
                         "required": ["start", "end"]
+                      },
+                      "proposals": {
+                        "type": "array",
+                        "description": "Alternative slots to try (conflict-checked in order). If all proposals conflict, the macro returns HTTP 409 with details.",
+                        "minItems": 1,
+                        "maxItems": 10,
+                        "items": {
+                          "type": "object",
+                          "required": ["start", "end"],
+                          "properties": {
+                            "start": {
+                              "type": "string",
+                              "format": "date-time",
+                              "description": "Proposed start time (ISO 8601)."
+                            },
+                            "end": {
+                              "type": "string",
+                              "format": "date-time",
+                              "description": "Proposed end time (ISO 8601)."
+                            }
+                          },
+                          "additionalProperties": false
+                        }
                       }
-                    }
+                    },
+                    "additionalProperties": false,
+                    "anyOf": [
+                      { "required": ["fixed"] },
+                      { "required": ["proposals"] }
+                    ]
                   },
                   "attendees": {
                     "type": "array",
@@ -626,7 +654,18 @@
                     "type": "string",
                     "enum": ["none", "auto", "meet", "zoom"],
                     "default": "none",
-                    "description": "Video link: 'none'=no video, 'meet'=Google Meet, 'zoom'=Zoom, 'auto'=default provider."
+                    "description": "Video link: 'none'=no video, 'meet'=Google Meet (auto-generated), 'zoom'=adds placeholder text reminding organiser to add link manually, 'auto'=currently behaves like 'none'."
+                  },
+                  "enrichFromContacts": {
+                    "type": "string",
+                    "enum": ["ask", "auto", "off"],
+                    "default": "ask",
+                    "description": "Enrich attendee details from Google Contacts. 'ask'=pause and return confirmToken with suggested fields, 'auto'=auto-fill without confirmation, 'off'=skip enrichment."
+                  },
+                  "privacy": {
+                    "type": "string",
+                    "enum": ["default", "private", "public"],
+                    "description": "Visibility hint stored with pending confirmation payload (currently forwarded back untouched)."
                   },
                   "reminders": {
                     "type": "array",
@@ -673,6 +712,30 @@
                     "conference": "meet",
                     "reminders": [15, 60]
                   }
+                },
+                "proposedSlots": {
+                  "summary": "Try multiple slots and pick first without conflicts",
+                  "value": {
+                    "title": "Design Sync",
+                    "when": {
+                      "proposals": [
+                        {
+                          "start": "2025-10-22T09:00:00",
+                          "end": "2025-10-22T09:30:00"
+                        },
+                        {
+                          "start": "2025-10-22T10:00:00",
+                          "end": "2025-10-22T10:30:00"
+                        }
+                      ]
+                    },
+                    "attendees": [
+                      {
+                        "email": "alex@example.com"
+                      }
+                    ],
+                    "enrichFromContacts": "ask"
+                  }
                 }
               }
             }
@@ -680,14 +743,15 @@
         },
         "responses": {
           "200": {
-            "description": "Event created",
+            "description": "Event created or pending confirmation",
             "content": {
               "application/json": {
                 "schema": {
                   "type": "object",
                   "properties": {
                     "event": {
-                      "type": "object",
+                      "type": ["object", "null"],
+                      "description": "Created event details. Null when confirmToken returned for enrichment.",
                       "properties": {
                         "eventId": {
                           "type": "string"
@@ -700,6 +764,55 @@
                         },
                         "end": {
                           "type": "string"
+                        },
+                        "status": {
+                          "type": "string",
+                          "description": "Always 'upcoming' immediately after creation."
+                        },
+                        "attendees": {
+                          "type": "array",
+                          "description": "Attendee list with email/name pairs.",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "email": { "type": "string" },
+                              "name": { "type": ["string", "null"] }
+                            }
+                          }
+                        }
+                      }
+                    },
+                    "confirmToken": {
+                      "type": ["string", "null"],
+                      "description": "Present when enrichFromContacts='ask' and contact data found. Call /api/macros/confirm with this token to continue."
+                    },
+                    "warnings": {
+                      "type": "array",
+                      "items": { "type": "string" },
+                      "description": "Informational messages (e.g. enrichment suggestions or that auto-fill was applied)."
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "All proposed time slots conflict with existing events. Response includes alternatives array.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": { "type": "string" },
+                    "code": { "type": "string", "enum": ["CONFLICT"] },
+                    "alternatives": {
+                      "type": "array",
+                      "description": "Each item details a conflicting proposal with the conflicting events.",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "proposal": { "type": "object" },
+                          "conflicts": { "type": "array" }
                         }
                       }
                     }
@@ -816,8 +929,8 @@
                         "type": "object",
                         "properties": {
                           "draftId": {
-                            "type": "string",
-                            "description": "Gmail draft ID. Use to access/modify/send via Gmail API. Null if createDrafts=false."
+                            "type": ["string", "null"],
+                            "description": "Gmail draft ID. Use to access/modify/send via Gmail API. Null if createDrafts=false or draft creation failed."
                           },
                           "to": {
                             "type": "string",
@@ -853,8 +966,8 @@
     "/macros/contacts/safeAdd": {
       "post": {
         "operationId": "macroContactsSafeAdd",
-        "summary": "Add contacts with safe deduplication workflow",
-        "description": "Bulk add 1-50 contacts with duplicate detection. Strategies: 'ask' (confirm duplicates), 'skip' (skip), 'merge' (auto-merge), 'create' (always add). Use 'realestate' for organization.",
+        "summary": "Bulk add contacts with safety checks",
+        "description": "Bulk import 1-50 contacts with duplicate detection and confirmation. Strategies: 'ask' (confirm duplicates), 'skip' (skip), 'merge' (auto-merge), 'create' (always add). Direct users who want to clean up duplicates entirely to /rpc/contacts (call 'dedupe' then 'bulkDelete'). Use 'realestate' for organization.",
         "requestBody": {
           "required": true,
           "content": {
@@ -862,7 +975,7 @@
               "schema": {
                 "type": "object",
                 "required": ["entries"],
-                "description": "Bulk add contacts (1-50) with duplicate detection. Each entry needs 'name' (required), optional 'email'/'phone'/'realestate'/'notes'. Three deduping strategies: 'ask' (default, safe - ask user), 'skip' (skip if duplicate found), 'merge' (auto-merge if match found). Matching logic: email exact match > phone match > name exact match > partial name match. When duplicates found with strategy='ask', returns confirmToken for user to decide action.",
+                "description": "Bulk add contacts (1-50) with duplicate detection and follow-up confirmation. Each entry needs 'name' (required), optional 'email'/'phone'/'realestate'/'notes'. Strategies: 'ask' (default, safest – pause and return confirmToken), 'skip' (do not add duplicates), 'merge' (auto-merge into best match), 'create' (always add). Matching logic: email exact match > phone match > name exact match > partial name match. For removing duplicates after review, call /rpc/contacts with op:'dedupe' then op:'bulkDelete'.",
                 "properties": {
                   "entries": {
                     "type": "array",
@@ -1010,7 +1123,7 @@
                     },
                     "warnings": {
                       "type": "array",
-                      "description": "Informational messages for user (e.g., 'Found 2 duplicates. Call /api/macros/confirm...')",
+                      "description": "Informational messages for user (e.g., duplicate counts, reminder to confirm or to use /rpc/contacts dedupe+bulkDelete for cleanup)",
                       "items": {"type": "string"}
                     }
                   }
@@ -1333,7 +1446,7 @@
       "post": {
         "operationId": "mailRpc",
         "summary": "Advanced mail operations",
-        "description": "Low-level Gmail RPC. Operations: search, read, send, reply, modify. Use macros for common tasks, RPC for advanced control. Returns ALL matching results (within op limits). Attachment URLs expire 1h.",
+        "description": "Low-level Gmail RPC. Operations: search, preview, read, send, reply, modify labels, preview attachments. Use macros for common tasks, RPC for advanced control. Returns ALL matching results (within op limits). Attachment URLs expire 1h.",
         "requestBody": {
           "required": true,
           "content": {
@@ -1344,11 +1457,11 @@
                 "properties": {
                   "op": {
                     "type": "string",
-                    "enum": ["search", "read", "send", "reply", "modify"],
-                    "description": "Operation: search, read (full email), send (direct OR by draftId), reply, modify"
+                    "enum": ["search", "preview", "read", "send", "reply", "modify", "attachmentPreview", "labels"],
+                    "description": "Operation: search, preview (metadata for ids), read (full email or by search), send (direct OR by draftId), reply, modify labels, preview attachments, or manage labels list/modify."
                   },
                   "params": {
-                    "oneOf": [
+                    "anyOf": [
                       {
                         "type": "object",
                         "title": "Send Draft",
@@ -1413,9 +1526,55 @@
                             "maximum": 100
                           }
                         }
+                      },
+                      {
+                        "type": "object",
+                        "title": "Attachment preview",
+                        "description": "Preview text/table from attachment (op=attachmentPreview)",
+                        "required": ["messageId", "attachmentId", "mode"],
+                        "properties": {
+                          "messageId": { "type": "string" },
+                          "attachmentId": { "type": "string" },
+                          "mode": { "type": "string", "enum": ["text", "table"] },
+                          "maxKb": { "type": "integer", "minimum": 1, "maximum": 512 },
+                          "maxRows": { "type": "integer", "minimum": 1, "maximum": 200 },
+                          "delimiter": { "type": "string", "description": "Table delimiter (optional, defaults to auto)." }
+                        }
+                      },
+                      {
+                        "type": "object",
+                        "title": "Labels ops",
+                        "description": "List or modify labels (op=labels)",
+                        "properties": {
+                          "list": { "type": "boolean" },
+                          "modify": {
+                            "type": "object",
+                            "properties": {
+                              "messageId": { "type": "string" },
+                              "ids": {
+                                "type": "array",
+                                "items": { "type": "string" },
+                                "description": "Alternative to messageId. When provided, modifies first id only (matches service)."
+                              },
+                              "add": {
+                                "type": "array",
+                                "items": { "type": "string" }
+                              },
+                              "remove": {
+                                "type": "array",
+                                "items": { "type": "string" }
+                              }
+                            }
+                          }
+                        }
+                      },
+                      {
+                        "type": "object",
+                        "description": "Generic parameters for other ops (preview, read, reply, modify). See examples for common shapes.",
+                        "additionalProperties": true
                       }
                     ],
-                    "description": "Parameters depend on op value. Use oneOf validation to understand structure."
+                    "description": "Parameters depend on op value. Specific schemas provided for common cases; other operations accept their documented fields."
                   }
                 }
               },
@@ -1447,6 +1606,27 @@
                     "op": "send",
                     "params": {
                       "draftId": "18abc123def456"
+                    }
+                  }
+                },
+                "attachmentPreview": {
+                  "summary": "Preview attachment text",
+                  "value": {
+                    "op": "attachmentPreview",
+                    "params": {
+                      "messageId": "1890de2cafe3a3b7",
+                      "attachmentId": "ANGjdJ9XbExample",
+                      "mode": "text",
+                      "maxKb": 128
+                    }
+                  }
+                },
+                "listLabels": {
+                  "summary": "List all Gmail labels",
+                  "value": {
+                    "op": "labels",
+                    "params": {
+                      "list": true
                     }
                   }
                 }
@@ -1636,7 +1816,7 @@
       "post": {
         "operationId": "tasksRpc",
         "summary": "Advanced tasks operations",
-        "description": "Low-level tasks RPC. Operations: list, get, create, update, delete, complete. Use /macros/tasks/overview for grouped views. RPC returns ALL tasks (no grouping). Use for batch ops.",
+        "description": "Low-level tasks RPC. Operations: list, create, update, delete, complete. A 'get' shape exists but currently returns HTTP 501 (not implemented). Use /macros/tasks/overview for grouped views. RPC returns ALL tasks (no grouping). Use for batch ops.",
         "requestBody": {
           "required": true,
           "content": {
@@ -1938,6 +2118,7 @@
         ]
       },
       "TasksGetRequest": {
+        "description": "Placeholder for future single-task retrieval. Currently returns HTTP 501 (not implemented).",
         "allOf": [
           { "$ref": "#/components/schemas/TasksBaseRequest" },
           {
