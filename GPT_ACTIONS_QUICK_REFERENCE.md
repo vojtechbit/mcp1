@@ -146,6 +146,229 @@ GET /api/gmail/read/{messageId}
 
 ---
 
-**Status:** ✅ Ready to use
-**Tested:** ✅ Yes
+## 🌐 API Endpoints & Enhancements
+
+### Mail Batch Operations
+```
+POST /mail/batchPreview
+Body: { ids: ["id1", "id2"], kind: "summary"|"snippet"|"metadata" }
+
+POST /mail/batchRead
+Body: { ids: ["id1", "id2"] }
+```
+
+### Contacts Bulk Operations
+```
+POST /contacts/bulkUpsert
+Body: { contacts: [{ name, email, notes?, realEstate?, phone? }] }
+
+POST /contacts/bulkDelete
+Body: { emails: ["email1", "email2"] } OR { rowIds: [2, 3, 4] }
+
+GET /contacts/address-suggest?query=john
+Returns: Top 3 fuzzy-matched addresses
+```
+
+### Enhanced Search & Calendar Queries
+```
+GET /api/gmail/search?query=test&aggregate=true&include=summary&normalizeQuery=true&relative=today&snapshotToken=...
+GET /api/calendar/events?aggregate=true&snapshotToken=...&maxResults=100&pageToken=...
+GET /api/tasks?maxResults=100&page=1
+```
+- `aggregate=true` → interní stránkování do limitu
+- `include=summary` → vrací summary pro všechny ID
+- `normalizeQuery=true` → normalizuje diakritiku a aliasy
+- `relative=today|tomorrow|thisWeek|lastHour` → relativní čas
+- `snapshotToken=...` → stabilní iterace (mail, calendar)
+- `maxResults` / `pageToken` → kontrola stránkování
+
+### Send to Self (s potvrzením)
+```
+POST /api/gmail/send
+{
+  "subject": "Test",
+  "body": "Message",
+  "toSelf": true,
+  "confirmSelfSend": true
+}
+
+POST /api/gmail/reply/:messageId
+{
+  "body": "Reply",
+  "toSelf": true,
+  "confirmSelfSend": true
+}
+```
+
+---
+
+## 📦 Response Patterns
+
+### Standard Pagination
+```json
+{
+  "success": true,
+  "items": [...],
+  "hasMore": true,
+  "nextPageToken": "token123"
+}
+```
+
+### Aggregate Mode
+```json
+{
+  "success": true,
+  "items": [...],
+  "totalExact": 1234,
+  "pagesConsumed": 15,
+  "hasMore": false,
+  "partial": false,
+  "snapshotToken": "snap456"
+}
+```
+
+### Mail Search se summary
+```json
+{
+  "success": true,
+  "items": [
+    {
+      "id": "msg123",
+      "threadId": "thread456",
+      "summary": {
+        "from": "sender@example.com",
+        "subject": "Subject",
+        "internalDate": "2025-10-17T10:00:00Z"
+      }
+    }
+  ],
+  "idsReturned": 50,
+  "summariesReturned": 50,
+  "hasMore": true,
+  "nextPageToken": "..."
+}
+```
+
+### Contacts Duplicate Detection
+```json
+{
+  "success": true,
+  "contact": {
+    "name": "John Doe",
+    "email": "john@example.com",
+    "notes": "",
+    "realEstate": "Villa Praha",
+    "phone": "+420123456789"
+  },
+  "duplicates": [
+    {
+      "rowIndex": 5,
+      "name": "John Doe",
+      "email": "john@example.com",
+      "notes": "Old note",
+      "realEstate": "",
+      "phone": ""
+    }
+  ],
+  "note": "Duplicate email(s) detected..."
+}
+```
+
+---
+
+## ♻️ ETag Caching Workflow
+```
+# First request
+GET /api/contacts
+→ Response: ETag: "abc123..."
+
+# Subsequent request
+GET /api/contacts
+If-None-Match: "abc123..."
+→ Response: 304 Not Modified (if unchanged)
+```
+
+---
+
+## 🚦 Rate Limits & Environment
+
+| Endpoint Type | Limit | Window |
+|--------------|-------|--------|
+| Standard | 600 requests | 15 min |
+| Heavy (aggregate, batch, bulk) | 150 requests | 15 min |
+
+Single required ENV:
+```
+REQUEST_BUDGET_15M=600  # default
+```
+Derived automatically:
+- RL_MAX_PER_IP = 600
+- RL_MAX_HEAVY_PER_IP = 150
+- PAGE_SIZE_DEFAULT = 100
+- PAGE_SIZE_MAX = 200
+- BATCH_PREVIEW_MAX_IDS = 200
+- BATCH_READ_MAX_IDS = 50
+- AGGREGATE_CAP_MAIL = 2000
+- AGGREGATE_CAP_CAL = 4000
+
+---
+
+## 📋 Contacts Sheet Structure
+```
+A: Name
+B: Email
+C: Notes
+D: RealEstate  ← dříve "Property"
+E: Phone
+```
+Rozsah: `A2:E` (bez pevného limitu řádků)
+
+---
+
+## 🔁 Common Workflows
+- **Search with summary:** `GET /api/gmail/search?relative=today&include=summary`
+- **Aggregate calendar events:** `GET /api/calendar/events?timeMin=2025-10-01&timeMax=2025-10-31&aggregate=true`
+- **Batch preview emails:** `POST /mail/batchPreview` s `kind="summary"`
+- **Send to self (testování):** `POST /api/gmail/send` s `confirmSelfSend=true`
+- **Find contact address:** `GET /contacts/address-suggest?query=john`
+- **Bulk import contacts:** `POST /contacts/bulkUpsert` s více záznamy
+
+---
+
+## 🧰 Error Handling & Checklist
+
+### Standard error payload
+```json
+{
+  "error": "Error Type",
+  "message": "Detailed error message",
+  "code": "ERROR_CODE"
+}
+```
+
+Časté kódy:
+- `AUTH_REQUIRED` (401)
+- `CONFIRM_SELF_SEND_REQUIRED` (400)
+- `CONTACT_NOT_FOUND` (404)
+- `CONTACT_EXISTS` (409)
+
+### Testovací checklist
+- [ ] Aggregate mode + mail search
+- [ ] `include=summary` responses
+- [ ] `normalizeQuery` s diakritikou
+- [ ] Relativní časy (today, tomorrow, thisWeek, lastHour)
+- [ ] Batch preview & batch read
+- [ ] Send-to-self (selže bez confirmSelfSend)
+- [ ] Address suggestions
+- [ ] Bulk upsert + duplicates array
+- [ ] Bulk delete
+- [ ] ETag caching (304 responses)
+- [ ] Rate limiting (standard vs heavy)
+- [ ] Snapshot tokens pro stabilní iteraci
+- [ ] Pagination (`hasMore`, `nextPageToken`)
+
+---
+
+**Status:** ✅ Ready to use  
+**Tested:** ✅ Yes  
 **Documentation:** See EMAIL_SIZE_HANDLING_UPDATE.md
