@@ -11,6 +11,10 @@ import * as contactsService from '../services/contactsService.js';
 import * as tasksService from '../services/tasksService.js';
 import { computeETag } from '../utils/helpers.js';
 
+const rpcTestOverrides = globalThis.__RPC_TEST_OVERRIDES || {};
+const contactsSvc = rpcTestOverrides.contactsService || contactsService;
+const tasksSvc = rpcTestOverrides.tasksService || tasksService;
+
 // ==================== MAIL RPC ====================
 
 export async function mailRpc(req, res) {
@@ -416,7 +420,7 @@ export async function contactsRpc(req, res) {
     
     switch (op) {
       case 'list':
-        result = await contactsService.listAllContacts(req.user.accessToken);
+        result = await contactsSvc.listAllContacts(req.user.accessToken);
         break;
         
       case 'search':
@@ -428,7 +432,7 @@ export async function contactsRpc(req, res) {
             expectedFormat: { op: 'search', params: { query: 'string' } }
           });
         }
-        result = await contactsService.searchContacts(req.user.accessToken, params.query);
+        result = await contactsSvc.searchContacts(req.user.accessToken, params.query);
         break;
         
       case 'add':
@@ -440,7 +444,7 @@ export async function contactsRpc(req, res) {
             expectedFormat: { op: 'add', params: { name: 'string', email: 'string', notes: 'string?', realEstate: 'string?', phone: 'string?' } }
           });
         }
-        result = await contactsService.addContact(req.user.accessToken, params);
+        result = await contactsSvc.addContact(req.user.accessToken, params);
         break;
         
       case 'update':
@@ -452,7 +456,7 @@ export async function contactsRpc(req, res) {
             expectedFormat: { op: 'update', params: { name: 'string', email: 'string', notes: 'string?', realEstate: 'string?', phone: 'string?' } }
           });
         }
-        result = await contactsService.updateContact(req.user.accessToken, params);
+        result = await contactsSvc.updateContact(req.user.accessToken, params);
         break;
         
       case 'delete':
@@ -468,11 +472,11 @@ export async function contactsRpc(req, res) {
             }
           });
         }
-        result = await contactsService.deleteContact(req.user.accessToken, params);
+        result = await contactsSvc.deleteContact(req.user.accessToken, params);
         break;
         
       case 'dedupe':
-        result = await contactsService.findDuplicates(req.user.accessToken);
+        result = await contactsSvc.findDuplicates(req.user.accessToken);
         break;
         
       case 'bulkUpsert':
@@ -484,7 +488,7 @@ export async function contactsRpc(req, res) {
             expectedFormat: { op: 'bulkUpsert', params: { contacts: [{ name: 'string', email: 'string' }] } }
           });
         }
-        result = await contactsService.bulkUpsert(req.user.accessToken, params.contacts);
+        result = await contactsSvc.bulkUpsert(req.user.accessToken, params.contacts);
         break;
         
       case 'bulkDelete':
@@ -502,7 +506,7 @@ export async function contactsRpc(req, res) {
             }
           });
         }
-        result = await contactsService.bulkDelete(req.user.accessToken, {
+        result = await contactsSvc.bulkDelete(req.user.accessToken, {
           emails: params.emails,
           rowIds: params.rowIds
         });
@@ -517,7 +521,7 @@ export async function contactsRpc(req, res) {
             expectedFormat: { op: 'addressSuggest', params: { query: 'partial name or email' } }
           });
         }
-        result = await contactsService.getAddressSuggestions(req.user.accessToken, params.query);
+        result = await contactsSvc.getAddressSuggestions(req.user.accessToken, params.query);
         break;
         
       default:
@@ -570,17 +574,17 @@ export async function tasksRpc(req, res) {
     
     switch (op) {
       case 'list':
-        result = await tasksService.listTasks(req.user.googleSub, params);
+        result = await tasksSvc.listTasks(req.user.googleSub, params);
         break;
         
       case 'get':
-        // TODO: tasksService.getTask not exported - needs implementation
+        // TODO: tasksSvc.getTask not exported - needs implementation
         return res.status(501).json({
           error: 'Not implemented',
           message: 'Get single task not yet implemented',
           code: 'NOT_IMPLEMENTED'
         });
-        // result = await tasksService.getTask(
+        // result = await tasksSvc.getTask(
         //   req.user.googleSub,
         //   params.taskListId,
         //   params.taskId
@@ -588,11 +592,11 @@ export async function tasksRpc(req, res) {
         // break;
         
       case 'create':
-        result = await tasksService.createTask(req.user.googleSub, params);
+        result = await tasksSvc.createTask(req.user.googleSub, params);
         break;
         
       case 'update':
-        result = await tasksService.updateTask(
+        result = await tasksSvc.updateTask(
           req.user.googleSub,
           params.taskListId,
           params.taskId,
@@ -601,7 +605,7 @@ export async function tasksRpc(req, res) {
         break;
         
       case 'delete':
-        result = await tasksService.deleteTask(
+        result = await tasksSvc.deleteTask(
           req.user.googleSub,
           params.taskListId,
           params.taskId
@@ -609,7 +613,7 @@ export async function tasksRpc(req, res) {
         break;
         
       case 'complete':
-        result = await tasksService.updateTask(
+        result = await tasksSvc.updateTask(
           req.user.googleSub,
           params.taskListId,
           params.taskId,
@@ -618,7 +622,7 @@ export async function tasksRpc(req, res) {
         break;
         
       case 'reopen':
-        result = await tasksService.updateTask(
+        result = await tasksSvc.updateTask(
           req.user.googleSub,
           params.taskListId,
           params.taskId,
