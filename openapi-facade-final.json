@@ -1111,7 +1111,7 @@
       "post": {
         "operationId": "contactsRpc",
         "summary": "Advanced contact RPC operations (9 operations)",
-        "description": "Low-level RPC for contacts management. Nine operations: list (get all), search (by query), add (single contact), update (existing), delete (by email), dedupe (find duplicates), bulkUpsert (batch add), bulkDelete (batch delete), addressSuggest (address suggestions from realEstate field). Use /macros/contacts/safeAdd for safe workflow with user confirmation, use /rpc/contacts for direct control.",
+        "description": "Low-level contact operations: list, search, add, update, delete, dedupe, bulkUpsert, bulkDelete, addressSuggest. Use /macros/contacts/safeAdd for safe workflow, /rpc/contacts for direct control.",
         "requestBody": {
           "required": true,
           "content": {
