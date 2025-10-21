@@ -1690,7 +1690,7 @@
       "post": {
         "operationId": "tasksRpc",
         "summary": "Advanced tasks operations",
-        "description": "Low-level tasks RPC for list, create, update, delete, complete. The legacy get shape still returns HTTP 501. Prefer /macros/tasks/overview for grouped views. Returns all tasks without grouping. Accepts params either inside `params` or directly beside `op`.",
+        "description": "Low-level tasks RPC. Operations: list, create, update, delete, complete. A 'get' shape exists but currently returns HTTP 501 (not implemented). Use /macros/tasks/overview for grouped views. RPC returns ALL tasks (no grouping). Use for batch ops. Supports both nested params objects and direct root-level parameters next to 'op'.",
         "requestBody": {
           "required": true,
           "content": {
