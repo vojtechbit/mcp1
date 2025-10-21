@@ -557,7 +557,7 @@
       "post": {
         "operationId": "macroCalendarSchedule",
         "summary": "Create new calendar event (create-only flow)",
-        "description": "CREATE new events only. For MODIFYING existing events, use /rpc/calendar with op:update instead. Accepts either a fixed time or proposals[] (macro checks conflicts and picks first free). When enrichFromContacts='ask', returns confirmToken so you can call /macros/confirm before creating the event. Supports Google Meet links (auto-generated) or adds placeholder text for Zoom. Max 20 attendees. Europe/Prague timezone.",
+        "description": "CREATE new events only; modify via /rpc/calendar op:update. Accept fixed slot or proposals[] (first free). If enrichFromContacts='ask', returns confirmToken for /macros/confirm. Auto adds Google Meet or Zoom placeholder. Limit 20 attendees, Europe/Prague timezone.",
         "requestBody": {
           "required": true,
           "content": {
@@ -967,7 +967,7 @@
       "post": {
         "operationId": "macroContactsSafeAdd",
         "summary": "Bulk add contacts with safety checks",
-        "description": "Bulk import 1-50 contacts with duplicate detection and confirmation. Strategies: 'ask' (confirm duplicates), 'skip' (skip), 'merge' (auto-merge), 'create' (always add). Direct users who want to clean up duplicates entirely to /rpc/contacts (call 'dedupe' then 'bulkDelete'). Use 'realestate' for organization.",
+        "description": "Bulk import 1-50 contacts with duplicate detection plus confirmation. Strategies: ask (confirm), skip, merge, create. For deep cleanup use /rpc/contacts (dedupe then bulkDelete). Field 'realestate' stores organization.",
         "requestBody": {
           "required": true,
           "content": {
