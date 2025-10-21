@@ -1719,6 +1719,27 @@
         "type": "object",
         "required": ["op"],
         "description": "Contacts RPC payload backed 100% by Google Sheets (no MongoDB writes). Always include an 'op' plus optional 'params' that describe how to update the sheet rows.\n\n**WORKFLOW 1 – REMOVE DUPLICATES (keep best contact, delete extras):**\n  Step 1: Call {\"op\": \"dedupe\"} → Returns groups like {rowIndex: [2,3,5]} meaning 3 duplicates\n  Step 2: Pick the best rowIndex (most complete data)\n  Step 3: Call bulkDelete with the extra rowIds only: {\"op\": \"bulkDelete\", \"params\": {\"rowIds\": [3,5]}} to keep row 2\n\n**WORKFLOW 2 – DELETE ENTIRE CONTACT (all occurrences):**\n  Call {\"op\": \"bulkDelete\", \"params\": {\"emails\": [\"john@example.com\"]}} → Deletes ALL rows with that email\n\n**IMPORTANT:** bulkDelete has TWO modes:\n  • emails mode: Deletes COMPLETE contact (all rows with email)\n  • rowIds mode: Deletes SPECIFIC rows (surgical, keeps others with same email)\n\nAlways use rowIds mode for duplicate cleanup (keeps one), emails mode for complete removal.",
+        "properties": {
+          "op": {
+            "type": "string",
+            "enum": [
+              "list",
+              "dedupe",
+              "search",
+              "add",
+              "update",
+              "delete",
+              "bulkUpsert",
+              "bulkDelete",
+              "addressSuggest"
+            ],
+            "description": "Operation to perform against the Google Sheets contacts backend."
+          },
+          "params": {
+            "type": "object",
+            "description": "Operation-specific parameters. The schema depends on the chosen op and is validated via the referenced sub-schemas."
+          }
+        },
         "oneOf": [
           { "$ref": "#/components/schemas/ContactsListRequest" },
           { "$ref": "#/components/schemas/ContactsDedupeRequest" },
@@ -2090,6 +2111,24 @@
         "type": "object",
         "required": ["op"],
         "description": "Tasks RPC payload. Choose the shape that matches the desired operation so the Actions runtime can validate params correctly.",
+        "properties": {
+          "op": {
+            "type": "string",
+            "enum": [
+              "list",
+              "get",
+              "create",
+              "update",
+              "delete",
+              "complete"
+            ],
+            "description": "Operation to execute on Google Tasks."
+          },
+          "params": {
+            "type": "object",
+            "description": "Operation-specific parameters validated by the targeted request schema."
+          }
+        },
         "oneOf": [
           { "$ref": "#/components/schemas/TasksListRequest" },
           { "$ref": "#/components/schemas/TasksGetRequest" },
