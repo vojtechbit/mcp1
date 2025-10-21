@@ -23,7 +23,7 @@ async function searchContacts(req, res) {
       });
     }
 
-    const results = await contactsService.searchContacts(req.user.googleSub, query);
+    const results = await contactsService.searchContacts(req.user.accessToken, query);
 
     // ETag support
     const etag = computeETag(results);
@@ -79,7 +79,7 @@ async function getAddressSuggestions(req, res) {
       });
     }
 
-    const suggestions = await contactsService.getAddressSuggestions(req.user.googleSub, query);
+    const suggestions = await contactsService.getAddressSuggestions(req.user.accessToken, query);
 
     res.json({
       success: true,
@@ -115,7 +115,7 @@ async function getAddressSuggestions(req, res) {
  */
 async function listContacts(req, res) {
   try {
-    const contacts = await contactsService.listAllContacts(req.user.googleSub);
+    const contacts = await contactsService.listAllContacts(req.user.accessToken);
 
     // ETag support
     const etag = computeETag(contacts);
@@ -173,7 +173,7 @@ async function addContact(req, res) {
       });
     }
 
-    const result = await contactsService.addContact(req.user.googleSub, {
+    const result = await contactsService.addContact(req.user.accessToken, {
       name, email, notes, realEstate, phone
     });
 
@@ -245,7 +245,7 @@ async function bulkUpsertContacts(req, res) {
         }
       }
 
-      const result = await contactsService.bulkUpsert(req.user.googleSub, contacts);
+      const result = await contactsService.bulkUpsert(req.user.accessToken, contacts);
 
       const response = {
         success: true,
@@ -297,7 +297,7 @@ async function bulkDeleteContacts(req, res) {
         });
       }
 
-      const result = await contactsService.bulkDelete(req.user.googleSub, { emails, rowIds });
+      const result = await contactsService.bulkDelete(req.user.accessToken, { emails, rowIds });
 
       res.json({
         success: true,
@@ -340,7 +340,7 @@ async function updateContact(req, res) {
       });
     }
 
-    const contact = await contactsService.updateContact(req.user.googleSub, {
+    const contact = await contactsService.updateContact(req.user.accessToken, {
       name, email, notes, realEstate, phone
     });
 
@@ -384,7 +384,7 @@ async function deleteContact(req, res) {
       });
     }
 
-    const result = await contactsService.deleteContact(req.user.googleSub, {
+    const result = await contactsService.deleteContact(req.user.accessToken, {
       email,
       name
     });

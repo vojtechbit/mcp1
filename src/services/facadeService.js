@@ -1290,7 +1290,7 @@ function extractContactFields(contact) {
  * - 'merge': Merge into existing contact
  */
 async function performContactsBulkAdd(
-  googleSub,
+  accessToken,
   entries,
   duplicateFindings,
   strategy
@@ -1308,7 +1308,7 @@ async function performContactsBulkAdd(
     // If no duplicates OR strategy='create' → ADD
     if (finding.candidates.length === 0 || strategy === 'create') {
       try {
-        const created = await contactsService.addContact(googleSub, {
+        const created = await contactsService.addContact(accessToken, {
           name: entry.name,
           email: entry.email,
           phone: entry.phone,
@@ -1344,7 +1344,7 @@ async function performContactsBulkAdd(
       
       try {
         // Merge: update existing contact with new data (preserve existing values)
-        const updated = await contactsService.updateContact(googleSub, {
+        const updated = await contactsService.updateContact(accessToken, {
           rowIndex: existingContact.rowIndex,
           name: existingContact.name, // Keep existing name
           email: existingContact.email, // Keep existing email

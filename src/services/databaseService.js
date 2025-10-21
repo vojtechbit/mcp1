@@ -9,15 +9,11 @@ async function withDbRetry(operation, operationName = 'db operation', maxAttempt
   
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     try {
-      console.log(`[DEBUG] ${operationName} attempt ${attempt}/${maxAttempts}...`);
       const result = await operation();
-      console.log(`[DEBUG] ${operationName} succeeded on attempt ${attempt}`);
       return result;
     } catch (error) {
       lastError = error;
-      console.warn(`[DEBUG] ${operationName} attempt ${attempt}/${maxAttempts} failed:`, error.message);
       
-      // If database not ready, retry
       if (
         error.message?.includes('collection') || 
         error.message?.includes('not a function') ||

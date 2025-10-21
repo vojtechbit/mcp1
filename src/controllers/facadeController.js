@@ -167,7 +167,7 @@ export async function macroCalendarReminderDrafts(req, res) {
 
 export async function macroContactsSafeAdd(req, res) {
   try {
-    const result = await facadeService.contactsSafeAdd(req.user.googleSub, req.body);
+    const result = await facadeService.contactsSafeAdd(req.user.accessToken, req.body);
     res.json(result);
   } catch (error) {
     console.error('❌ Macro contacts safe add failed:', error.message);

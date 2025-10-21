@@ -60,9 +60,11 @@ async function verifyToken(req, res, next) {
       req.user = {
         googleSub: user.googleSub,
         email: user.email,
-        name: user.email.split('@')[0], // Extract name from email
+        name: user.email.split('@')[0],
         picture: null,
-        tokenType: 'proxy' // Mark that this is a proxy token
+        accessToken: user.accessToken,
+        refreshToken: user.refreshToken,
+        tokenType: 'proxy'
       };
       
       console.log(`✅ User authenticated via proxy token: ${user.email}`);
@@ -129,7 +131,8 @@ async function verifyToken(req, res, next) {
       email,
       name: userInfo.name,
       picture: userInfo.picture,
-      tokenType: 'google' // Mark that this is a direct Google token
+      accessToken: token,
+      tokenType: 'google'
     };
 
     console.log(`✅ User authenticated via Google token: ${email} (${googleSub})`)

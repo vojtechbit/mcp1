@@ -416,7 +416,7 @@ export async function contactsRpc(req, res) {
     
     switch (op) {
       case 'list':
-        result = await contactsService.listAllContacts(req.user.googleSub);
+        result = await contactsService.listAllContacts(req.user.accessToken);
         break;
         
       case 'search':
@@ -428,7 +428,7 @@ export async function contactsRpc(req, res) {
             expectedFormat: { op: 'search', params: { query: 'string' } }
           });
         }
-        result = await contactsService.searchContacts(req.user.googleSub, params.query);
+        result = await contactsService.searchContacts(req.user.accessToken, params.query);
         break;
         
       case 'add':
@@ -440,7 +440,7 @@ export async function contactsRpc(req, res) {
             expectedFormat: { op: 'add', params: { name: 'string', email: 'string', notes: 'string?', realEstate: 'string?', phone: 'string?' } }
           });
         }
-        result = await contactsService.addContact(req.user.googleSub, params);
+        result = await contactsService.addContact(req.user.accessToken, params);
         break;
         
       case 'update':
@@ -452,7 +452,7 @@ export async function contactsRpc(req, res) {
             expectedFormat: { op: 'update', params: { name: 'string', email: 'string', notes: 'string?', realEstate: 'string?', phone: 'string?' } }
           });
         }
-        result = await contactsService.updateContact(req.user.googleSub, params);
+        result = await contactsService.updateContact(req.user.accessToken, params);
         break;
         
       case 'delete':
@@ -464,11 +464,11 @@ export async function contactsRpc(req, res) {
             expectedFormat: { op: 'delete', params: { email: 'string', name: 'string?' } }
           });
         }
-        result = await contactsService.deleteContact(req.user.googleSub, params);
+        result = await contactsService.deleteContact(req.user.accessToken, params);
         break;
         
       case 'dedupe':
-        result = await contactsService.findDuplicates(req.user.googleSub);
+        result = await contactsService.findDuplicates(req.user.accessToken);
         break;
         
       case 'bulkUpsert':
@@ -480,7 +480,7 @@ export async function contactsRpc(req, res) {
             expectedFormat: { op: 'bulkUpsert', params: { contacts: [{ name: 'string', email: 'string' }] } }
           });
         }
-        result = await contactsService.bulkUpsert(req.user.googleSub, params.contacts);
+        result = await contactsService.bulkUpsert(req.user.accessToken, params.contacts);
         break;
         
       case 'bulkDelete':
@@ -498,7 +498,7 @@ export async function contactsRpc(req, res) {
             }
           });
         }
-        result = await contactsService.bulkDelete(req.user.googleSub, {
+        result = await contactsService.bulkDelete(req.user.accessToken, {
           emails: params.emails,
           rowIds: params.rowIds
         });
@@ -513,7 +513,7 @@ export async function contactsRpc(req, res) {
             expectedFormat: { op: 'addressSuggest', params: { query: 'partial name or email' } }
           });
         }
-        result = await contactsService.getAddressSuggestions(req.user.googleSub, params.query);
+        result = await contactsService.getAddressSuggestions(req.user.accessToken, params.query);
         break;
         
       default:
