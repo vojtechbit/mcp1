@@ -19,7 +19,7 @@ const CONFIRMATION_TIMEOUT_MS = 15 * 60 * 1000; // 15 minutes
  */
 export async function initializeConfirmationStore() {
   try {
-    const db = getDatabase();
+    const db = await getDatabase();
     const collection = db.collection(COLLECTION_NAME);
     
     // Create TTL index to auto-delete expired confirmations after 15 min
@@ -74,8 +74,8 @@ export async function createPendingConfirmation(googleSub, type, data) {
     confirmedAt: null,
     action: null
   };
-  
-  const db = getDatabase();
+
+  const db = await getDatabase();
   const collection = db.collection(COLLECTION_NAME);
   
   await collection.insertOne(confirmation);
@@ -94,7 +94,7 @@ export async function createPendingConfirmation(googleSub, type, data) {
  * @returns {Promise<object|null>} Confirmation data or null if expired/not found
  */
 export async function getPendingConfirmation(confirmToken) {
-  const db = getDatabase();
+  const db = await getDatabase();
   const collection = db.collection(COLLECTION_NAME);
   
   const confirmation = await collection.findOne({ 
@@ -126,7 +126,7 @@ export async function getPendingConfirmation(confirmToken) {
  * @returns {Promise<object>} Updated confirmation with action applied
  */
 export async function confirmPendingConfirmation(confirmToken, action) {
-  const db = getDatabase();
+  const db = await getDatabase();
   const collection = db.collection(COLLECTION_NAME);
   
   const confirmation = await getPendingConfirmation(confirmToken);
@@ -159,7 +159,7 @@ export async function confirmPendingConfirmation(confirmToken, action) {
  * @param {string} confirmToken
  */
 export async function completePendingConfirmation(confirmToken) {
-  const db = getDatabase();
+  const db = await getDatabase();
   const collection = db.collection(COLLECTION_NAME);
   
   await collection.updateOne(
@@ -173,7 +173,7 @@ export async function completePendingConfirmation(confirmToken) {
  * @param {string} confirmToken
  */
 export async function cancelPendingConfirmation(confirmToken) {
-  const db = getDatabase();
+  const db = await getDatabase();
   const collection = db.collection(COLLECTION_NAME);
   
   await collection.updateOne(

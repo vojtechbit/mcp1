@@ -326,8 +326,7 @@
                     "properties": {
                       "ids": { "type": "array" },
                       "format": { "type": "string" }
-                    },
-                    "additionalProperties": false
+                    }
                   },
                   {
                     "type": "object",
@@ -336,8 +335,7 @@
                     "properties": {
                       "searchQuery": { "type": "string" },
                       "format": { "type": "string" }
-                    },
-                    "additionalProperties": false
+                    }
                   }
                 ]
               },
@@ -762,8 +760,7 @@
                       "template": { "type": "string" },
                       "includeLocation": { "type": "boolean" },
                       "createDrafts": { "type": "boolean" }
-                    },
-                    "additionalProperties": false
+                    }
                   },
                   {
                     "type": "object",
@@ -775,8 +772,7 @@
                       "template": { "type": "string" },
                       "includeLocation": { "type": "boolean" },
                       "createDrafts": { "type": "boolean" }
-                    },
-                    "additionalProperties": false
+                    }
                   }
                 ]
               },
@@ -1125,8 +1121,7 @@
                     "properties": {
                       "op": { "type": "string", "enum": ["list"] },
                       "params": { "type": "object" }
-                    },
-                    "additionalProperties": false
+                    }
                   },
                   {
                     "type": "object",
@@ -1139,11 +1134,9 @@
                         "required": ["query"],
                         "properties": {
                           "query": { "type": "string" }
-                        },
-                        "additionalProperties": false
+                        }
                       }
-                    },
-                    "additionalProperties": false
+                    }
                   },
                   {
                     "type": "object",
@@ -1160,11 +1153,9 @@
                           "phone": { "type": "string" },
                           "realestate": { "type": "string" },
                           "notes": { "type": "string" }
-                        },
-                        "additionalProperties": false
+                        }
                       }
-                    },
-                    "additionalProperties": false
+                    }
                   },
                   {
                     "type": "object",
@@ -1181,11 +1172,9 @@
                           "phone": { "type": "string" },
                           "realestate": { "type": "string" },
                           "notes": { "type": "string" }
-                        },
-                        "additionalProperties": false
+                        }
                       }
-                    },
-                    "additionalProperties": false
+                    }
                   },
                   {
                     "type": "object",
@@ -1198,11 +1187,9 @@
                         "properties": {
                           "email": { "type": "string" },
                           "name": { "type": "string" }
-                        },
-                        "additionalProperties": false
+                        }
                       }
-                    },
-                    "additionalProperties": false
+                    }
                   },
                   {
                     "type": "object",
@@ -1211,8 +1198,7 @@
                     "properties": {
                       "op": { "type": "string", "enum": ["dedupe"] },
                       "params": { "type": "object" }
-                    },
-                    "additionalProperties": false
+                    }
                   },
                   {
                     "type": "object",
@@ -1228,11 +1214,9 @@
                             "type": "array",
                             "items": { "type": "object" }
                           }
-                        },
-                        "additionalProperties": false
+                        }
                       }
-                    },
-                    "additionalProperties": false
+                    }
                   },
                   {
                     "type": "object",
@@ -1257,11 +1241,9 @@
                         "oneOf": [
                           { "required": ["emails"] },
                           { "required": ["rowIds"] }
-                        ],
-                        "additionalProperties": false
+                        ]
                       }
-                    },
-                    "additionalProperties": false
+                    }
                   },
                   {
                     "type": "object",
@@ -1274,11 +1256,9 @@
                         "required": ["query"],
                         "properties": {
                           "query": { "type": "string" }
-                        },
-                        "additionalProperties": false
+                        }
                       }
-                    },
-                    "additionalProperties": false
+                    }
                   }
                 ],
                 "description": "Contact RPC operations with strict operation-level validation. KEY WORKFLOWS:\n\n**WORKFLOW 1 - REMOVE DUPLICATES (keep best contact, delete extras):**\n  Step 1: Call {\"op\": \"dedupe\"} → Returns groups like {rowIndex: [2, 3, 5]} meaning 3 duplicates\n  Step 2: Analyze which rowIndex is BEST (most recent/complete data)\n  Step 3: Call bulkDelete with rowIds of EXTRAS ONLY: {\"op\": \"bulkDelete\", \"params\": {\"rowIds\": [3, 5]}} (keep 2)\n\n**WORKFLOW 2 - DELETE ENTIRE CONTACT (all occurrences):**\n  Call {\"op\": \"bulkDelete\", \"params\": {\"emails\": [\"john@example.com\"]}} → Deletes ALL rows with that email\n\n**IMPORTANT:** bulkDelete has TWO modes:\n  - emails mode: Deletes COMPLETE contact (all rows with email)\n  - rowIds mode: Deletes SPECIFIC rows (surgical, keeps others with same email)\n\nAlways use rowIds mode for duplicate cleanup (keeps one), emails mode for complete removal."
@@ -1395,8 +1375,7 @@
                             "example": "r-70585620154190988",
                             "description": "Draft ID returned from /macros/calendar/reminderDrafts. Format: r-XXXXXXXXX (immutable draft identifier)"
                           }
-                        },
-                        "additionalProperties": false
+                        }
                       },
                       {
                         "type": "object",
@@ -1430,8 +1409,7 @@
                             "type": "string",
                             "description": "BCC recipients (comma-separated, optional)"
                           }
-                        },
-                        "additionalProperties": false
+                        }
                       },
                       {
                         "type": "object",
@@ -1448,8 +1426,7 @@
                             "minimum": 1,
                             "maximum": 100
                           }
-                        },
-                        "additionalProperties": false
+                        }
                       }
                     ],
                     "description": "Parameters depend on op value. Use oneOf validation to understand structure."
