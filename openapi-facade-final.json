@@ -301,25 +301,45 @@
                 "properties": {
                   "ids": {
                     "type": "array",
-                    "items": {
-                      "type": "string"
-                    },
+                    "items": { "type": "string" },
                     "minItems": 1,
                     "maxItems": 50,
-                    "description": "Array of Gmail message IDs to read (from /macros/inbox/overview or /macros/inbox/snippets). Use when you know which specific emails to read. Reads ALL provided IDs. Max 50. Cannot combine with searchQuery."
+                    "description": "Array of Gmail message IDs (alternative to searchQuery)"
                   },
                   "searchQuery": {
                     "type": "string",
                     "maxLength": 255,
-                    "description": "Gmail search query (alternative to ids). Finds and reads ALL matching emails (up to 50). Supports operators: from:, to:, subject:, has:attachment, after:YYYY-MM-DD, before:YYYY-MM-DD, is:unread. Example: 'from:john@example.com subject:meeting' reads ALL John's emails about meetings. Cannot combine with ids."
+                    "description": "Gmail search query (alternative to ids)"
                   },
                   "format": {
                     "type": "string",
                     "enum": ["snippet", "minimal", "full"],
                     "default": "minimal",
-                    "description": "Body format: 'snippet'=300 chars (quick preview), 'minimal'=5KB (recommended - good balance), 'full'=complete body (use for long emails or when user needs everything). Default 'minimal' works for 95% of emails."
+                    "description": "Body format: 'snippet'=300 chars, 'minimal'=5KB (recommended), 'full'=complete."
                   }
-                }
+                },
+                "oneOf": [
+                  {
+                    "type": "object",
+                    "title": "Read by IDs",
+                    "required": ["ids"],
+                    "properties": {
+                      "ids": { "type": "array" },
+                      "format": { "type": "string" }
+                    },
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "object",
+                    "title": "Read by search query",
+                    "required": ["searchQuery"],
+                    "properties": {
+                      "searchQuery": { "type": "string" },
+                      "format": { "type": "string" }
+                    },
+                    "additionalProperties": false
+                  }
+                ]
               },
               "examples": {
                 "readByIds": {
@@ -709,31 +729,56 @@
                   "window": {
                     "type": "string",
                     "enum": ["today", "nextHours"],
-                    "default": "today",
-                    "description": "Time window: 'today'=ALL events in current day (00:00-23:59), 'nextHours'=next N hours from now (requires 'hours' parameter)"
+                    "description": "Time window: 'today'=ALL events today, 'nextHours'=next N hours (requires hours param)"
                   },
                   "hours": {
                     "type": "integer",
                     "minimum": 1,
                     "maximum": 24,
-                    "description": "REQUIRED when window='nextHours'. Lookahead window in hours (1-24). Example: 4=next 4 hours from now"
+                    "description": "Lookahead window in hours (required when window='nextHours')"
                   },
                   "template": {
                     "type": "string",
                     "maxLength": 2000,
-                    "description": "Custom email body template (optional). Use placeholders: {title}, {start}, {end}, {location}, {recipientName}. If omitted, uses default friendly reminder format."
+                    "description": "Custom email template (optional)"
                   },
                   "includeLocation": {
                     "type": "boolean",
                     "default": true,
-                    "description": "If true, includes event location in reminder. If false, omits location line."
+                    "description": "Include location in reminder"
                   },
                   "createDrafts": {
                     "type": "boolean",
                     "default": true,
-                    "description": "If true (default), creates Gmail drafts immediately. If false, just previews what drafts would be created."
+                    "description": "Create drafts or preview only"
                   }
-                }
+                },
+                "oneOf": [
+                  {
+                    "type": "object",
+                    "title": "Generate for today",
+                    "properties": {
+                      "window": { "type": "string" },
+                      "template": { "type": "string" },
+                      "includeLocation": { "type": "boolean" },
+                      "createDrafts": { "type": "boolean" }
+                    },
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "object",
+                    "title": "Generate for next N hours",
+                    "required": ["hours"],
+                    "properties": {
+                      "window": { "type": "string" },
+                      "hours": { "type": "integer" },
+                      "template": { "type": "string" },
+                      "includeLocation": { "type": "boolean" },
+                      "createDrafts": { "type": "boolean" }
+                    },
+                    "additionalProperties": false
+                  }
+                ]
               },
               "examples": {
                 "todayReminders": {
@@ -813,7 +858,7 @@
       "post": {
         "operationId": "macroContactsSafeAdd",
         "summary": "Add contacts with safe deduplication workflow",
-        "description": "Bulk add 1-50 contacts with automatic duplicate detection based on email/name/phone matching. Supports three strategies: 'ask' (ask user to decide), 'skip' (skip duplicates), 'merge' (auto-merge into existing). Default 'ask' is safest - returns duplicates for user confirmation. For bulk imports, use 'merge' to auto-consolidate. Use 'realestate' field for company/organization.",
+        "description": "Bulk add 1-50 contacts with duplicate detection. Strategies: 'ask' (confirm duplicates), 'skip' (skip), 'merge' (auto-merge), 'create' (always add). Use 'realestate' for organization.",
         "requestBody": {
           "required": true,
           "content": {
@@ -1501,93 +1546,134 @@
                       {
                         "type": "object",
                         "title": "search - Search contacts",
-                        "required": ["query"],
+                        "required": ["params"],
                         "properties": {
-                          "query": {
-                            "type": "string",
-                            "example": "john",
-                            "description": "Search query. Matches against name, email, notes, realEstate, phone fields."
+                          "params": {
+                            "type": "object",
+                            "required": ["query"],
+                            "properties": {
+                              "query": {
+                                "type": "string",
+                                "example": "john",
+                                "description": "Search query. Matches against name, email, notes, realEstate, phone fields."
+                              }
+                            },
+                            "additionalProperties": false
                           }
-                        },
-                        "additionalProperties": false
+                        }
                       },
                       {
                         "type": "object",
                         "title": "add - Add single contact",
-                        "required": ["name", "email"],
+                        "required": ["params"],
                         "properties": {
-                          "name": { "type": "string", "example": "John Smith" },
-                          "email": { "type": "string", "format": "email", "example": "john@example.com" },
-                          "notes": { "type": "string" },
-                          "realEstate": { "type": "string" },
-                          "phone": { "type": "string" }
-                        },
-                        "additionalProperties": false
+                          "params": {
+                            "type": "object",
+                            "required": ["name", "email"],
+                            "properties": {
+                              "name": { "type": "string", "example": "John Smith" },
+                              "email": { "type": "string", "format": "email", "example": "john@example.com" },
+                              "notes": { "type": "string" },
+                              "realEstate": { "type": "string" },
+                              "phone": { "type": "string" }
+                            },
+                            "additionalProperties": false
+                          }
+                        }
                       },
                       {
                         "type": "object",
                         "title": "update - Update contact",
-                        "required": ["name", "email"],
+                        "required": ["params"],
                         "properties": {
-                          "name": { "type": "string", "description": "Contact name (used to identify which row to update)" },
-                          "email": { "type": "string", "format": "email", "description": "Contact email (used to identify which row to update)" },
-                          "notes": { "type": "string" },
-                          "realEstate": { "type": "string" },
-                          "phone": { "type": "string" }
-                        },
-                        "additionalProperties": false
+                          "params": {
+                            "type": "object",
+                            "required": ["name", "email"],
+                            "properties": {
+                              "name": { "type": "string", "description": "Contact name (used to identify which row to update)" },
+                              "email": { "type": "string", "format": "email", "description": "Contact email (used to identify which row to update)" },
+                              "notes": { "type": "string" },
+                              "realEstate": { "type": "string" },
+                              "phone": { "type": "string" }
+                            },
+                            "additionalProperties": false
+                          }
+                        }
                       },
                       {
                         "type": "object",
                         "title": "delete - Delete contact",
-                        "required": ["email"],
+                        "required": ["params"],
                         "properties": {
-                          "email": { "type": "string", "format": "email", "example": "john@example.com", "description": "Contact email (required to identify which row to delete)" },
-                          "name": { "type": "string", "description": "Contact name (optional, for additional validation)" }
-                        },
-                        "additionalProperties": false
+                          "params": {
+                            "type": "object",
+                            "required": ["email"],
+                            "properties": {
+                              "email": { "type": "string", "format": "email", "example": "john@example.com", "description": "Contact email (required to identify which row to delete)" },
+                              "name": { "type": "string", "description": "Contact name (optional, for additional validation)" }
+                            },
+                            "additionalProperties": false
+                          }
+                        }
                       },
                       {
                         "type": "object",
                         "title": "bulkUpsert - Batch add contacts",
-                        "required": ["contacts"],
+                        "required": ["params"],
                         "properties": {
-                          "contacts": {
-                            "type": "array",
-                            "minItems": 1,
-                            "items": {
-                              "type": "object",
-                              "required": ["name", "email"],
-                              "properties": {
-                                "name": { "type": "string" },
-                                "email": { "type": "string", "format": "email" },
-                                "notes": { "type": "string" },
-                                "realEstate": { "type": "string" },
-                                "phone": { "type": "string" }
+                          "params": {
+                            "type": "object",
+                            "required": ["contacts"],
+                            "properties": {
+                              "contacts": {
+                                "type": "array",
+                                "minItems": 1,
+                                "items": {
+                                  "type": "object",
+                                  "required": ["name", "email"],
+                                  "properties": {
+                                    "name": { "type": "string" },
+                                    "email": { "type": "string", "format": "email" },
+                                    "notes": { "type": "string" },
+                                    "realEstate": { "type": "string" },
+                                    "phone": { "type": "string" }
+                                  }
+                                },
+                                "description": "Array of contacts to add. Always appends (no auto-merge). Duplicates by email are detected and reported."
                               }
                             },
-                            "description": "Array of contacts to add. Always appends (no auto-merge). Duplicates by email are detected and reported."
+                            "additionalProperties": false
                           }
-                        },
-                        "additionalProperties": false
+                        }
                       },
                       {
                         "type": "object",
-                        "title": "bulkDelete - Batch delete contacts",
+                        "title": "bulkDelete by emails",
+                        "required": ["emails"],
                         "properties": {
                           "emails": {
                             "type": "array",
                             "items": { "type": "string", "format": "email" },
                             "example": ["john@example.com", "jane@example.com"],
-                            "description": "Array of email addresses to delete"
-                          },
+                            "description": "Array of email addresses to delete. Use this OR rowIds."
+                          }
+                        },
+                        "description": "Delete contacts by email addresses.",
+                        "additionalProperties": false
+                      },
+                      {
+                        "type": "object",
+                        "title": "bulkDelete by rowIds",
+                        "required": ["rowIds"],
+                        "properties": {
                           "rowIds": {
                             "type": "array",
                             "items": { "type": "integer" },
-                            "description": "Alternative: array of row IDs (1-based sheet row indices)"
+                            "example": [2, 3, 5],
+                            "description": "Array of row IDs to delete (1-based sheet row indices). Use this OR emails."
                           }
                         },
-                        "description": "Provide EITHER emails array OR rowIds array. Returns count of deleted contacts.",
+                        "description": "Delete contacts by sheet row IDs (1-based).",
                         "additionalProperties": false
                       },
                       {
