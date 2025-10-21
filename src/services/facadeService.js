@@ -989,6 +989,46 @@ export async function tasksOverview(googleSub, params) {
 }
 
 /**
+ * Format ISO datetime range to human-readable Czech format
+ * @param {string} startIso - Start time ISO 8601 string
+ * @param {string} endIso - End time ISO 8601 string
+ * @returns {string} Formatted time range like "15:00-16:00 21.10 2025"
+ */
+function formatTimeRangeForEmail(startIso, endIso) {
+  if (!startIso || !endIso) return '';
+  try {
+    const startDate = new Date(startIso);
+    const endDate = new Date(endIso);
+    
+    // Formátování času (HH:MM)
+    const startTime = startDate.toLocaleString('cs-CZ', {
+      hour: '2-digit',
+      minute: '2-digit',
+      timeZone: 'Europe/Prague'
+    });
+    
+    const endTime = endDate.toLocaleString('cs-CZ', {
+      hour: '2-digit',
+      minute: '2-digit',
+      timeZone: 'Europe/Prague'
+    });
+    
+    // Formátování data (DD.MM YYYY)
+    const dateStr = startDate.toLocaleString('cs-CZ', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      timeZone: 'Europe/Prague'
+    });
+    
+    return `${startTime}-${endTime} ${dateStr}`;
+  } catch (e) {
+    console.warn('Failed to format time range:', startIso, endIso, e.message);
+    return `${startIso} - ${endIso}`;
+  }
+}
+
+/**
  * Format ISO datetime to human-readable Czech format
  * @param {string} isoString - ISO 8601 datetime string
  * @returns {string} Formatted time like "21.10.2025 15:00"
@@ -1076,18 +1116,17 @@ export async function calendarReminderDrafts(googleSub, params) {
       const subject = `Reminder: ${event.summary}`;
       const locationText = includeLocation && event.location ? `\nLocation: ${event.location}` : '';
       
-      // Format times to human-readable Czech format
-      const startTime = formatTimeForEmail(event.start.dateTime || event.start.date);
-      const endTime = formatTimeForEmail(event.end.dateTime || event.end.date);
+      // Format times to human-readable Czech format (HH:MM-HH:MM DD.MM YYYY)
+      const timeRange = formatTimeRangeForEmail(event.start.dateTime || event.start.date, event.end.dateTime || event.end.date);
       
       const body = template 
         ? template
             .replace(/{title}/g, event.summary || '')
-            .replace(/{start}/g, startTime)
-            .replace(/{end}/g, endTime)
+            .replace(/{start}/g, event.start.dateTime || event.start.date)
+            .replace(/{end}/g, event.end.dateTime || event.end.date)
             .replace(/{location}/g, event.location || '')
             .replace(/{recipientName}/g, attendee.displayName || attendee.email)
-        : `Ahoj${attendee.displayName ? ' ' + attendee.displayName : ''},\n\njej potvrzujem, že s tebou počítám na akci "${event.summary}"\nČas: ${startTime}${endTime ? ` - ${endTime}` : ''}${locationText}\n\nTěším se!`;
+        : `Ahoj${attendee.displayName ? ' ' + attendee.displayName : ''},\n\njej potvrzujem, že s tebou počítám na akci "${event.summary}"\nČas: ${timeRange}${locationText}\n\nTěším se!`;
       
       let draftId = null;
       if (createDrafts) {

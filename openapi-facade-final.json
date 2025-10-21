@@ -1031,8 +1031,77 @@
                     "description": "Operation: search, read (full email), send (direct OR by draftId), reply, modify"
                   },
                   "params": {
-                    "type": "object",
-                    "description": "FIXED: Operation parameters structure. For 'send' DIRECT: params must have {to, subject, body}. For 'send' DRAFT: params must have {draftId}. For other ops: depends on operation."
+                    "oneOf": [
+                      {
+                        "type": "object",
+                        "title": "Send Draft",
+                        "description": "Send existing draft by ID (op=send with draftId)",
+                        "required": ["draftId"],
+                        "properties": {
+                          "draftId": {
+                            "type": "string",
+                            "pattern": "^r-[0-9]+$",
+                            "example": "r-70585620154190988",
+                            "description": "Draft ID returned from /macros/calendar/reminderDrafts. Format: r-XXXXXXXXX (immutable draft identifier)"
+                          }
+                        },
+                        "additionalProperties": false
+                      },
+                      {
+                        "type": "object",
+                        "title": "Send Direct Email",
+                        "description": "Send email directly without draft (op=send with to+subject+body)",
+                        "required": ["to", "subject", "body"],
+                        "properties": {
+                          "to": {
+                            "type": "string",
+                            "format": "email",
+                            "example": "recipient@example.com",
+                            "description": "Recipient email address"
+                          },
+                          "subject": {
+                            "type": "string",
+                            "maxLength": 255,
+                            "example": "Meeting tomorrow",
+                            "description": "Email subject line"
+                          },
+                          "body": {
+                            "type": "string",
+                            "maxLength": 10000,
+                            "example": "Hi, reminder about meeting at 7am",
+                            "description": "Email body (plain text)"
+                          },
+                          "cc": {
+                            "type": "string",
+                            "description": "CC recipients (comma-separated, optional)"
+                          },
+                          "bcc": {
+                            "type": "string",
+                            "description": "BCC recipients (comma-separated, optional)"
+                          }
+                        },
+                        "additionalProperties": false
+                      },
+                      {
+                        "type": "object",
+                        "title": "Search",
+                        "description": "Search emails (op=search)",
+                        "required": ["query"],
+                        "properties": {
+                          "query": {
+                            "type": "string",
+                            "description": "Gmail search query (from:, to:, subject:, has:attachment, etc.)"
+                          },
+                          "maxResults": {
+                            "type": "integer",
+                            "minimum": 1,
+                            "maximum": 100
+                          }
+                        },
+                        "additionalProperties": false
+                      }
+                    ],
+                    "description": "Parameters depend on op value. Use oneOf validation to understand structure."
                   }
                 }
               },

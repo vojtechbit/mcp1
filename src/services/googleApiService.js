@@ -563,7 +563,18 @@ async function createDraft(googleSub, { to, subject, body }) {
       throw new Error('Draft creation failed - draft ID is not a string');
     }
 
-    console.log(`✅ Draft created successfully. ID: ${result.data.id}`);
+    // 🔍 DEBUG: Inspekce kompletního response
+    console.log(`✅ Draft created successfully`);
+    console.log('[DRAFT_RESPONSE_DEBUG]', {
+      hasId: !!result.data.id,
+      id: result.data.id,
+      idType: typeof result.data.id,
+      hasMessage: !!result.data.message,
+      messageId: result.data.message?.id,
+      messageIdType: typeof result.data.message?.id,
+      allKeys: Object.keys(result.data)
+    });
+    console.log(`✅ Using draft.id: ${result.data.id}`);
     return result.data;
   });
 }
