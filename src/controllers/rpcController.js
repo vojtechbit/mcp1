@@ -80,9 +80,39 @@ export async function mailRpc(req, res) {
         }
         
         if (params.draftId) {
-          // Send existing draft
+          // Send existing draft - VALIDATE draftId format
+          if (typeof params.draftId !== 'string' || params.draftId.trim() === '') {
+            return res.status(400).json({
+              error: 'Invalid draftId format',
+              message: 'draftId must be a non-empty string',
+              code: 'INVALID_PARAM',
+              received: { type: typeof params.draftId, value: params.draftId }
+            });
+          }
           result = await gmailService.sendDraft(req.user.googleSub, params.draftId);
         } else if (params.to && params.subject && params.body) {
+          // Create and send new email - VALIDATE fields
+          if (typeof params.to !== 'string' || params.to.trim() === '') {
+            return res.status(400).json({
+              error: 'Invalid email format',
+              message: 'to field must be non-empty email string',
+              code: 'INVALID_PARAM'
+            });
+          }
+          if (typeof params.subject !== 'string' || params.subject.trim() === '') {
+            return res.status(400).json({
+              error: 'Invalid subject format',
+              message: 'subject field must be non-empty string',
+              code: 'INVALID_PARAM'
+            });
+          }
+          if (typeof params.body !== 'string' || params.body.trim() === '') {
+            return res.status(400).json({
+              error: 'Invalid body format',
+              message: 'body field must be non-empty string',
+              code: 'INVALID_PARAM'
+            });
+          }
           // Create and send new email
           if (params.toSelf && !params.confirmSelfSend) {
             return res.status(400).json({

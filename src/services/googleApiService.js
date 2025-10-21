@@ -546,6 +546,24 @@ async function createDraft(googleSub, { to, subject, body }) {
       }
     });
 
+    // ✅ VALIDACE draft response
+    if (!result.data) {
+      console.error('❌ [DRAFT_ERROR] Gmail API vrátila prázdný response');
+      throw new Error('Draft creation failed - empty response from Gmail API');
+    }
+
+    if (!result.data.id) {
+      console.error('🔴 [DRAFT_ERROR] Draft ID chybí v odpovědi!');
+      console.error('Full response:', JSON.stringify(result.data, null, 2));
+      throw new Error('Draft creation failed - missing draft ID in response');
+    }
+
+    if (typeof result.data.id !== 'string') {
+      console.error('⚠️ [DRAFT_ERROR] Draft ID má nesprávný typ:', typeof result.data.id);
+      throw new Error('Draft creation failed - draft ID is not a string');
+    }
+
+    console.log(`✅ Draft created successfully. ID: ${result.data.id}`);
     return result.data;
   });
 }

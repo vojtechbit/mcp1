@@ -989,6 +989,29 @@ export async function tasksOverview(googleSub, params) {
 }
 
 /**
+ * Format ISO datetime to human-readable Czech format
+ * @param {string} isoString - ISO 8601 datetime string
+ * @returns {string} Formatted time like "21.10.2025 15:00"
+ */
+function formatTimeForEmail(isoString) {
+  if (!isoString) return '';
+  try {
+    const date = new Date(isoString);
+    return date.toLocaleString('cs-CZ', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      timeZone: 'Europe/Prague'
+    });
+  } catch (e) {
+    console.warn('Failed to format time:', isoString, e.message);
+    return isoString;
+  }
+}
+
+/**
  * Reminder Drafts - bulk email reminders for today's events
  */
 export async function calendarReminderDrafts(googleSub, params) {
@@ -1053,14 +1076,18 @@ export async function calendarReminderDrafts(googleSub, params) {
       const subject = `Reminder: ${event.summary}`;
       const locationText = includeLocation && event.location ? `\nLocation: ${event.location}` : '';
       
+      // Format times to human-readable Czech format
+      const startTime = formatTimeForEmail(event.start.dateTime || event.start.date);
+      const endTime = formatTimeForEmail(event.end.dateTime || event.end.date);
+      
       const body = template 
         ? template
             .replace(/{title}/g, event.summary || '')
-            .replace(/{start}/g, event.start.dateTime || event.start.date)
-            .replace(/{end}/g, event.end.dateTime || event.end.date)
+            .replace(/{start}/g, startTime)
+            .replace(/{end}/g, endTime)
             .replace(/{location}/g, event.location || '')
             .replace(/{recipientName}/g, attendee.displayName || attendee.email)
-        : `Hi${attendee.displayName ? ' ' + attendee.displayName : ''},\n\nThis is a reminder about: ${event.summary}\nTime: ${event.start.dateTime || event.start.date}${locationText}\n\nSee you there!`;
+        : `Ahoj${attendee.displayName ? ' ' + attendee.displayName : ''},\n\njej potvrzujem, že s tebou počítám na akci "${event.summary}"\nČas: ${startTime}${endTime ? ` - ${endTime}` : ''}${locationText}\n\nTěším se!`;
       
       let draftId = null;
       if (createDrafts) {
@@ -1070,14 +1097,38 @@ export async function calendarReminderDrafts(googleSub, params) {
             subject,
             body
           });
+          
+          // ✅ VALIDACE draft ID
+          if (!draft) {
+            console.error(`❌ [DRAFT_VALIDATION] Draft object is null/undefined for ${attendee.email}`);
+            throw new Error('Gmail API returned null draft');
+          }
+          
+          if (!draft.id) {
+            console.error(`❌ [DRAFT_VALIDATION] Draft ID is missing for ${attendee.email}`);
+            console.error('Draft object keys:', Object.keys(draft));
+            console.error('Full draft:', JSON.stringify(draft, null, 2));
+            throw new Error('Draft created but missing ID field');
+          }
+          
+          if (typeof draft.id !== 'string') {
+            console.error(`⚠️ [DRAFT_VALIDATION] Draft ID type is ${typeof draft.id}, expected string: ${draft.id}`);
+            throw new Error(`Invalid draft ID type: ${typeof draft.id}`);
+          }
+          
+          // ✅ Berme DRAFT ID (ne message ID)
           draftId = draft.id;
+          console.log(`✅ [DRAFT_SUCCESS] Draft created with ID: ${draftId} for ${attendee.email}`);
+          
         } catch (error) {
-          console.error(`Failed to create draft for ${attendee.email}:`, error.message);
+          console.error(`❌ [DRAFT_ERROR] Failed to create draft for ${attendee.email}:`, error.message);
+          console.error('Stack:', error.stack);
+          draftId = null;  // Ensure null on failure
         }
       }
       
       drafts.push({
-        draftId,
+        draftId,  // Nyní korektní draft ID nebo null
         to: attendee.email,
         subject,
         preview: body.substring(0, 200),

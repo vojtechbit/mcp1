@@ -693,6 +693,122 @@
         }
       }
     },
+    "/macros/calendar/reminderDrafts": {
+      "post": {
+        "operationId": "macroCalendarReminderDrafts",
+        "summary": "Generate reminder email drafts for upcoming events",
+        "description": "Create Gmail draft reminders for event attendees. Scopes: today (all day's events) or nextHours (next N hours). Returns draft list with generated emails ready to send. Email templates customizable.",
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "description": "Generate reminder drafts for events. Scope: 'today'=all day's events, 'nextHours'=next N hours. Creates one draft per attendee. Templates customizable with {title}, {start}, {end}, {location}, {recipientName}.",
+                "properties": {
+                  "window": {
+                    "type": "string",
+                    "enum": ["today", "nextHours"],
+                    "default": "today",
+                    "description": "Time window: 'today'=ALL events in current day (00:00-23:59), 'nextHours'=next N hours from now (requires 'hours' parameter)"
+                  },
+                  "hours": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 24,
+                    "description": "REQUIRED when window='nextHours'. Lookahead window in hours (1-24). Example: 4=next 4 hours from now"
+                  },
+                  "template": {
+                    "type": "string",
+                    "maxLength": 2000,
+                    "description": "Custom email body template (optional). Use placeholders: {title}, {start}, {end}, {location}, {recipientName}. If omitted, uses default friendly reminder format."
+                  },
+                  "includeLocation": {
+                    "type": "boolean",
+                    "default": true,
+                    "description": "If true, includes event location in reminder. If false, omits location line."
+                  },
+                  "createDrafts": {
+                    "type": "boolean",
+                    "default": true,
+                    "description": "If true (default), creates Gmail drafts immediately. If false, just previews what drafts would be created."
+                  }
+                }
+              },
+              "examples": {
+                "todayReminders": {
+                  "summary": "Generate reminders for ALL today's events",
+                  "value": {
+                    "window": "today"
+                  }
+                },
+                "nextHoursReminders": {
+                  "summary": "Generate reminders for next 4 hours only",
+                  "value": {
+                    "window": "nextHours",
+                    "hours": 4
+                  }
+                },
+                "customTemplate": {
+                  "summary": "Use custom reminder template",
+                  "value": {
+                    "window": "today",
+                    "template": "Hi {recipientName},\n\nDon't forget about {title}!\nWhen: {start}\nWhere: {location}\n\nLooking forward to seeing you!"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successfully generated reminder drafts",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "drafts": {
+                      "type": "array",
+                      "description": "Email drafts created (one per attendee per event). Ready to send or customize further.",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "draftId": {
+                            "type": "string",
+                            "description": "Gmail draft ID. Use to access/modify/send via Gmail API. Null if createDrafts=false."
+                          },
+                          "to": {
+                            "type": "string",
+                            "description": "Recipient email address (event attendee)"
+                          },
+                          "subject": {
+                            "type": "string",
+                            "description": "Email subject line. Format: 'Reminder: {event title}'"
+                          },
+                          "preview": {
+                            "type": "string",
+                            "description": "First 200 chars of email body for preview"
+                          },
+                          "eventId": {
+                            "type": "string",
+                            "description": "Google Calendar event ID. Use to reference original event."
+                          }
+                        }
+                      }
+                    },
+                    "subset": {
+                      "type": "boolean",
+                      "description": "Always false. All matching events included (no pagination)"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/macros/contacts/safeAdd": {
       "post": {
         "operationId": "macroContactsSafeAdd",
