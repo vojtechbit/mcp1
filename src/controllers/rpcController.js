@@ -7,8 +7,8 @@
 
 import * as gmailService from '../services/googleApiService.js';
 import * as calendarService from '../services/googleApiService.js';
-import * as contactsService from '../services/googleApiService.js';
-import * as tasksService from '../services/googleApiService.js';
+import * as contactsService from '../services/contactsService.js';
+import * as tasksService from '../services/tasksService.js';
 import { computeETag } from '../utils/helpers.js';
 
 // ==================== MAIL RPC ====================
@@ -114,7 +114,7 @@ export async function mailRpc(req, res) {
       case 'modify':
         result = await Promise.all(
           (params.ids || []).map(id =>
-            gmailService.modifyMessage(req.user.googleSub, id, params.actions)
+            gmailService.modifyMessageLabels(req.user.googleSub, id, params.actions)
           )
         );
         break;
@@ -213,15 +213,15 @@ export async function calendarRpc(req, res) {
     
     switch (op) {
       case 'list':
-        result = await calendarService.listEvents(req.user.googleSub, params);
+        result = await calendarService.listCalendarEvents(req.user.googleSub, params);
         break;
         
       case 'get':
-        result = await calendarService.getEvent(req.user.googleSub, params.eventId);
+        result = await calendarService.getCalendarEvent(req.user.googleSub, params.eventId);
         break;
         
       case 'create':
-        result = await calendarService.createEvent(req.user.googleSub, params);
+        result = await calendarService.createCalendarEvent(req.user.googleSub, params);
         break;
         
       case 'update':
@@ -290,7 +290,7 @@ export async function calendarRpc(req, res) {
         break;
         
       case 'delete':
-        result = await calendarService.deleteEvent(req.user.googleSub, params.eventId);
+        result = await calendarService.deleteCalendarEvent(req.user.googleSub, params.eventId);
         break;
         
       case 'checkConflicts':
@@ -367,7 +367,7 @@ export async function contactsRpc(req, res) {
     
     switch (op) {
       case 'list':
-        result = await contactsService.listContacts(req.user.googleSub, params);
+        result = await contactsService.listAllContacts(req.user.googleSub, params);
         break;
         
       case 'search':
@@ -396,7 +396,7 @@ export async function contactsRpc(req, res) {
         break;
         
       case 'bulkUpsert':
-        result = await contactsService.bulkUpsertContacts(req.user.googleSub, params.entries);
+        result = await contactsService.bulkUpsert(req.user.googleSub, params.entries);
         break;
         
       default:
@@ -453,12 +453,18 @@ export async function tasksRpc(req, res) {
         break;
         
       case 'get':
-        result = await tasksService.getTask(
-          req.user.googleSub,
-          params.taskListId,
-          params.taskId
-        );
-        break;
+        // TODO: tasksService.getTask not exported - needs implementation
+        return res.status(501).json({
+          error: 'Not implemented',
+          message: 'Get single task not yet implemented',
+          code: 'NOT_IMPLEMENTED'
+        });
+        // result = await tasksService.getTask(
+        //   req.user.googleSub,
+        //   params.taskListId,
+        //   params.taskId
+        // );
+        // break;
         
       case 'create':
         result = await tasksService.createTask(req.user.googleSub, params);

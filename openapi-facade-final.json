@@ -7,7 +7,7 @@
   },
   "servers": [
     {
-      "url": "https://mcp1-oauth-server.onrender.com",
+      "url": "https://mcp1-oauth-server.onrender.com/api",
       "description": "Production server"
     }
   ],
