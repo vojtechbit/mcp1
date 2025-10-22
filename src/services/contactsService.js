@@ -17,6 +17,8 @@ dotenv.config();
 
 const CONTACTS_SHEET_NAME = 'MCP1 Contacts';
 const CONTACTS_RANGE = 'A2:E';
+const CONTACTS_EXPECTED_HEADERS = ['Name', 'Email', 'Notes', 'RealEstate', 'Phone'];
+const GPT_RETRY_EXAMPLE_EMAIL = 'alex@example.com';
 
 /**
  * Get authenticated Sheets API client
@@ -101,31 +103,35 @@ async function createContactsSheet(accessToken) {
     });
 
     const spreadsheetId = createResponse.data.spreadsheetId;
+    const primarySheet = createResponse.data.sheets?.[0]?.properties || {};
+    const sheetId = primarySheet.sheetId;
 
     // Add header row
     await sheets.spreadsheets.values.update({
       spreadsheetId,
       range: 'A1:E1',
       valueInputOption: 'RAW',
-      requestBody: { values: [['Name', 'Email', 'Notes', 'RealEstate', 'Phone']] }
+      requestBody: { values: [CONTACTS_EXPECTED_HEADERS] }
     });
 
     // Make header bold
-    await sheets.spreadsheets.batchUpdate({
-      spreadsheetId,
-      requestBody: {
-        requests: [{
-          repeatCell: {
-            range: { sheetId: 0, startRowIndex: 0, endRowIndex: 1 },
-            cell: { userEnteredFormat: { textFormat: { bold: true } } },
-            fields: 'userEnteredFormat.textFormat.bold'
-          }
-        }]
-      }
-    });
+    if (typeof sheetId === 'number') {
+      await sheets.spreadsheets.batchUpdate({
+        spreadsheetId,
+        requestBody: {
+          requests: [{
+            repeatCell: {
+              range: { sheetId, startRowIndex: 0, endRowIndex: 1 },
+              cell: { userEnteredFormat: { textFormat: { bold: true } } },
+              fields: 'userEnteredFormat.textFormat.bold'
+            }
+          }]
+        }
+      });
+    }
 
     console.log(`✅ Contact sheet created: ${spreadsheetId}`);
-    return spreadsheetId;
+    return { spreadsheetId, sheetId, sheetTitle: primarySheet.title };
 
   } catch (error) {
     console.error('❌ [SHEETS_ERROR] Failed to create contacts sheet');
@@ -139,13 +145,153 @@ async function createContactsSheet(accessToken) {
 async function getOrCreateContactsSheet(accessToken) {
   let spreadsheetId = await findContactsSheet(accessToken);
   if (!spreadsheetId) {
-    spreadsheetId = await createContactsSheet(accessToken);
+    const created = await createContactsSheet(accessToken);
+    spreadsheetId = created.spreadsheetId;
   }
   return spreadsheetId;
 }
 
 function stripDiacritics(str) {
   return str.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+}
+
+function normalizeHeaderValue(value) {
+  return String(value ?? '').trim().toLowerCase();
+}
+
+function isContactsHeaderRow(row) {
+  if (!Array.isArray(row)) return false;
+  if (row.length < 2) return false;
+  const normalized = row.map(normalizeHeaderValue);
+  return normalized[0] === 'name' && normalized[1] === 'email';
+}
+
+function quoteSheetTitleForRange(title) {
+  const safeTitle = String(title ?? '').replace(/'/g, "''");
+  return `'${safeTitle}'`;
+}
+
+async function getContactsSheetInfo(accessToken) {
+  const sheets = await getSheetsClient(accessToken);
+  const spreadsheetId = await getOrCreateContactsSheet(accessToken);
+
+  const spreadsheet = await sheets.spreadsheets.get({
+    spreadsheetId,
+    fields: 'sheets(properties(sheetId,title,index))'
+  });
+
+  const sheetsMeta = spreadsheet.data.sheets || [];
+  if (sheetsMeta.length === 0) {
+    throw buildContactsSheetMismatchError(
+      new Error('Contacts spreadsheet is missing worksheets'),
+      { reason: 'NO_WORKSHEETS', spreadsheetId, operation: 'contacts.resolveSheet' }
+    );
+  }
+
+  const ranges = sheetsMeta.map(sheet => `${quoteSheetTitleForRange(sheet.properties?.title ?? '')}!A1:E1`);
+  const headerRows = new Map();
+
+  if (ranges.length > 0) {
+    const headerResponse = await sheets.spreadsheets.values.batchGet({
+      spreadsheetId,
+      ranges
+    });
+
+    const valueRanges = headerResponse.data?.valueRanges || [];
+    valueRanges.forEach((range, index) => {
+      if (!headerRows.has(index)) {
+        headerRows.set(index, range.values?.[0] || null);
+      }
+    });
+  }
+
+  let matchedIndex = -1;
+  for (let i = 0; i < sheetsMeta.length; i++) {
+    const headerRow = headerRows.get(i);
+    if (headerRow && isContactsHeaderRow(headerRow)) {
+      matchedIndex = i;
+      break;
+    }
+  }
+
+  if (matchedIndex === -1) {
+    matchedIndex = sheetsMeta.findIndex(sheet => sheet.properties?.index === 0);
+  }
+
+  if (matchedIndex === -1) matchedIndex = 0;
+
+  const matchedSheet = sheetsMeta[matchedIndex];
+  const detectedHeaders = headerRows.get(matchedIndex) || null;
+
+  return {
+    spreadsheetId,
+    sheetId: matchedSheet.properties?.sheetId,
+    sheetTitle: matchedSheet.properties?.title,
+    detectedHeaders
+  };
+}
+
+function isMissingGridError(error) {
+  if (!error) return false;
+  const directMessage = typeof error.message === 'string' ? error.message : '';
+  if (directMessage.includes('No grid with id')) return true;
+
+  const errorList = Array.isArray(error.errors) ? error.errors : [];
+  if (errorList.some(item => typeof item?.message === 'string' && item.message.includes('No grid with id'))) {
+    return true;
+  }
+
+  const responseMessage = error.response?.data?.error?.message;
+  if (typeof responseMessage === 'string' && responseMessage.includes('No grid with id')) {
+    return true;
+  }
+
+  const rootMessage = error.response?.data?.message;
+  if (typeof rootMessage === 'string' && rootMessage.includes('No grid with id')) {
+    return true;
+  }
+
+  return false;
+}
+
+function buildContactsSheetMismatchError(originalError, context = {}) {
+  const error = new Error('Contacts worksheet is missing or does not match the expected structure');
+  error.name = 'ContactsSheetMismatchError';
+  error.statusCode = context.statusCode || 409;
+  error.code = 'CONTACTS_SHEET_MISMATCH';
+
+  const details = {
+    reason: context.reason || 'TARGET_WORKSHEET_MISSING',
+    spreadsheetId: context.spreadsheetId,
+    attemptedSheetId: context.sheetId,
+    sheetTitle: context.sheetTitle,
+    expectedHeaders: CONTACTS_EXPECTED_HEADERS,
+    suggestedNextSteps: [
+      {
+        type: 'retry',
+        description: 'Retry the delete operation with a verified contact email address.',
+        request: { op: context.retryOp || 'contactsDelete', body: { email: GPT_RETRY_EXAMPLE_EMAIL } }
+      },
+      {
+        type: 'fallback',
+        description: 'Run the contacts dedupe macro to merge duplicate rows before retrying delete.',
+        request: { op: 'dedupe' }
+      }
+    ],
+    originalError: originalError?.message || String(originalError)
+  };
+
+  if (context.operation) {
+    details.operation = context.operation;
+  }
+
+  if (context.detectedHeaders && Array.isArray(context.detectedHeaders)) {
+    details.detectedHeaders = context.detectedHeaders;
+  }
+
+  error.details = details;
+  error.cause = originalError;
+  return error;
 }
 
 function jaroWinkler(s1, s2) {
@@ -427,9 +573,22 @@ async function bulkUpsert(accessToken, contacts) {
  * Bulk delete contacts (by emails or rowIds)
  */
 async function bulkDelete(accessToken, { emails, rowIds }) {
+  let sheetInfo;
   try {
     const sheets = await getSheetsClient(accessToken);
-    const spreadsheetId = await getOrCreateContactsSheet(accessToken);
+    sheetInfo = await getContactsSheetInfo(accessToken);
+    const { spreadsheetId, sheetId, sheetTitle, detectedHeaders } = sheetInfo;
+
+    if (typeof sheetId !== 'number') {
+      throw buildContactsSheetMismatchError(new Error('Missing sheet identifier'), {
+        reason: 'MISSING_SHEET_ID',
+        spreadsheetId,
+        sheetId,
+        sheetTitle,
+        detectedHeaders,
+        operation: 'contacts.bulkDelete'
+      });
+    }
 
     let rowsToDelete = [];
 
@@ -450,7 +609,28 @@ async function bulkDelete(accessToken, { emails, rowIds }) {
       rowsToDelete = rowIds;
     }
 
-    if (rowsToDelete.length === 0) return { deleted: 0 };
+    if (rowsToDelete.length === 0) {
+      return {
+        deleted: 0,
+        skipped: {
+          reason: 'NO_MATCHING_ROWS',
+          attemptedEmails: Array.isArray(emails) ? emails : undefined,
+          attemptedRowIds: Array.isArray(rowIds) ? rowIds : undefined,
+          suggestedNextSteps: [
+            {
+              type: 'search',
+              description: 'Search contacts first to confirm the stored email or row before retrying bulk delete.',
+              request: { op: 'contactsSearch', query: 'alex' }
+            },
+            {
+              type: 'fallback',
+              description: 'Fallback to dedupe to merge duplicates before deleting.',
+              request: { op: 'dedupe' }
+            }
+          ]
+        }
+      };
+    }
 
     console.log(`📊 Deleting rows: ${rowsToDelete.join(', ')}`);
     rowsToDelete.sort((a, b) => b - a);
@@ -458,7 +638,7 @@ async function bulkDelete(accessToken, { emails, rowIds }) {
     const requests = rowsToDelete.map(rowIndex => ({
       deleteDimension: {
         range: {
-          sheetId: 0,
+          sheetId,
           dimension: 'ROWS',
           startIndex: rowIndex - 1,
           endIndex: rowIndex
@@ -474,6 +654,19 @@ async function bulkDelete(accessToken, { emails, rowIds }) {
     return { deleted: rowsToDelete.length };
 
   } catch (error) {
+    if (error.code === 'CONTACTS_SHEET_MISMATCH') {
+      throw error;
+    }
+    if (isMissingGridError(error)) {
+      console.error('❌ [SHEETS_ERROR] Contacts worksheet mismatch during bulk delete');
+      throw buildContactsSheetMismatchError(error, {
+        operation: 'contacts.bulkDelete',
+        spreadsheetId: sheetInfo?.spreadsheetId,
+        sheetId: sheetInfo?.sheetId,
+        sheetTitle: sheetInfo?.sheetTitle,
+        detectedHeaders: sheetInfo?.detectedHeaders
+      });
+    }
     console.error('❌ [SHEETS_ERROR] Failed to bulk delete contacts');
     throw error;
   }
@@ -532,15 +725,39 @@ async function updateContact(accessToken, contactData) {
  * - If both: delete exact match (email + name)
  */
 async function deleteContact(accessToken, { email, name }) {
+  let sheetInfo;
   try {
     if (!email && !name) {
       const error = new Error('Must provide either email or name');
       error.statusCode = 400;
+      error.code = 'INVALID_IDENTIFIER';
+      error.details = {
+        required: ['email', 'name'],
+        suggestedNextSteps: [
+          {
+            type: 'retry',
+            description: 'Retry with a contact email that exists in the Google Sheet.',
+            request: { op: 'contactsDelete', body: { email: GPT_RETRY_EXAMPLE_EMAIL } }
+          }
+        ]
+      };
       throw error;
     }
 
     const sheets = await getSheetsClient(accessToken);
-    const spreadsheetId = await getOrCreateContactsSheet(accessToken);
+    sheetInfo = await getContactsSheetInfo(accessToken);
+    const { spreadsheetId, sheetId, sheetTitle, detectedHeaders } = sheetInfo;
+
+    if (typeof sheetId !== 'number') {
+      throw buildContactsSheetMismatchError(new Error('Missing sheet identifier'), {
+        reason: 'MISSING_SHEET_ID',
+        spreadsheetId,
+        sheetId,
+        sheetTitle,
+        detectedHeaders,
+        operation: 'contacts.deleteContact'
+      });
+    }
 
     const response = await sheets.spreadsheets.values.get({
       spreadsheetId,
@@ -577,7 +794,8 @@ async function deleteContact(accessToken, { email, name }) {
       // NAME ONLY MODE: Find by name
       const nameToFind = name.toLowerCase().trim();
       const matches = [];
-      
+      const searchHint = (name || '').trim().slice(0, 3) || 'alex';
+
       for (let i = 0; i < rows.length; i++) {
         const rowName = (rows[i][0] || '').toLowerCase().trim();
         if (rowName === nameToFind) {
@@ -593,20 +811,45 @@ async function deleteContact(accessToken, { email, name }) {
           });
         }
       }
-      
+
       if (matches.length === 0) {
         const error = new Error(`Contact not found: ${name}`);
         error.code = 'CONTACT_NOT_FOUND';
         error.statusCode = 404;
+        error.details = {
+          attemptedIdentifiers: { name },
+          suggestedNextSteps: [
+            {
+              type: 'search',
+              description: 'Search contacts to find the matching email before deleting.',
+              request: { op: 'contactsSearch', query: searchHint }
+            },
+            {
+              type: 'retry',
+              description: 'Retry delete with the exact email returned by the search.',
+              request: { op: 'contactsDelete', body: { email: GPT_RETRY_EXAMPLE_EMAIL } }
+            }
+          ]
+        };
         throw error;
       }
-      
+
       if (matches.length > 1) {
         // Multiple matches - cannot delete ambiguously
         const error = new Error(`Found ${matches.length} contacts with name "${name}". Please provide email to disambiguate.`);
         error.code = 'AMBIGUOUS_DELETE';
         error.statusCode = 409;
         error.candidates = matches.map(m => m.contact);
+        error.details = {
+          candidates: matches.map(m => m.contact),
+          suggestedNextSteps: [
+            {
+              type: 'retry',
+              description: 'Retry delete using the precise email of the desired contact.',
+              request: { op: 'contactsDelete', body: { email: GPT_RETRY_EXAMPLE_EMAIL } }
+            }
+          ]
+        };
         throw error;
       }
       
@@ -619,6 +862,24 @@ async function deleteContact(accessToken, { email, name }) {
       const error = new Error(`Contact not found: ${name ? `${name} (${email})` : email}`);
       error.code = 'CONTACT_NOT_FOUND';
       error.statusCode = 404;
+      error.details = {
+        attemptedIdentifiers: {
+          email: email || null,
+          name: name || null
+        },
+        suggestedNextSteps: [
+          {
+            type: 'search',
+            description: 'Search contacts to confirm the exact stored email before retrying delete.',
+            request: { op: 'contactsSearch', query: 'alex' }
+          },
+          {
+            type: 'retry',
+            description: 'Retry delete with the confirmed email value.',
+            request: { op: 'contactsDelete', body: { email: GPT_RETRY_EXAMPLE_EMAIL } }
+          }
+        ]
+      };
       throw error;
     }
 
@@ -628,7 +889,7 @@ async function deleteContact(accessToken, { email, name }) {
         requests: [{
           deleteDimension: {
             range: {
-              sheetId: 0,
+              sheetId,
               dimension: 'ROWS',
               startIndex: rowIndex - 1,
               endIndex: rowIndex
@@ -638,11 +899,29 @@ async function deleteContact(accessToken, { email, name }) {
       }
     });
 
-    return { success: true, deleted: deletedContact };
+    return {
+      success: true,
+      deleted: deletedContact,
+      deletedRowIndex: rowIndex,
+      sheet: { spreadsheetId, sheetId }
+    };
 
   } catch (error) {
     if (error.code === 'CONTACT_NOT_FOUND' || error.code === 'AMBIGUOUS_DELETE') {
       throw error;
+    }
+    if (error.code === 'CONTACTS_SHEET_MISMATCH') {
+      throw error;
+    }
+    if (isMissingGridError(error)) {
+      console.error('❌ [SHEETS_ERROR] Contacts worksheet mismatch during delete');
+      throw buildContactsSheetMismatchError(error, {
+        operation: 'contacts.deleteContact',
+        spreadsheetId: sheetInfo?.spreadsheetId,
+        sheetId: sheetInfo?.sheetId,
+        sheetTitle: sheetInfo?.sheetTitle,
+        detectedHeaders: sheetInfo?.detectedHeaders
+      });
     }
     console.error('❌ [SHEETS_ERROR] Failed to delete contact');
     throw error;
