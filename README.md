@@ -68,7 +68,7 @@ node test-oauth-proxy.js
 
 ✅ AES-256-GCM encryption  
 ✅ OAuth 2.0  
-✅ Rate limiting (100 req/15min)  
+✅ Rate limiting (600 req/15min)  
 ✅ TLS 1.3  
 ✅ Audit logs (90 dní)  
 
