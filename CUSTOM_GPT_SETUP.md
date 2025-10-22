@@ -48,6 +48,8 @@ Na Render.com přidej environment variables (včetně `OAUTH_CLIENT_SECRET`).
 **Conversation Starters:**
 - Zkopíruj z `GPT_CONFIG.md`
 
+> 📎 **Poznámka:** `GPT_ACTIONS_QUICK_REFERENCE.md` nech jako interní tahák. Slouží pro tebe při ladění a testování, ale nekopíruj ho do promptu — zabíral by místo pro skutečnou konverzaci.
+
 **Privacy Policy:**
 - URL: `https://mcp1-oauth-server.onrender.com/privacy-policy`
 
