@@ -1550,13 +1550,14 @@
                       "search",
                       "preview",
                       "read",
+                      "createDraft",
                       "send",
                       "reply",
                       "modify",
                       "attachmentPreview",
                       "labels"
                     ],
-                    "description": "Operation: search, preview (metadata for ids), read (full email or by search), send (direct OR by draftId), reply, modify labels, preview attachments, or manage labels list/modify."
+                    "description": "Operation: search, preview (metadata for ids), read (full email or by search), create drafts (trigger phrases: 'vytvořit mi draft', 'udělej mi draft'), send (direct OR by draftId), reply, modify labels, preview attachments, or manage labels list/modify."
                   },
                   "params": {
                     "anyOf": [
@@ -1617,7 +1618,7 @@
                       {
                         "type": "object",
                         "title": "Create Draft",
-                        "description": "Create Gmail draft without sending (op=createDraft)",
+                        "description": "Create Gmail draft without sending (op=createDraft). Use for requests like 'vytvořit mi draft' or 'udělej mi draft'.",
                         "required": [
                           "to",
                           "subject",
