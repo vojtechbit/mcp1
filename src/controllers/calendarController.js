@@ -2,6 +2,7 @@ import * as calendarService from '../services/googleApiService.js';
 import { heavyLimiter } from '../server.js';
 import { computeETag, checkETagMatch } from '../utils/helpers.js';
 import { createSnapshot, getSnapshot } from '../utils/snapshotStore.js';
+import { handleControllerError } from '../utils/errors.js';
 import { 
   PAGE_SIZE_DEFAULT, 
   PAGE_SIZE_MAX,
@@ -95,20 +96,10 @@ async function createEvent(req, res) {
     res.json(response);
 
   } catch (error) {
-    console.error('❌ Failed to create calendar event');
-    
-    if (error.code === 'AUTH_REQUIRED' || error.code === 'REFRESH_TOKEN_INVALID' || error.statusCode === 401) {
-      return res.status(401).json({
-        error: 'Authentication required',
-        message: error.message || 'Your session has expired. Please log in again.',
-        code: error.code || 'AUTH_REQUIRED',
-        requiresReauth: true
-      });
-    }
-    
-    res.status(500).json({
-      error: 'Event creation failed',
-      message: error.message
+    return handleControllerError(res, error, {
+      context: 'calendar.createEvent',
+      defaultMessage: 'Event creation failed',
+      defaultCode: 'CALENDAR_EVENT_CREATE_FAILED'
     });
   }
 }
@@ -138,20 +129,10 @@ async function getEvent(req, res) {
     });
 
   } catch (error) {
-    console.error('❌ Failed to get calendar event');
-    
-    if (error.code === 'AUTH_REQUIRED' || error.code === 'REFRESH_TOKEN_INVALID' || error.statusCode === 401) {
-      return res.status(401).json({
-        error: 'Authentication required',
-        message: error.message || 'Your session has expired. Please log in again.',
-        code: error.code || 'AUTH_REQUIRED',
-        requiresReauth: true
-      });
-    }
-    
-    res.status(500).json({
-      error: 'Event retrieval failed',
-      message: error.message
+    return handleControllerError(res, error, {
+      context: 'calendar.getEvent',
+      defaultMessage: 'Event retrieval failed',
+      defaultCode: 'CALENDAR_EVENT_GET_FAILED'
     });
   }
 }
@@ -295,20 +276,10 @@ async function listEvents(req, res) {
       }
 
     } catch (error) {
-      console.error('❌ Failed to list calendar events');
-      
-      if (error.code === 'AUTH_REQUIRED' || error.code === 'REFRESH_TOKEN_INVALID' || error.statusCode === 401) {
-        return res.status(401).json({
-          error: 'Authentication required',
-          message: error.message || 'Your session has expired. Please log in again.',
-          code: error.code || 'AUTH_REQUIRED',
-          requiresReauth: true
-        });
-      }
-      
-      res.status(500).json({
-        error: 'Event listing failed',
-        message: error.message
+      return handleControllerError(res, error, {
+        context: 'calendar.listEvents',
+        defaultMessage: 'Event listing failed',
+        defaultCode: 'CALENDAR_EVENT_LIST_FAILED'
       });
     }
   };
@@ -411,20 +382,10 @@ async function updateEvent(req, res) {
     res.json(response);
 
   } catch (error) {
-    console.error('❌ Failed to update calendar event');
-    
-    if (error.code === 'AUTH_REQUIRED' || error.code === 'REFRESH_TOKEN_INVALID' || error.statusCode === 401) {
-      return res.status(401).json({
-        error: 'Authentication required',
-        message: error.message || 'Your session has expired. Please log in again.',
-        code: error.code || 'AUTH_REQUIRED',
-        requiresReauth: true
-      });
-    }
-    
-    res.status(500).json({
-      error: 'Event update failed',
-      message: error.message
+    return handleControllerError(res, error, {
+      context: 'calendar.updateEvent',
+      defaultMessage: 'Event update failed',
+      defaultCode: 'CALENDAR_EVENT_UPDATE_FAILED'
     });
   }
 }
@@ -448,20 +409,10 @@ async function deleteEvent(req, res) {
     });
 
   } catch (error) {
-    console.error('❌ Failed to delete calendar event');
-    
-    if (error.code === 'AUTH_REQUIRED' || error.code === 'REFRESH_TOKEN_INVALID' || error.statusCode === 401) {
-      return res.status(401).json({
-        error: 'Authentication required',
-        message: error.message || 'Your session has expired. Please log in again.',
-        code: error.code || 'AUTH_REQUIRED',
-        requiresReauth: true
-      });
-    }
-    
-    res.status(500).json({
-      error: 'Event deletion failed',
-      message: error.message
+    return handleControllerError(res, error, {
+      context: 'calendar.deleteEvent',
+      defaultMessage: 'Event deletion failed',
+      defaultCode: 'CALENDAR_EVENT_DELETE_FAILED'
     });
   }
 }

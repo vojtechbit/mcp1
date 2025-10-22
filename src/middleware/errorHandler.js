@@ -1,4 +1,5 @@
 import dotenv from 'dotenv';
+import { ApiError, resolveStatusTitle } from '../utils/errors.js';
 
 dotenv.config();
 
@@ -7,61 +8,42 @@ dotenv.config();
  * This should be the LAST middleware in the chain
  */
 function errorHandler(err, req, res, next) {
-  // Log error details
-  console.error('❌ [UNHANDLED_ERROR]');
-  console.error('Error:', err.message);
-  console.error('Path:', req.method, req.path);
-  console.error('User:', req.user?.email || 'Anonymous');
-  console.error('Timestamp:', new Date().toISOString());
+  const apiError = ApiError.from(err);
 
-  // Log stack trace in development
-  if (process.env.NODE_ENV === 'development') {
-    console.error('Stack trace:', err.stack);
+  const logParts = [
+    '❌ [UNHANDLED_ERROR]',
+    `status=${apiError.statusCode}`,
+    `message=${apiError.message}`,
+    `path=${req.method} ${req.path}`,
+    `user=${req.user?.email || 'Anonymous'}`
+  ];
+
+  if (apiError.code) {
+    logParts.push(`code=${apiError.code}`);
   }
 
-  // Determine status code
-  const statusCode = err.statusCode || err.status || 500;
-
-  // Determine error type
-  let errorType = 'Internal Server Error';
-  let userMessage = 'An unexpected error occurred';
-
-  if (statusCode === 400) {
-    errorType = 'Bad Request';
-    userMessage = 'Invalid request parameters';
-  } else if (statusCode === 401) {
-    errorType = 'Unauthorized';
-    userMessage = 'Authentication required';
-  } else if (statusCode === 403) {
-    errorType = 'Forbidden';
-    userMessage = 'Access denied';
-  } else if (statusCode === 404) {
-    errorType = 'Not Found';
-    userMessage = 'Resource not found';
-  } else if (statusCode === 429) {
-    errorType = 'Too Many Requests';
-    userMessage = 'Rate limit exceeded';
-  } else if (statusCode >= 500) {
-    errorType = 'Internal Server Error';
-    userMessage = 'Something went wrong on our end';
+  if (apiError.requiresReauth) {
+    logParts.push('requiresReauth=true');
   }
 
-  // Build error response
-  const errorResponse = {
-    error: errorType,
-    message: err.message || userMessage,
-    timestamp: new Date().toISOString()
-  };
+  console.error(logParts.join(' '));
 
-  // Add additional details in development
-  if (process.env.NODE_ENV === 'development') {
-    errorResponse.stack = err.stack;
-    errorResponse.path = req.path;
-    errorResponse.method = req.method;
+  if (process.env.NODE_ENV === 'development' && apiError.stack) {
+    console.error(apiError.stack);
   }
 
-  // Send error response
-  res.status(statusCode).json(errorResponse);
+  const responsePayload = apiError.toResponse({
+    defaultMessage: 'Something went wrong on our end',
+    includeStack: process.env.NODE_ENV === 'development',
+    path: req.path,
+    method: req.method
+  });
+
+  if (!responsePayload.error) {
+    responsePayload.error = resolveStatusTitle(apiError.statusCode);
+  }
+
+  res.status(apiError.statusCode).json(responsePayload);
 }
 
 /**
@@ -70,7 +52,7 @@ function errorHandler(err, req, res, next) {
  */
 function notFoundHandler(req, res, next) {
   console.log('⚠️  404 Not Found:', req.method, req.path);
-  
+
   res.status(404).json({
     error: 'Not Found',
     message: `Cannot ${req.method} ${req.path}`,

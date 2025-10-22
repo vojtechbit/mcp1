@@ -1,6 +1,7 @@
 import * as contactsService from '../services/contactsService.js';
 import { heavyLimiter } from '../server.js';
 import { computeETag, checkETagMatch } from '../utils/helpers.js';
+import { handleControllerError } from '../utils/errors.js';
 
 /**
  * Contacts Controller
@@ -39,9 +40,7 @@ async function searchContacts(req, res) {
     });
 
   } catch (error) {
-    console.error('❌ Failed to search contacts');
-    
-    if (error.message.includes('not found')) {
+    if (error.message?.includes('not found')) {
       return res.status(404).json({
         error: 'Contact sheet not found',
         message: error.message,
@@ -49,17 +48,10 @@ async function searchContacts(req, res) {
       });
     }
 
-    if (error.code === 'AUTH_REQUIRED' || error.statusCode === 401) {
-      return res.status(401).json({
-        error: 'Authentication required',
-        message: 'Your session has expired. Please log in again.',
-        code: 'AUTH_REQUIRED'
-      });
-    }
-
-    res.status(error.statusCode || 500).json({
-      error: 'Contact search failed',
-      message: error.message
+    return handleControllerError(res, error, {
+      context: 'contacts.searchContacts',
+      defaultMessage: 'Contact search failed',
+      defaultCode: 'CONTACT_SEARCH_FAILED'
     });
   }
 }
@@ -92,19 +84,10 @@ async function getAddressSuggestions(req, res) {
     });
 
   } catch (error) {
-    console.error('❌ Failed to get address suggestions');
-    
-    if (error.code === 'AUTH_REQUIRED' || error.statusCode === 401) {
-      return res.status(401).json({
-        error: 'Authentication required',
-        message: 'Your session has expired. Please log in again.',
-        code: 'AUTH_REQUIRED'
-      });
-    }
-
-    res.status(error.statusCode || 500).json({
-      error: 'Address suggestion failed',
-      message: error.message
+    return handleControllerError(res, error, {
+      context: 'contacts.getAddressSuggestions',
+      defaultMessage: 'Address suggestion failed',
+      defaultCode: 'CONTACT_ADDRESS_SUGGEST_FAILED'
     });
   }
 }
@@ -132,9 +115,7 @@ async function listContacts(req, res) {
     });
 
   } catch (error) {
-    console.error('❌ Failed to list contacts');
-
-    if (error.message.includes('not found')) {
+    if (error.message?.includes('not found')) {
       return res.status(404).json({
         error: 'Contact sheet not found',
         message: error.message,
@@ -142,17 +123,10 @@ async function listContacts(req, res) {
       });
     }
 
-    if (error.code === 'AUTH_REQUIRED' || error.statusCode === 401) {
-      return res.status(401).json({
-        error: 'Authentication required',
-        message: 'Your session has expired. Please log in again.',
-        code: 'AUTH_REQUIRED'
-      });
-    }
-
-    res.status(error.statusCode || 500).json({
-      error: 'Contact list failed',
-      message: error.message
+    return handleControllerError(res, error, {
+      context: 'contacts.listContacts',
+      defaultMessage: 'Contact list failed',
+      defaultCode: 'CONTACT_LIST_FAILED'
     });
   }
 }
@@ -192,9 +166,7 @@ async function addContact(req, res) {
     res.json(response);
 
   } catch (error) {
-    console.error('❌ Failed to add contact');
-
-    if (error.message.includes('not found')) {
+    if (error.message?.includes('not found')) {
       return res.status(404).json({
         error: 'Contact sheet not found',
         message: error.message,
@@ -202,17 +174,10 @@ async function addContact(req, res) {
       });
     }
 
-    if (error.code === 'AUTH_REQUIRED' || error.statusCode === 401) {
-      return res.status(401).json({
-        error: 'Authentication required',
-        message: 'Your session has expired. Please log in again.',
-        code: 'AUTH_REQUIRED'
-      });
-    }
-
-    res.status(error.statusCode || 500).json({
-      error: 'Contact add failed',
-      message: error.message
+    return handleControllerError(res, error, {
+      context: 'contacts.addContact',
+      defaultMessage: 'Contact add failed',
+      defaultCode: 'CONTACT_ADD_FAILED'
     });
   }
 }
@@ -261,19 +226,10 @@ async function bulkUpsertContacts(req, res) {
       res.json(response);
 
     } catch (error) {
-      console.error('❌ Failed to bulk upsert contacts');
-
-      if (error.code === 'AUTH_REQUIRED' || error.statusCode === 401) {
-        return res.status(401).json({
-          error: 'Authentication required',
-          message: 'Your session has expired. Please log in again.',
-          code: 'AUTH_REQUIRED'
-        });
-      }
-
-      res.status(error.statusCode || 500).json({
-        error: 'Bulk upsert failed',
-        message: error.message
+      return handleControllerError(res, error, {
+        context: 'contacts.bulkUpsertContacts',
+        defaultMessage: 'Bulk upsert failed',
+        defaultCode: 'CONTACT_BULK_UPSERT_FAILED'
       });
     }
   });
@@ -306,19 +262,10 @@ async function bulkDeleteContacts(req, res) {
       });
 
     } catch (error) {
-      console.error('❌ Failed to bulk delete contacts');
-
-      if (error.code === 'AUTH_REQUIRED' || error.statusCode === 401) {
-        return res.status(401).json({
-          error: 'Authentication required',
-          message: 'Your session has expired. Please log in again.',
-          code: 'AUTH_REQUIRED'
-        });
-      }
-
-      res.status(error.statusCode || 500).json({
-        error: 'Bulk delete failed',
-        message: error.message
+      return handleControllerError(res, error, {
+        context: 'contacts.bulkDeleteContacts',
+        defaultMessage: 'Bulk delete failed',
+        defaultCode: 'CONTACT_BULK_DELETE_FAILED'
       });
     }
   });
@@ -351,19 +298,10 @@ async function updateContact(req, res) {
     });
 
   } catch (error) {
-    console.error('❌ Failed to update contact');
-
-    if (error.code === 'AUTH_REQUIRED' || error.statusCode === 401) {
-      return res.status(401).json({
-        error: 'Authentication required',
-        message: 'Your session has expired. Please log in again.',
-        code: 'AUTH_REQUIRED'
-      });
-    }
-
-    res.status(error.statusCode || 500).json({
-      error: 'Contact update failed',
-      message: error.message
+    return handleControllerError(res, error, {
+      context: 'contacts.updateContact',
+      defaultMessage: 'Contact update failed',
+      defaultCode: 'CONTACT_UPDATE_FAILED'
     });
   }
 }
@@ -396,8 +334,6 @@ async function deleteContact(req, res) {
     });
 
   } catch (error) {
-    console.error('❌ Failed to delete contact');
-
     if (error.code === 'CONTACT_NOT_FOUND') {
       return res.status(404).json({
         error: 'Contact not found',
@@ -406,7 +342,7 @@ async function deleteContact(req, res) {
       });
     }
 
-    if (error.message.includes('not found')) {
+    if (error.message?.includes('not found')) {
       return res.status(404).json({
         error: 'Contact sheet not found',
         message: error.message,
@@ -414,17 +350,10 @@ async function deleteContact(req, res) {
       });
     }
 
-    if (error.code === 'AUTH_REQUIRED' || error.statusCode === 401) {
-      return res.status(401).json({
-        error: 'Authentication required',
-        message: 'Your session has expired. Please log in again.',
-        code: 'AUTH_REQUIRED'
-      });
-    }
-
-    res.status(error.statusCode || 500).json({
-      error: 'Contact delete failed',
-      message: error.message
+    return handleControllerError(res, error, {
+      context: 'contacts.deleteContact',
+      defaultMessage: 'Contact delete failed',
+      defaultCode: 'CONTACT_DELETE_FAILED'
     });
   }
 }
