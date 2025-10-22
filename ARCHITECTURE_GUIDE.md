@@ -198,7 +198,7 @@ function classifyEmailCategory(message) {
 
 ### RPC Operace (nízkoúrovňové)
 
-- `POST /rpc/mail` - search, read, send, reply, modify
+- `POST /rpc/mail` - search, preview, read, createDraft, send, reply, modify
 - `POST /rpc/calendar` - list, get, create, update, delete
 - `POST /rpc/contacts` - list, search, add, update, delete
 - `POST /rpc/tasks` - list, get, create, update, delete, complete

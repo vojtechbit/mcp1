@@ -12,6 +12,7 @@ import * as tasksService from '../services/tasksService.js';
 import { computeETag } from '../utils/helpers.js';
 
 const rpcTestOverrides = globalThis.__RPC_TEST_OVERRIDES || {};
+const gmailSvc = rpcTestOverrides.gmailService || gmailService;
 const contactsSvc = rpcTestOverrides.contactsService || contactsService;
 const tasksSvc = rpcTestOverrides.tasksService || tasksService;
 
@@ -33,13 +34,13 @@ export async function mailRpc(req, res) {
     
     switch (op) {
       case 'search':
-        result = await gmailService.searchEmails(req.user.googleSub, params);
+        result = await gmailSvc.searchEmails(req.user.googleSub, params);
         break;
         
       case 'preview':
         result = await Promise.all(
-          (params.ids || []).map(id => 
-            gmailService.readEmail(req.user.googleSub, id, 'metadata')
+          (params.ids || []).map(id =>
+            gmailSvc.readEmail(req.user.googleSub, id, 'metadata')
           )
         );
         break;
@@ -47,29 +48,60 @@ export async function mailRpc(req, res) {
       case 'read':
         if (params.ids && params.ids.length > 1) {
           result = await Promise.all(
-            params.ids.map(id => 
-              gmailService.readEmail(req.user.googleSub, id, params.format || 'full')
+            params.ids.map(id =>
+              gmailSvc.readEmail(req.user.googleSub, id, params.format || 'full')
             )
           );
         } else if (params.ids && params.ids.length === 1) {
-          result = await gmailService.readEmail(
-            req.user.googleSub, 
-            params.ids[0], 
+          result = await gmailSvc.readEmail(
+            req.user.googleSub,
+            params.ids[0],
             params.format || 'full'
           );
         } else if (params.searchQuery) {
-          const searchResult = await gmailService.searchEmails(req.user.googleSub, {
+          const searchResult = await gmailSvc.searchEmails(req.user.googleSub, {
             q: params.searchQuery,
             maxResults: 10
           });
           result = await Promise.all(
-            searchResult.messages.map(m => 
-              gmailService.readEmail(req.user.googleSub, m.id, params.format || 'full')
+            searchResult.messages.map(m =>
+              gmailSvc.readEmail(req.user.googleSub, m.id, params.format || 'full')
             )
           );
         }
         break;
-        
+
+      case 'createDraft':
+        if (!params || typeof params !== 'object') {
+          return res.status(400).json({
+            error: 'Invalid request format',
+            message: 'params object is required for createDraft operation',
+            code: 'INVALID_PARAM',
+            expectedFormat: { op: 'createDraft', params: { to: 'string', subject: 'string', body: 'string' } }
+          });
+        }
+
+        const missingDraftFields = ['to', 'subject', 'body'].filter(field => {
+          const value = params[field];
+          return typeof value !== 'string' || value.trim() === '';
+        });
+
+        if (missingDraftFields.length > 0) {
+          return res.status(400).json({
+            error: 'Invalid request format',
+            message: `Missing or invalid field(s) for createDraft: ${missingDraftFields.join(', ')}`,
+            code: 'INVALID_PARAM',
+            expectedFormat: { op: 'createDraft', params: { to: 'recipient@example.com', subject: 'string', body: 'string' } }
+          });
+        }
+
+        result = await gmailSvc.createDraft(req.user.googleSub, {
+          to: params.to.trim(),
+          subject: params.subject.trim(),
+          body: params.body
+        });
+        break;
+
       case 'send':
         // FIXED: Better validation for send operation
         if (!params) {
@@ -93,7 +125,7 @@ export async function mailRpc(req, res) {
               received: { type: typeof params.draftId, value: params.draftId }
             });
           }
-          result = await gmailService.sendDraft(req.user.googleSub, params.draftId);
+          result = await gmailSvc.sendDraft(req.user.googleSub, params.draftId);
         } else if (params.to && params.subject && params.body) {
           // Create and send new email - VALIDATE fields
           if (typeof params.to !== 'string' || params.to.trim() === '') {
@@ -125,7 +157,7 @@ export async function mailRpc(req, res) {
               code: 'CONFIRM_SELF_SEND_REQUIRED'
             });
           }
-          result = await gmailService.sendEmail(req.user.googleSub, params);
+          result = await gmailSvc.sendEmail(req.user.googleSub, params);
         } else {
           return res.status(400).json({
             error: 'Invalid request format',
@@ -138,31 +170,31 @@ export async function mailRpc(req, res) {
         break;
         
       case 'reply':
-        result = await gmailService.replyToEmail(
-          req.user.googleSub, 
-          params.messageId, 
+        result = await gmailSvc.replyToEmail(
+          req.user.googleSub,
+          params.messageId,
           params
         );
         break;
-        
+
       case 'modify':
         result = await Promise.all(
           (params.ids || []).map(id =>
-            gmailService.modifyMessageLabels(req.user.googleSub, id, params.actions)
+            gmailSvc.modifyMessageLabels(req.user.googleSub, id, params.actions)
           )
         );
         break;
-        
+
       case 'attachmentPreview':
         if (params.mode === 'text') {
-          result = await gmailService.previewAttachmentText(
+          result = await gmailSvc.previewAttachmentText(
             req.user.googleSub,
             params.messageId,
             params.attachmentId,
             params.maxKb || 256
           );
         } else if (params.mode === 'table') {
-          result = await gmailService.previewAttachmentTable(
+          result = await gmailSvc.previewAttachmentTable(
             req.user.googleSub,
             params.messageId,
             params.attachmentId,
@@ -173,12 +205,12 @@ export async function mailRpc(req, res) {
           );
         }
         break;
-        
+
       case 'labels':
         if (params.list) {
-          result = await gmailService.listLabels(req.user.googleSub);
+          result = await gmailSvc.listLabels(req.user.googleSub);
         } else if (params.modify) {
-          result = await gmailService.modifyMessageLabels(
+          result = await gmailSvc.modifyMessageLabels(
             req.user.googleSub,
             params.modify.messageId || params.modify.ids?.[0],
             {

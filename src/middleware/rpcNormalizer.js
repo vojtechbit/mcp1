@@ -26,7 +26,8 @@ export function normalizeRpcRequest(req, res, next) {
     const paramKeys = {
       // Mail params
       search: ['query', 'maxResults'],
-      send: ['to', 'subject', 'body', 'cc', 'bcc', 'draftId'],
+      send: ['to', 'subject', 'body', 'cc', 'bcc', 'draftId', 'confirmSelfSend', 'toSelf'],
+      createDraft: ['to', 'subject', 'body'],
       read: ['ids', 'searchQuery', 'format'],
       reply: ['messageId'],
       modify: ['ids', 'actions'],
