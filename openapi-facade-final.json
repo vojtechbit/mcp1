@@ -49,7 +49,7 @@
                     "minimum": 1,
                     "maximum": 200,
                     "default": 100,
-                    "description": "Max emails to return. Default 100 ensures complete results for typical daily/weekly volumes. ONLY reduce if user explicitly requests limited results (e.g., 'show me last 5 emails'). When user asks 'what emails today?', use default to get ALL. Max 200 total. If more exist, response includes subset=true."
+                    "description": "Maximum emails to return (1-200). Default 100 suits typical daily or weekly requests. Lower it only when the user explicitly asks for a smaller sample (e.g. \"last 5 emails\"). When more exist the response sets subset=true."
                   },
                   "filters": {
                     "type": "object",
@@ -73,7 +73,7 @@
                           "updates",
                           "forums"
                         ],
-                        "description": "Filter by inbox category/label. Use when user asks to view specific inbox sections. Examples: 'Show me my Primary inbox' -> {category:'primary'}, 'Check Promotions' -> {category:'promotions'}, 'Social notifications' -> {category:'social'}. This maps to Gmail's internal category labels (CATEGORY_PERSONAL, CATEGORY_PROMOTIONS, etc.). Omit to search all categories."
+                        "description": "Limit overview results to a Gmail category/label. Examples: {category:\"primary\"}, {category:\"promotions\"}, {category:\"social\"}. Maps to Gmail CATEGORY_* labels. Omit this field to inspect all categories."
                       }
                     }
                   }
@@ -1123,7 +1123,7 @@
                 "required": [
                   "entries"
                 ],
-                "description": "Bulk add contacts (1-50) with duplicate detection and follow-up confirmation. Each entry needs 'name' (required), optional 'email'/'phone'/'realestate'/'notes'. Strategies: 'ask' (default, safest – pause and return confirmToken), 'skip' (do not add duplicates), 'merge' (auto-merge into best match), 'create' (always add). Matching logic: email exact match > phone match > name exact match > partial name match. For removing duplicates after review, call /rpc/contacts with op:\"dedupe\" then POST /contacts/actions/bulkDelete.",
+                "description": "Bulk add 1-50 contacts with duplicate detection. Each entry needs name plus optional email/phone/realestate/notes. dedupeStrategy handles duplicates: ask (default confirmation), skip (ignore), merge (update existing), create (always insert). Use /contacts/actions/bulkDelete to remove extras.",
                 "properties": {
                   "entries": {
                     "type": "array",
@@ -1173,7 +1173,7 @@
                       "create"
                     ],
                     "default": "ask",
-                    "description": "Duplicate handling strategy: 'ask' (default, safest) = detect duplicates and return confirmToken for user to decide, 'skip' = skip entries with duplicates (don't add), 'merge' = auto-merge into existing (preserve existing, add new fields), 'create' = always add (may create duplicates). For safest experience, use 'ask' (requires user confirmation). For bulk imports, use 'merge'."
+                    "description": "Duplicate handling mode. 'ask' (default) returns a confirmToken for duplicates, 'skip' ignores them, 'merge' updates the best match, 'create' always inserts. Prefer 'ask' for safety; 'merge' suits bulk imports."
                   }
                 }
               },
@@ -1618,7 +1618,11 @@
                         "type": "object",
                         "title": "Create Draft",
                         "description": "Create Gmail draft without sending (op=createDraft)",
-                        "required": ["to", "subject", "body"],
+                        "required": [
+                          "to",
+                          "subject",
+                          "body"
+                        ],
                         "properties": {
                           "to": {
                             "type": "string",
@@ -2283,9 +2287,15 @@
                 "schema": {
                   "type": "object",
                   "properties": {
-                    "ok": { "type": "boolean" },
-                    "task": { "type": "object" },
-                    "message": { "type": "string" }
+                    "ok": {
+                      "type": "boolean"
+                    },
+                    "task": {
+                      "type": "object"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
                   }
                 }
               }
@@ -2329,9 +2339,15 @@
                 "schema": {
                   "type": "object",
                   "properties": {
-                    "ok": { "type": "boolean" },
-                    "task": { "type": "object" },
-                    "message": { "type": "string" }
+                    "ok": {
+                      "type": "boolean"
+                    },
+                    "task": {
+                      "type": "object"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
                   }
                 }
               }
@@ -2375,8 +2391,12 @@
                 "schema": {
                   "type": "object",
                   "properties": {
-                    "ok": { "type": "boolean" },
-                    "message": { "type": "string" }
+                    "ok": {
+                      "type": "boolean"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
                   }
                 }
               }
@@ -2402,7 +2422,7 @@
         "required": [
           "op"
         ],
-        "description": "Contacts RPC payload backed 100% by Google Sheets (no MongoDB writes). Always include an 'op'. Parameters can be supplied either inside a nested 'params' object (legacy format) or directly at the root next to 'op'.\n\n**WORKFLOW 1 – REMOVE DUPLICATES (keep best contact, delete extras):**\n  Step 1: Call {\"op\": \"dedupe\"} → Returns groups like {rowIndex: [2,3,5]} meaning duplicates.\n  Step 2: Pick the best rowIndex (most complete data).\n  Step 3: POST /contacts/actions/bulkDelete with {\"rowIds\": [3,5]} to remove extra rows (keep row 2).\n\n**WORKFLOW 2 – DELETE ENTIRE CONTACT (all occurrences):**\n  POST /contacts/actions/bulkDelete with {\"emails\": [\"john@example.com\"]} → Deletes ALL rows with that email.\n\n**IMPORTANT:** rowIds mode = surgical delete (keeps the best row). emails mode = delete entire contact.\n\nMutating operations (modify/delete/bulkDelete) are available via /api/contacts/actions/modify, /api/contacts/actions/delete and /api/contacts/actions/bulkDelete.",
+        "description": "Contacts RPC payload. Always send an 'op'; pass parameters inside params{} or directly on the root. Use op:'dedupe' to fetch duplicate row groups, then call /contacts/actions/bulkDelete with rowIds to prune extras or emails to remove a contact. Mutations now live under /api/contacts/actions/*.",
         "properties": {
           "op": {
             "type": "string",
@@ -3222,44 +3242,41 @@
       "ContactsBulkDeleteActionRequest": {
         "type": "object",
         "description": "Payload for /api/contacts/actions/bulkDelete. Choose mode: emails[] deletes full contacts, rowIds[] deletes specific rows.",
-        "oneOf": [
+        "properties": {
+          "emails": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 100,
+            "items": {
+              "type": "string",
+              "format": "email"
+            },
+            "description": "Emails whose rows should be removed (deletes all rows matching each email)."
+          },
+          "rowIds": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 100,
+            "items": {
+              "type": "integer",
+              "minimum": 2
+            },
+            "description": "Sheet row indexes to delete (1-based, e.g. 2 removes second contact row)."
+          }
+        },
+        "additionalProperties": false,
+        "minProperties": 1,
+        "maxProperties": 1,
+        "anyOf": [
           {
-            "type": "object",
             "required": [
               "emails"
-            ],
-            "properties": {
-              "emails": {
-                "type": "array",
-                "minItems": 1,
-                "maxItems": 100,
-                "items": {
-                  "type": "string",
-                  "format": "email"
-                },
-                "description": "Emails whose rows should be removed (deletes all rows matching each email)."
-              }
-            },
-            "additionalProperties": false
+            ]
           },
           {
-            "type": "object",
             "required": [
               "rowIds"
-            ],
-            "properties": {
-              "rowIds": {
-                "type": "array",
-                "minItems": 1,
-                "maxItems": 100,
-                "items": {
-                  "type": "integer",
-                  "minimum": 2
-                },
-                "description": "Sheet row indexes to delete (1-based, e.g. 2 removes second contact row)."
-              }
-            },
-            "additionalProperties": false
+            ]
           }
         ]
       },
@@ -3344,11 +3361,31 @@
           }
         },
         "oneOf": [
-          { "required": ["status"] },
-          { "required": ["title"] },
-          { "required": ["notes"] },
-          { "required": ["due"] },
-          { "required": ["updates"] }
+          {
+            "required": [
+              "status"
+            ]
+          },
+          {
+            "required": [
+              "title"
+            ]
+          },
+          {
+            "required": [
+              "notes"
+            ]
+          },
+          {
+            "required": [
+              "due"
+            ]
+          },
+          {
+            "required": [
+              "updates"
+            ]
+          }
         ],
         "additionalProperties": false
       },
