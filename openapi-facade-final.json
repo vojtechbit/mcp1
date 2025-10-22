@@ -3241,7 +3241,7 @@
       },
       "ContactsBulkDeleteActionRequest": {
         "type": "object",
-        "description": "Payload for /api/contacts/actions/bulkDelete. Choose mode: emails[] deletes full contacts, rowIds[] deletes specific rows.",
+        "description": "Payload for /api/contacts/actions/bulkDelete. Send exactly one field: emails[] deletes full contacts by address, rowIds[] deletes duplicate rows by sheet index.",
         "properties": {
           "emails": {
             "type": "array",
@@ -3264,21 +3264,8 @@
             "description": "Sheet row indexes to delete (1-based, e.g. 2 removes second contact row)."
           }
         },
-        "additionalProperties": false,
-        "minProperties": 1,
-        "maxProperties": 1,
-        "anyOf": [
-          {
-            "required": [
-              "emails"
-            ]
-          },
-          {
-            "required": [
-              "rowIds"
-            ]
-          }
-        ]
+        "required": [],
+        "additionalProperties": false
       },
       "TasksActionCreateRequest": {
         "type": "object",
