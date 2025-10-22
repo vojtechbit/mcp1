@@ -1,5 +1,6 @@
 import crypto from 'crypto';
 import dotenv from 'dotenv';
+import { wrapModuleFunctions } from '../utils/advancedDebugging.js';
 
 dotenv.config();
 
@@ -116,4 +117,20 @@ function testEncryption() {
   }
 }
 
-export { encryptToken, decryptToken, testEncryption };
+const traced = wrapModuleFunctions('services.tokenService', {
+  encryptToken,
+  decryptToken,
+  testEncryption,
+});
+
+const {
+  encryptToken: tracedEncryptToken,
+  decryptToken: tracedDecryptToken,
+  testEncryption: tracedTestEncryption,
+} = traced;
+
+export {
+  tracedEncryptToken as encryptToken,
+  tracedDecryptToken as decryptToken,
+  tracedTestEncryption as testEncryption,
+};

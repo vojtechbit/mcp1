@@ -4,8 +4,10 @@
  * Transforms any RPC/custom format contact request to Sheets-compatible format.
  * Ensures all contact operations (add, delete, etc.) go through Sheets, not MongoDB.
  */
+import { wrapModuleFunctions } from '../utils/advancedDebugging.js';
 
-export function normalizeContactsRequest(req, res, next) {
+
+function normalizeContactsRequest(req, res, next) {
   // Only process /rpc/contacts endpoints
   if (!req.path.includes('/rpc/contacts') && req.method !== 'POST') {
     return next();
@@ -99,3 +101,15 @@ export function normalizeContactsRequest(req, res, next) {
     });
   }
 }
+
+const traced = wrapModuleFunctions('middleware.contactsNormalizer', {
+  normalizeContactsRequest,
+});
+
+const {
+  normalizeContactsRequest: tracedNormalizeContactsRequest,
+} = traced;
+
+export {
+  tracedNormalizeContactsRequest as normalizeContactsRequest,
+};

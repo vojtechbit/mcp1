@@ -1,6 +1,7 @@
 import { google } from 'googleapis';
 import dotenv from 'dotenv';
 import { findUserByProxyToken } from '../services/proxyTokenService.js';
+import { wrapModuleFunctions } from '../utils/advancedDebugging.js';
 
 dotenv.config();
 
@@ -193,4 +194,17 @@ async function requireDatabaseUser(req, res, next) {
   }
 }
 
-export { verifyToken, requireDatabaseUser };
+const traced = wrapModuleFunctions('middleware.authMiddleware', {
+  verifyToken,
+  requireDatabaseUser,
+});
+
+const {
+  verifyToken: tracedVerifyToken,
+  requireDatabaseUser: tracedRequireDatabaseUser,
+} = traced;
+
+export {
+  tracedVerifyToken as verifyToken,
+  tracedRequireDatabaseUser as requireDatabaseUser,
+};

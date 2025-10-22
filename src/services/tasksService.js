@@ -2,6 +2,7 @@ import { google } from 'googleapis';
 import { getUserByGoogleSub, updateTokens, updateLastUsed } from './databaseService.js';
 import { refreshAccessToken } from '../config/oauth.js';
 import dotenv from 'dotenv';
+import { wrapModuleFunctions } from '../utils/advancedDebugging.js';
 
 dotenv.config();
 
@@ -399,10 +400,26 @@ async function deleteTask(googleSub, taskListId, taskId) {
   }
 }
 
-export {
+const traced = wrapModuleFunctions('services.tasksService', {
   listTasks,
   listAllTasks,
   createTask,
   updateTask,
-  deleteTask
+  deleteTask,
+});
+
+const {
+  listTasks: tracedListTasks,
+  listAllTasks: tracedListAllTasks,
+  createTask: tracedCreateTask,
+  updateTask: tracedUpdateTask,
+  deleteTask: tracedDeleteTask,
+} = traced;
+
+export {
+  tracedListTasks as listTasks,
+  tracedListAllTasks as listAllTasks,
+  tracedCreateTask as createTask,
+  tracedUpdateTask as updateTask,
+  tracedDeleteTask as deleteTask,
 };
