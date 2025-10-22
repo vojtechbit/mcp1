@@ -12,6 +12,7 @@ import { normalizeRpcRequest } from '../middleware/rpcNormalizer.js';
 import * as facadeController from '../controllers/facadeController.js';
 import * as rpcController from '../controllers/rpcController.js';
 import * as confirmationController from '../controllers/confirmationController.js';
+import * as contactsActionsController from '../controllers/contactsActionsController.js';
 
 const router = express.Router();
 
@@ -41,6 +42,11 @@ router.post('/macros/calendar/reminderDrafts', facadeController.macroCalendarRem
 
 // Contacts Macros
 router.post('/macros/contacts/safeAdd', facadeController.macroContactsSafeAdd);
+
+// Contacts direct actions (mutation shortcuts for GPT)
+router.post('/contacts/actions/modify', contactsActionsController.modifyContact);
+router.post('/contacts/actions/delete', contactsActionsController.deleteContact);
+router.post('/contacts/actions/bulkDelete', contactsActionsController.bulkDeleteContacts);
 
 // Tasks Macros
 router.post('/macros/tasks/overview', facadeController.macroTasksOverview);

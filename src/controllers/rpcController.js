@@ -30,7 +30,7 @@ export async function mailRpc(req, res) {
     }
     
     let result;
-    
+
     switch (op) {
       case 'search':
         result = await gmailService.searchEmails(req.user.googleSub, params);
@@ -418,6 +418,22 @@ export async function contactsRpc(req, res) {
     
     let result;
     
+    const mutationRedirect = (operation) => {
+      const redirectMap = {
+        update: '/api/contacts/actions/modify',
+        delete: '/api/contacts/actions/delete',
+        bulkDelete: '/api/contacts/actions/bulkDelete'
+      };
+
+      return res.status(410).json({
+        ok: false,
+        error: 'Contacts RPC mutation disabled',
+        message: `The contacts RPC no longer supports the \"${operation}\" operation. Call the dedicated facade endpoint instead.`,
+        code: 'CONTACTS_RPC_MUTATION_DISABLED',
+        endpoints: redirectMap
+      });
+    };
+
     switch (op) {
       case 'list':
         result = await contactsSvc.listAllContacts(req.user.accessToken);
@@ -448,32 +464,10 @@ export async function contactsRpc(req, res) {
         break;
         
       case 'update':
-        if (!params || !params.email || !params.name) {
-          return res.status(400).json({
-            error: 'Bad request',
-            message: 'update requires params: {name, email, notes?, realEstate?, phone?}',
-            code: 'INVALID_PARAM',
-            expectedFormat: { op: 'update', params: { name: 'string', email: 'string', notes: 'string?', realEstate: 'string?', phone: 'string?' } }
-          });
-        }
-        result = await contactsSvc.updateContact(req.user.accessToken, params);
-        break;
-        
+        return mutationRedirect('update');
+
       case 'delete':
-        if (!params || (!params.email && !params.name)) {
-          return res.status(400).json({
-            error: 'Bad request',
-            message: 'delete requires params: {email?, name?} - at least one of email or name must be provided',
-            code: 'INVALID_PARAM',
-            examples: {
-              byEmail: { op: 'delete', params: { email: 'john@example.com' } },
-              byName: { op: 'delete', params: { name: 'John Smith' } },
-              byBoth: { op: 'delete', params: { email: 'john@example.com', name: 'John Smith' } }
-            }
-          });
-        }
-        result = await contactsSvc.deleteContact(req.user.accessToken, params);
-        break;
+        return mutationRedirect('delete');
         
       case 'dedupe':
         result = await contactsSvc.findDuplicates(req.user.accessToken);
@@ -492,25 +486,7 @@ export async function contactsRpc(req, res) {
         break;
         
       case 'bulkDelete':
-        // TWO MODES for flexibility:
-        // 1. emails mode: Pass emails to DELETE ENTIRE CONTACT (all rows with that email)
-        // 2. rowIds mode: Pass rowIds to DELETE SPECIFIC ROWS (surgical delete, keep others)
-        if (!params || (!params.emails && !params.rowIds)) {
-          return res.status(400).json({
-            error: 'Bad request',
-            message: 'bulkDelete requires params: {emails: [string]} OR {rowIds: [number]}',
-            code: 'INVALID_PARAM',
-            examples: {
-              deleteContact: { op: 'bulkDelete', params: { emails: ['john@example.com'] }, note: 'Deletes ALL rows with this email' },
-              deleteDuplicates: { op: 'bulkDelete', params: { rowIds: [3, 5] }, note: 'Deletes only rows 3 and 5, keeps row 2 if same email' }
-            }
-          });
-        }
-        result = await contactsSvc.bulkDelete(req.user.accessToken, {
-          emails: params.emails,
-          rowIds: params.rowIds
-        });
-        break;
+        return mutationRedirect('bulkDelete');
         
       case 'addressSuggest':
         if (!params || !params.query) {

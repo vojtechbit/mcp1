@@ -46,7 +46,7 @@ class MockResponse {
   }
 }
 
-test('contactsRpc bulkDelete accepts rowIds payload', async () => {
+test('contactsRpc bulkDelete now returns migration error', async () => {
   bulkDeleteCalls.length = 0;
   const request = {
     body: {
@@ -59,20 +59,17 @@ test('contactsRpc bulkDelete accepts rowIds payload', async () => {
 
   await contactsRpc(request, response);
 
-  assert.equal(response.statusCode, 200);
-  assert.deepEqual(response.body, {
-    ok: true,
-    data: { removed: 2, emails: undefined }
+  assert.equal(response.statusCode, 410);
+  assert.equal(response.body.code, 'CONTACTS_RPC_MUTATION_DISABLED');
+  assert.deepEqual(response.body.endpoints, {
+    update: '/api/contacts/actions/modify',
+    delete: '/api/contacts/actions/delete',
+    bulkDelete: '/api/contacts/actions/bulkDelete'
   });
-  assert.deepEqual(bulkDeleteCalls, [
-    {
-      token: 'token-123',
-      payload: { emails: undefined, rowIds: [3, 5] }
-    }
-  ]);
+  assert.equal(bulkDeleteCalls.length, 0);
 });
 
-test('contactsRpc bulkDelete also accepts root-level rowIds', async () => {
+test('contactsRpc bulkDelete root-level payload also returns migration error', async () => {
   bulkDeleteCalls.length = 0;
   const request = {
     body: {
@@ -85,17 +82,9 @@ test('contactsRpc bulkDelete also accepts root-level rowIds', async () => {
 
   await contactsRpc(request, response);
 
-  assert.equal(response.statusCode, 200);
-  assert.deepEqual(response.body, {
-    ok: true,
-    data: { removed: 1, emails: undefined }
-  });
-  assert.deepEqual(bulkDeleteCalls, [
-    {
-      token: 'token-456',
-      payload: { emails: undefined, rowIds: [7] }
-    }
-  ]);
+  assert.equal(response.statusCode, 410);
+  assert.equal(response.body.code, 'CONTACTS_RPC_MUTATION_DISABLED');
+  assert.equal(bulkDeleteCalls.length, 0);
 });
 
 test('tasksRpc complete delegates to updateTask with completed status', async () => {

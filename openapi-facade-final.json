@@ -31,7 +31,15 @@
                     "properties": {
                       "relative": {
                         "type": "string",
-                        "enum": ["lastHour", "last3h", "last24h", "today", "yesterday", "thisWeek", "last7d"],
+                        "enum": [
+                          "lastHour",
+                          "last3h",
+                          "last24h",
+                          "today",
+                          "yesterday",
+                          "thisWeek",
+                          "last7d"
+                        ],
                         "description": "Natural time window: 'today'=ALL today's emails (00:00-23:59 Europe/Prague), 'thisWeek'=ALL this week Mon-Sun, 'last24h'=last 24 hours, 'yesterday'=ALL yesterday's emails, 'last7d'=past 7 days. Default behavior: returns ALL emails in period, not subset."
                       }
                     }
@@ -57,7 +65,14 @@
                       },
                       "category": {
                         "type": "string",
-                        "enum": ["primary", "work", "promotions", "social", "updates", "forums"],
+                        "enum": [
+                          "primary",
+                          "work",
+                          "promotions",
+                          "social",
+                          "updates",
+                          "forums"
+                        ],
                         "description": "Filter by inbox category/label. Use when user asks to view specific inbox sections. Examples: 'Show me my Primary inbox' -> {category:'primary'}, 'Check Promotions' -> {category:'promotions'}, 'Social notifications' -> {category:'social'}. This maps to Gmail's internal category labels (CATEGORY_PERSONAL, CATEGORY_PROMOTIONS, etc.). Omit to search all categories."
                       }
                     }
@@ -173,7 +188,15 @@
                     "properties": {
                       "relative": {
                         "type": "string",
-                        "enum": ["lastHour", "last3h", "last24h", "today", "yesterday", "thisWeek", "last7d"],
+                        "enum": [
+                          "lastHour",
+                          "last3h",
+                          "last24h",
+                          "today",
+                          "yesterday",
+                          "thisWeek",
+                          "last7d"
+                        ],
                         "description": "Natural time periods. 'today'=ALL today's emails with snippets, 'thisWeek'=ALL this week's emails. Default returns complete set, not partial."
                       }
                     }
@@ -301,7 +324,9 @@
                 "properties": {
                   "ids": {
                     "type": "array",
-                    "items": { "type": "string" },
+                    "items": {
+                      "type": "string"
+                    },
                     "minItems": 1,
                     "maxItems": 50,
                     "description": "Array of Gmail message IDs (alternative to searchQuery)"
@@ -313,7 +338,11 @@
                   },
                   "format": {
                     "type": "string",
-                    "enum": ["snippet", "minimal", "full"],
+                    "enum": [
+                      "snippet",
+                      "minimal",
+                      "full"
+                    ],
                     "default": "minimal",
                     "description": "Body format: 'snippet'=300 chars, 'minimal'=5KB (recommended), 'full'=complete."
                   }
@@ -322,19 +351,31 @@
                   {
                     "type": "object",
                     "title": "Read by IDs",
-                    "required": ["ids"],
+                    "required": [
+                      "ids"
+                    ],
                     "properties": {
-                      "ids": { "type": "array" },
-                      "format": { "type": "string" }
+                      "ids": {
+                        "type": "array"
+                      },
+                      "format": {
+                        "type": "string"
+                      }
                     }
                   },
                   {
                     "type": "object",
                     "title": "Read by search query",
-                    "required": ["searchQuery"],
+                    "required": [
+                      "searchQuery"
+                    ],
                     "properties": {
-                      "searchQuery": { "type": "string" },
-                      "format": { "type": "string" }
+                      "searchQuery": {
+                        "type": "string"
+                      },
+                      "format": {
+                        "type": "string"
+                      }
                     }
                   }
                 ]
@@ -343,7 +384,10 @@
                 "readByIds": {
                   "summary": "Read 2 specific emails by ID",
                   "value": {
-                    "ids": ["18abc123def456", "18abc789xyz012"],
+                    "ids": [
+                      "18abc123def456",
+                      "18abc789xyz012"
+                    ],
                     "format": "minimal"
                   }
                 },
@@ -369,7 +413,10 @@
                   "properties": {
                     "mode": {
                       "type": "string",
-                      "enum": ["single", "batch"],
+                      "enum": [
+                        "single",
+                        "batch"
+                      ],
                       "description": "'single'=1 email (use 'item'), 'batch'=multiple emails (use 'items' array)"
                     },
                     "item": {
@@ -434,12 +481,18 @@
             "application/json": {
               "schema": {
                 "type": "object",
-                "required": ["scope", "date"],
+                "required": [
+                  "scope",
+                  "date"
+                ],
                 "description": "Returns ALL events in specified scope by default (up to 50 max). When user asks 'what's my schedule today?', returns complete daily schedule, not subset. Status computed relative to current time. Use includePast=false (default) to hide finished events.",
                 "properties": {
                   "scope": {
                     "type": "string",
-                    "enum": ["daily", "weekly"],
+                    "enum": [
+                      "daily",
+                      "weekly"
+                    ],
                     "description": "'daily'=ALL events in single day, 'weekly'=ALL events Mon-Sun of week. For 'schedule today' use daily. For 'this week' use weekly. Returns complete schedule, not partial."
                   },
                   "date": {
@@ -531,7 +584,11 @@
                           },
                           "status": {
                             "type": "string",
-                            "enum": ["past", "ongoing", "upcoming"],
+                            "enum": [
+                              "past",
+                              "ongoing",
+                              "upcoming"
+                            ],
                             "description": "Computed status: 'past'=ended, 'ongoing'=happening now, 'upcoming'=not started. Relative to current time."
                           },
                           "locationText": {
@@ -564,7 +621,10 @@
             "application/json": {
               "schema": {
                 "type": "object",
-                "required": ["title", "when"],
+                "required": [
+                  "title",
+                  "when"
+                ],
                 "description": "Create calendar event with attendees, location, notes, optional contact enrichment, conference links, reminders. Sends calendar invites to all attendees. Max 20 attendees, max 5 reminders. Times in ISO 8601 format (Europe/Prague).",
                 "properties": {
                   "title": {
@@ -590,7 +650,10 @@
                             "description": "End time (ISO 8601). Must be after start. Example: '2025-10-20T15:00:00' for 1-hour meeting."
                           }
                         },
-                        "required": ["start", "end"]
+                        "required": [
+                          "start",
+                          "end"
+                        ]
                       },
                       "proposals": {
                         "type": "array",
@@ -599,7 +662,10 @@
                         "maxItems": 10,
                         "items": {
                           "type": "object",
-                          "required": ["start", "end"],
+                          "required": [
+                            "start",
+                            "end"
+                          ],
                           "properties": {
                             "start": {
                               "type": "string",
@@ -618,8 +684,16 @@
                     },
                     "additionalProperties": false,
                     "anyOf": [
-                      { "required": ["fixed"] },
-                      { "required": ["proposals"] }
+                      {
+                        "required": [
+                          "fixed"
+                        ]
+                      },
+                      {
+                        "required": [
+                          "proposals"
+                        ]
+                      }
                     ]
                   },
                   "attendees": {
@@ -628,7 +702,9 @@
                     "description": "Meeting attendees (max 20). Sends calendar invites. Each needs email, name optional.",
                     "items": {
                       "type": "object",
-                      "required": ["email"],
+                      "required": [
+                        "email"
+                      ],
                       "properties": {
                         "email": {
                           "type": "string",
@@ -652,19 +728,32 @@
                   },
                   "conference": {
                     "type": "string",
-                    "enum": ["none", "auto", "meet", "zoom"],
+                    "enum": [
+                      "none",
+                      "auto",
+                      "meet",
+                      "zoom"
+                    ],
                     "default": "none",
                     "description": "Video link: 'none'=no video, 'meet'=Google Meet (auto-generated), 'zoom'=adds placeholder text reminding organiser to add link manually, 'auto'=currently behaves like 'none'."
                   },
                   "enrichFromContacts": {
                     "type": "string",
-                    "enum": ["ask", "auto", "off"],
+                    "enum": [
+                      "ask",
+                      "auto",
+                      "off"
+                    ],
                     "default": "ask",
                     "description": "Enrich attendee details from Google Contacts. 'ask'=pause and return confirmToken with suggested fields, 'auto'=auto-fill without confirmation, 'off'=skip enrichment."
                   },
                   "privacy": {
                     "type": "string",
-                    "enum": ["default", "private", "public"],
+                    "enum": [
+                      "default",
+                      "private",
+                      "public"
+                    ],
                     "description": "Visibility hint stored with pending confirmation payload (currently forwarded back untouched)."
                   },
                   "reminders": {
@@ -690,7 +779,9 @@
                         "end": "2025-10-20T09:30:00"
                       }
                     },
-                    "reminders": [15]
+                    "reminders": [
+                      15
+                    ]
                   }
                 },
                 "meetingWithAttendees": {
@@ -710,7 +801,10 @@
                       }
                     ],
                     "conference": "meet",
-                    "reminders": [15, 60]
+                    "reminders": [
+                      15,
+                      60
+                    ]
                   }
                 },
                 "proposedSlots": {
@@ -750,7 +844,10 @@
                   "type": "object",
                   "properties": {
                     "event": {
-                      "type": ["object", "null"],
+                      "type": [
+                        "object",
+                        "null"
+                      ],
                       "description": "Created event details. Null when confirmToken returned for enrichment.",
                       "properties": {
                         "eventId": {
@@ -775,20 +872,32 @@
                           "items": {
                             "type": "object",
                             "properties": {
-                              "email": { "type": "string" },
-                              "name": { "type": ["string", "null"] }
+                              "email": {
+                                "type": "string"
+                              },
+                              "name": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ]
+                              }
                             }
                           }
                         }
                       }
                     },
                     "confirmToken": {
-                      "type": ["string", "null"],
+                      "type": [
+                        "string",
+                        "null"
+                      ],
                       "description": "Present when enrichFromContacts='ask' and contact data found. Call /api/macros/confirm with this token to continue."
                     },
                     "warnings": {
                       "type": "array",
-                      "items": { "type": "string" },
+                      "items": {
+                        "type": "string"
+                      },
                       "description": "Informational messages (e.g. enrichment suggestions or that auto-fill was applied)."
                     }
                   }
@@ -803,16 +912,27 @@
                 "schema": {
                   "type": "object",
                   "properties": {
-                    "error": { "type": "string" },
-                    "code": { "type": "string", "enum": ["CONFLICT"] },
+                    "error": {
+                      "type": "string"
+                    },
+                    "code": {
+                      "type": "string",
+                      "enum": [
+                        "CONFLICT"
+                      ]
+                    },
                     "alternatives": {
                       "type": "array",
                       "description": "Each item details a conflicting proposal with the conflicting events.",
                       "items": {
                         "type": "object",
                         "properties": {
-                          "proposal": { "type": "object" },
-                          "conflicts": { "type": "array" }
+                          "proposal": {
+                            "type": "object"
+                          },
+                          "conflicts": {
+                            "type": "array"
+                          }
                         }
                       }
                     }
@@ -839,7 +959,10 @@
                 "properties": {
                   "window": {
                     "type": "string",
-                    "enum": ["today", "nextHours"],
+                    "enum": [
+                      "today",
+                      "nextHours"
+                    ],
                     "description": "Time window: 'today'=ALL events today, 'nextHours'=next N hours (requires hours param)"
                   },
                   "hours": {
@@ -869,22 +992,42 @@
                     "type": "object",
                     "title": "Generate for today",
                     "properties": {
-                      "window": { "type": "string" },
-                      "template": { "type": "string" },
-                      "includeLocation": { "type": "boolean" },
-                      "createDrafts": { "type": "boolean" }
+                      "window": {
+                        "type": "string"
+                      },
+                      "template": {
+                        "type": "string"
+                      },
+                      "includeLocation": {
+                        "type": "boolean"
+                      },
+                      "createDrafts": {
+                        "type": "boolean"
+                      }
                     }
                   },
                   {
                     "type": "object",
                     "title": "Generate for next N hours",
-                    "required": ["hours"],
+                    "required": [
+                      "hours"
+                    ],
                     "properties": {
-                      "window": { "type": "string" },
-                      "hours": { "type": "integer" },
-                      "template": { "type": "string" },
-                      "includeLocation": { "type": "boolean" },
-                      "createDrafts": { "type": "boolean" }
+                      "window": {
+                        "type": "string"
+                      },
+                      "hours": {
+                        "type": "integer"
+                      },
+                      "template": {
+                        "type": "string"
+                      },
+                      "includeLocation": {
+                        "type": "boolean"
+                      },
+                      "createDrafts": {
+                        "type": "boolean"
+                      }
                     }
                   }
                 ]
@@ -929,7 +1072,10 @@
                         "type": "object",
                         "properties": {
                           "draftId": {
-                            "type": ["string", "null"],
+                            "type": [
+                              "string",
+                              "null"
+                            ],
                             "description": "Gmail draft ID. Use to access/modify/send via Gmail API. Null if createDrafts=false or draft creation failed."
                           },
                           "to": {
@@ -967,15 +1113,17 @@
       "post": {
         "operationId": "macroContactsSafeAdd",
         "summary": "Bulk add contacts with safety checks",
-        "description": "Bulk import 1-50 contacts with duplicate detection plus confirmation. Strategies: ask (confirm), skip, merge, create. For deep cleanup use /rpc/contacts (dedupe then bulkDelete). Field 'realestate' stores organization.",
+        "description": "Bulk import 1-50 contacts with duplicate detection plus confirmation. Strategies: ask (confirm), skip, merge, create. For deep cleanup use /rpc/contacts (op:\"dedupe\") then POST /contacts/actions/bulkDelete. Field 'realestate' stores organization.",
         "requestBody": {
           "required": true,
           "content": {
             "application/json": {
               "schema": {
                 "type": "object",
-                "required": ["entries"],
-                "description": "Bulk add contacts (1-50) with duplicate detection and follow-up confirmation. Each entry needs 'name' (required), optional 'email'/'phone'/'realestate'/'notes'. Strategies: 'ask' (default, safest – pause and return confirmToken), 'skip' (do not add duplicates), 'merge' (auto-merge into best match), 'create' (always add). Matching logic: email exact match > phone match > name exact match > partial name match. For removing duplicates after review, call /rpc/contacts with op:'dedupe' then op:'bulkDelete'.",
+                "required": [
+                  "entries"
+                ],
+                "description": "Bulk add contacts (1-50) with duplicate detection and follow-up confirmation. Each entry needs 'name' (required), optional 'email'/'phone'/'realestate'/'notes'. Strategies: 'ask' (default, safest – pause and return confirmToken), 'skip' (do not add duplicates), 'merge' (auto-merge into best match), 'create' (always add). Matching logic: email exact match > phone match > name exact match > partial name match. For removing duplicates after review, call /rpc/contacts with op:\"dedupe\" then POST /contacts/actions/bulkDelete.",
                 "properties": {
                   "entries": {
                     "type": "array",
@@ -984,7 +1132,9 @@
                     "description": "Contacts to add (1-50). Each: name (required), email/phone/realestate/notes (optional). Duplicate check on name/email/phone.",
                     "items": {
                       "type": "object",
-                      "required": ["name"],
+                      "required": [
+                        "name"
+                      ],
                       "properties": {
                         "name": {
                           "type": "string",
@@ -1016,7 +1166,12 @@
                   },
                   "dedupeStrategy": {
                     "type": "string",
-                    "enum": ["ask", "skip", "merge", "create"],
+                    "enum": [
+                      "ask",
+                      "skip",
+                      "merge",
+                      "create"
+                    ],
                     "default": "ask",
                     "description": "Duplicate handling strategy: 'ask' (default, safest) = detect duplicates and return confirmToken for user to decide, 'skip' = skip entries with duplicates (don't add), 'merge' = auto-merge into existing (preserve existing, add new fields), 'create' = always add (may create duplicates). For safest experience, use 'ask' (requires user confirmation). For bulk imports, use 'merge'."
                   }
@@ -1024,51 +1179,51 @@
               },
               "examples": {
                 "singleContact": {
-                "summary": "Add single contact (safest: asks if duplicate)",
-                "value": {
-                "entries": [
-                {
-                "name": "John Smith",
-                "email": "john@example.com",
-                "phone": "+420 123 456 789",
-                "realestate": "Acme Corp"
-                }
-                ],
-                  "dedupeStrategy": "ask"
+                  "summary": "Add single contact (safest: asks if duplicate)",
+                  "value": {
+                    "entries": [
+                      {
+                        "name": "John Smith",
+                        "email": "john@example.com",
+                        "phone": "+420 123 456 789",
+                        "realestate": "Acme Corp"
+                      }
+                    ],
+                    "dedupeStrategy": "ask"
                   }
                 },
                 "bulkImportAutoMerge": {
-                "summary": "Import 3 contacts with auto-merge into existing",
-                "value": {
-                "entries": [
-                {
-                "name": "Jane Doe",
-                  "email": "jane@company.com"
-                },
-                {
-                "name": "Bob Wilson",
-                  "email": "bob@startup.io"
-                  },
-                  {
-                      "name": "Alice Brown",
+                  "summary": "Import 3 contacts with auto-merge into existing",
+                  "value": {
+                    "entries": [
+                      {
+                        "name": "Jane Doe",
+                        "email": "jane@company.com"
+                      },
+                      {
+                        "name": "Bob Wilson",
+                        "email": "bob@startup.io"
+                      },
+                      {
+                        "name": "Alice Brown",
                         "phone": "+420 999 888 777"
-                        }
-                      ],
-                      "dedupeStrategy": "merge"
-                    }
-                  },
-                  "bulkImportSkip": {
-                    "summary": "Import but skip any duplicates found",
-                    "value": {
-                      "entries": [
-                        {
-                          "name": "Bob Wilson",
-                          "email": "bob@startup.io"
-                        }
-                      ],
-                      "dedupeStrategy": "skip"
-                    }
+                      }
+                    ],
+                    "dedupeStrategy": "merge"
                   }
+                },
+                "bulkImportSkip": {
+                  "summary": "Import but skip any duplicates found",
+                  "value": {
+                    "entries": [
+                      {
+                        "name": "Bob Wilson",
+                        "email": "bob@startup.io"
+                      }
+                    ],
+                    "dedupeStrategy": "skip"
+                  }
+                }
               }
             }
           }
@@ -1087,8 +1242,12 @@
                       "items": {
                         "type": "object",
                         "properties": {
-                          "name": {"type": "string"},
-                          "email": {"type": "string"}
+                          "name": {
+                            "type": "string"
+                          },
+                          "email": {
+                            "type": "string"
+                          }
                         }
                       }
                     },
@@ -1098,9 +1257,18 @@
                       "items": {
                         "type": "object",
                         "properties": {
-                          "merged_into": {"type": "string", "description": "Email of existing contact that was merged into"},
-                          "from": {"type": "string", "description": "Name of new contact that was merged"},
-                          "fields_updated": {"type": "array", "description": "Which fields were updated (phone, notes, etc)"}
+                          "merged_into": {
+                            "type": "string",
+                            "description": "Email of existing contact that was merged into"
+                          },
+                          "from": {
+                            "type": "string",
+                            "description": "Name of new contact that was merged"
+                          },
+                          "fields_updated": {
+                            "type": "array",
+                            "description": "Which fields were updated (phone, notes, etc)"
+                          }
                         }
                       }
                     },
@@ -1110,10 +1278,19 @@
                       "items": {
                         "type": "object",
                         "properties": {
-                          "email": {"type": "string"},
-                          "name": {"type": "string"},
-                          "reason": {"type": "string"},
-                          "existing": {"type": "array", "description": "Existing contacts that matched (if duplicates found)"}
+                          "email": {
+                            "type": "string"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "reason": {
+                            "type": "string"
+                          },
+                          "existing": {
+                            "type": "array",
+                            "description": "Existing contacts that matched (if duplicates found)"
+                          }
                         }
                       }
                     },
@@ -1123,8 +1300,10 @@
                     },
                     "warnings": {
                       "type": "array",
-                      "description": "Informational messages for user (e.g., duplicate counts, reminder to confirm or to use /rpc/contacts dedupe+bulkDelete for cleanup)",
-                      "items": {"type": "string"}
+                      "description": "Informational messages for user (e.g., duplicate counts, reminder to confirm or to use /rpc/contacts (dedupe) + /contacts/actions/bulkDelete for cleanup)",
+                      "items": {
+                        "type": "string"
+                      }
                     }
                   }
                 }
@@ -1145,12 +1324,17 @@
             "application/json": {
               "schema": {
                 "type": "object",
-                "required": ["scope"],
+                "required": [
+                  "scope"
+                ],
                 "description": "Returns ALL tasks in specified scope grouped by due date. Daily=ALL today's tasks, weekly=ALL this week's tasks. Four sections: 'today', 'thisWeek', 'overdue', 'completed' (if includeCompleted=true). Complete task list, not subset.",
                 "properties": {
                   "scope": {
                     "type": "string",
-                    "enum": ["daily", "weekly"],
+                    "enum": [
+                      "daily",
+                      "weekly"
+                    ],
                     "description": "'daily'=ALL tasks due today (24 hours). 'weekly'=ALL tasks due this week (Mon-Sun). Complete list, not subset."
                   },
                   "includeCompleted": {
@@ -1219,8 +1403,8 @@
     "/rpc/contacts": {
       "post": {
         "operationId": "contactsRpc",
-        "summary": "Advanced contact RPC operations (9 operations)",
-        "description": "Low-level contact operations: list, search, add, update, delete, dedupe, bulkUpsert, bulkDelete, addressSuggest. Use /macros/contacts/safeAdd for safe workflow, /rpc/contacts for direct control. Parameters may be nested under 'params' or supplied directly next to 'op'.",
+        "summary": "Advanced contact RPC (read-only + dedupe helpers)",
+        "description": "Low-level contact helpers backed by Google Sheets. Supports list, search, add, dedupe, bulkUpsert, and addressSuggest. Mutating operations (modify, delete, bulkDelete) now live at /api/contacts/actions/modify|delete|bulkDelete.",
         "requestBody": {
           "required": true,
           "content": {
@@ -1231,51 +1415,61 @@
               "examples": {
                 "list": {
                   "summary": "Get all contacts",
-                  "value": {"op": "list"}
+                  "value": {
+                    "op": "list"
+                  }
                 },
                 "search": {
                   "summary": "Search for 'john'",
-                  "value": {"op": "search", "params": {"query": "john"}}
+                  "value": {
+                    "op": "search",
+                    "params": {
+                      "query": "john"
+                    }
+                  }
                 },
                 "add": {
                   "summary": "Add single contact",
-                  "value": {"op": "add", "params": {"name": "John Smith", "email": "john@example.com"}}
-                },
-                "update": {
-                  "summary": "Update existing contact",
-                  "value": {"op": "update", "params": {"name": "John Smith", "email": "john@example.com", "phone": "+420 999 999 999"}}
-                },
-                "delete": {
-                  "summary": "Delete by email",
-                  "value": {"op": "delete", "params": {"email": "old@example.com"}}
+                  "value": {
+                    "op": "add",
+                    "params": {
+                      "name": "John Smith",
+                      "email": "john@example.com"
+                    }
+                  }
                 },
                 "dedupe": {
                   "summary": "Find duplicate contacts",
-                  "value": {"op": "dedupe"}
+                  "value": {
+                    "op": "dedupe"
+                  }
                 },
                 "bulkUpsert": {
                   "summary": "Batch add contacts",
-                  "value": {"op": "bulkUpsert", "params": {"contacts": [{"name": "Alice", "email": "alice@example.com"}, {"name": "Bob", "email": "bob@example.com"}]}}
-                },
-                "bulkDeleteByRowIds": {
-                  "summary": "Delete specific rows (keep one, remove duplicates)",
-                  "value": {"op": "bulkDelete", "params": {"rowIds": [3, 5]}}
-                },
-                "bulkDeleteRowIdsDirect": {
-                  "summary": "Delete duplicates with rowIds at root (no params wrapper)",
-                  "value": {"op": "bulkDelete", "rowIds": [3, 5]}
-                },
-                "bulkDeleteByEmails": {
-                  "summary": "Delete entire contact by email",
-                  "value": {"op": "bulkDelete", "params": {"emails": ["john@example.com"]}}
-                },
-                "bulkDeleteEmailsDirect": {
-                  "summary": "Delete entire contact by email (direct root-level field)",
-                  "value": {"op": "bulkDelete", "emails": ["john@example.com"]}
+                  "value": {
+                    "op": "bulkUpsert",
+                    "params": {
+                      "contacts": [
+                        {
+                          "name": "Alice",
+                          "email": "alice@example.com"
+                        },
+                        {
+                          "name": "Bob",
+                          "email": "bob@example.com"
+                        }
+                      ]
+                    }
+                  }
                 },
                 "addressSuggest": {
                   "summary": "Get address suggestions from realEstate field",
-                  "value": {"op": "addressSuggest", "params": {"query": "Vrchlického"}}
+                  "value": {
+                    "op": "addressSuggest",
+                    "params": {
+                      "query": "Vrchlického"
+                    }
+                  }
                 }
               }
             }
@@ -1289,8 +1483,14 @@
                 "schema": {
                   "type": "object",
                   "properties": {
-                    "ok": {"type": "boolean", "description": "Always true on success"},
-                    "data": {"type": "object", "description": "Response data (varies by operation)"}
+                    "ok": {
+                      "type": "boolean",
+                      "description": "Always true on success"
+                    },
+                    "data": {
+                      "type": "object",
+                      "description": "Response data (varies by operation)"
+                    }
                   }
                 }
               }
@@ -1303,16 +1503,29 @@
                 "schema": {
                   "type": "object",
                   "properties": {
-                    "error": {"type": "string"},
-                    "message": {"type": "string"},
-                    "code": {"type": "string", "enum": ["INVALID_PARAM"]}
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "code": {
+                      "type": "string",
+                      "enum": [
+                        "INVALID_PARAM"
+                      ]
+                    }
                   }
                 }
               }
             }
           },
-          "401": {"description": "Authentication required"},
-          "500": {"description": "Server error"}
+          "401": {
+            "description": "Authentication required"
+          },
+          "500": {
+            "description": "Server error"
+          }
         }
       }
     },
@@ -1327,11 +1540,22 @@
             "application/json": {
               "schema": {
                 "type": "object",
-                "required": ["op"],
+                "required": [
+                  "op"
+                ],
                 "properties": {
                   "op": {
                     "type": "string",
-                    "enum": ["search", "preview", "read", "send", "reply", "modify", "attachmentPreview", "labels"],
+                    "enum": [
+                      "search",
+                      "preview",
+                      "read",
+                      "send",
+                      "reply",
+                      "modify",
+                      "attachmentPreview",
+                      "labels"
+                    ],
                     "description": "Operation: search, preview (metadata for ids), read (full email or by search), send (direct OR by draftId), reply, modify labels, preview attachments, or manage labels list/modify."
                   },
                   "params": {
@@ -1340,7 +1564,9 @@
                         "type": "object",
                         "title": "Send Draft",
                         "description": "Send existing draft by ID (op=send with draftId)",
-                        "required": ["draftId"],
+                        "required": [
+                          "draftId"
+                        ],
                         "properties": {
                           "draftId": {
                             "type": "string",
@@ -1354,7 +1580,11 @@
                         "type": "object",
                         "title": "Send Direct Email",
                         "description": "Send email directly without draft (op=send with to+subject+body)",
-                        "required": ["to", "subject", "body"],
+                        "required": [
+                          "to",
+                          "subject",
+                          "body"
+                        ],
                         "properties": {
                           "to": {
                             "type": "string",
@@ -1388,7 +1618,9 @@
                         "type": "object",
                         "title": "Search",
                         "description": "Search emails (op=search)",
-                        "required": ["query"],
+                        "required": [
+                          "query"
+                        ],
                         "properties": {
                           "query": {
                             "type": "string",
@@ -1405,14 +1637,39 @@
                         "type": "object",
                         "title": "Attachment preview",
                         "description": "Preview text/table from attachment (op=attachmentPreview)",
-                        "required": ["messageId", "attachmentId", "mode"],
+                        "required": [
+                          "messageId",
+                          "attachmentId",
+                          "mode"
+                        ],
                         "properties": {
-                          "messageId": { "type": "string" },
-                          "attachmentId": { "type": "string" },
-                          "mode": { "type": "string", "enum": ["text", "table"] },
-                          "maxKb": { "type": "integer", "minimum": 1, "maximum": 512 },
-                          "maxRows": { "type": "integer", "minimum": 1, "maximum": 200 },
-                          "delimiter": { "type": "string", "description": "Table delimiter (optional, defaults to auto)." }
+                          "messageId": {
+                            "type": "string"
+                          },
+                          "attachmentId": {
+                            "type": "string"
+                          },
+                          "mode": {
+                            "type": "string",
+                            "enum": [
+                              "text",
+                              "table"
+                            ]
+                          },
+                          "maxKb": {
+                            "type": "integer",
+                            "minimum": 1,
+                            "maximum": 512
+                          },
+                          "maxRows": {
+                            "type": "integer",
+                            "minimum": 1,
+                            "maximum": 200
+                          },
+                          "delimiter": {
+                            "type": "string",
+                            "description": "Table delimiter (optional, defaults to auto)."
+                          }
                         }
                       },
                       {
@@ -1420,23 +1677,33 @@
                         "title": "Labels ops",
                         "description": "List or modify labels (op=labels)",
                         "properties": {
-                          "list": { "type": "boolean" },
+                          "list": {
+                            "type": "boolean"
+                          },
                           "modify": {
                             "type": "object",
                             "properties": {
-                              "messageId": { "type": "string" },
+                              "messageId": {
+                                "type": "string"
+                              },
                               "ids": {
                                 "type": "array",
-                                "items": { "type": "string" },
+                                "items": {
+                                  "type": "string"
+                                },
                                 "description": "Alternative to messageId. When provided, modifies first id only (matches service)."
                               },
                               "add": {
                                 "type": "array",
-                                "items": { "type": "string" }
+                                "items": {
+                                  "type": "string"
+                                }
                               },
                               "remove": {
                                 "type": "array",
-                                "items": { "type": "string" }
+                                "items": {
+                                  "type": "string"
+                                }
                               }
                             }
                           }
@@ -1519,12 +1786,25 @@
                 "schema": {
                   "type": "object",
                   "properties": {
-                    "error": { "type": "string" },
-                    "message": { "type": "string" },
-                    "code": { "type": "string" },
-                    "details": { "type": "string", "description": "Specific format requirements" },
-                    "option1": { "type": "object" },
-                    "option2": { "type": "object" }
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "code": {
+                      "type": "string"
+                    },
+                    "details": {
+                      "type": "string",
+                      "description": "Specific format requirements"
+                    },
+                    "option1": {
+                      "type": "object"
+                    },
+                    "option2": {
+                      "type": "object"
+                    }
                   }
                 }
               }
@@ -1544,11 +1824,20 @@
             "application/json": {
               "schema": {
                 "type": "object",
-                "required": ["op"],
+                "required": [
+                  "op"
+                ],
                 "properties": {
                   "op": {
                     "type": "string",
-                    "enum": ["list", "get", "create", "update", "delete", "checkConflicts"],
+                    "enum": [
+                      "list",
+                      "get",
+                      "create",
+                      "update",
+                      "delete",
+                      "checkConflicts"
+                    ],
                     "description": "Operation type. CRITICAL for update: must include eventId and updates fields with proper start/end structure."
                   },
                   "params": {
@@ -1566,7 +1855,10 @@
                           "start": {
                             "type": "object",
                             "description": "FIXED: start is an OBJECT with required fields dateTime and timeZone",
-                            "required": ["dateTime", "timeZone"],
+                            "required": [
+                              "dateTime",
+                              "timeZone"
+                            ],
                             "properties": {
                               "dateTime": {
                                 "type": "string",
@@ -1584,7 +1876,10 @@
                           "end": {
                             "type": "object",
                             "description": "FIXED: end is an OBJECT with required fields dateTime and timeZone",
-                            "required": ["dateTime", "timeZone"],
+                            "required": [
+                              "dateTime",
+                              "timeZone"
+                            ],
                             "properties": {
                               "dateTime": {
                                 "type": "string",
@@ -1597,15 +1892,24 @@
                               }
                             }
                           },
-                          "summary": { "type": "string" },
-                          "description": { "type": "string" },
-                          "location": { "type": "string" },
+                          "summary": {
+                            "type": "string"
+                          },
+                          "description": {
+                            "type": "string"
+                          },
+                          "location": {
+                            "type": "string"
+                          },
                           "attendees": {
                             "type": "array",
                             "items": {
                               "type": "object",
                               "properties": {
-                                "email": { "type": "string", "format": "email" }
+                                "email": {
+                                  "type": "string",
+                                  "format": "email"
+                                }
                               }
                             }
                           }
@@ -1642,7 +1946,9 @@
                           "timeZone": "Europe/Prague"
                         },
                         "attendees": [
-                          { "email": "user@example.com" }
+                          {
+                            "email": "user@example.com"
+                          }
                         ]
                       }
                     }
@@ -1673,11 +1979,21 @@
                 "schema": {
                   "type": "object",
                   "properties": {
-                    "error": { "type": "string" },
-                    "message": { "type": "string" },
-                    "code": { "type": "string" },
-                    "details": { "type": "string" },
-                    "expectedFormat": { "type": "object" }
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "code": {
+                      "type": "string"
+                    },
+                    "details": {
+                      "type": "string"
+                    },
+                    "expectedFormat": {
+                      "type": "object"
+                    }
                   }
                 }
               }
@@ -1727,14 +2043,197 @@
           }
         }
       }
+    },
+    "/contacts/actions/modify": {
+      "post": {
+        "operationId": "contactsModify",
+        "tags": [
+          "Contacts"
+        ],
+        "summary": "Modify an existing contact (idempotent)",
+        "description": "Direct mutation endpoint for GPT. Updates an existing contact identified by name+email; creates if missing. Provide Idempotency-Key header for safe retries.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ContactsModifyActionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Contact updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    },
+                    "contact": {
+                      "type": "object",
+                      "description": "Updated contact payload"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request - invalid parameters"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "404": {
+            "description": "Not found"
+          },
+          "409": {
+            "description": "Conflict"
+          },
+          "500": {
+            "description": "Server error"
+          }
+        }
+      }
+    },
+    "/contacts/actions/delete": {
+      "post": {
+        "operationId": "contactsDelete",
+        "tags": [
+          "Contacts"
+        ],
+        "summary": "Delete a contact (email or name)",
+        "description": "Deletes a contact row from Google Sheets by email (preferred) or by unique name. Returns 409 if name matches multiple contacts.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ContactsDeleteActionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Contact deleted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    },
+                    "deleted": {
+                      "type": "object",
+                      "description": "Deleted contact data (if available)"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request - invalid parameters"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "404": {
+            "description": "Not found"
+          },
+          "409": {
+            "description": "Conflict"
+          },
+          "500": {
+            "description": "Server error"
+          }
+        }
+      }
+    },
+    "/contacts/actions/bulkDelete": {
+      "post": {
+        "operationId": "contactsBulkDelete",
+        "tags": [
+          "Contacts"
+        ],
+        "summary": "Bulk delete contacts (emails or rowIds)",
+        "description": "Delete full contacts by email or remove duplicate rows by rowIds. Accepts up to 100 entries per call.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ContactsBulkDeleteActionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Rows deleted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    },
+                    "deleted": {
+                      "type": "integer",
+                      "description": "Number of rows removed."
+                    },
+                    "mode": {
+                      "type": "string",
+                      "enum": [
+                        "emails",
+                        "rowIds"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request - invalid parameters"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "404": {
+            "description": "Not found"
+          },
+          "409": {
+            "description": "Conflict"
+          },
+          "500": {
+            "description": "Server error"
+          }
+        }
+      }
     }
   },
   "components": {
     "schemas": {
       "ContactsRpcRequest": {
         "type": "object",
-        "required": ["op"],
-        "description": "Contacts RPC payload backed 100% by Google Sheets (no MongoDB writes). Always include an 'op'. Parameters can be supplied either inside a nested 'params' object (legacy format) or directly at the root next to 'op' (e.g. {\"op\": \"bulkDelete\", \"rowIds\": [3,5]}). The backend normalizes both forms.\n\n**WORKFLOW 1 – REMOVE DUPLICATES (keep best contact, delete extras):**\n  Step 1: Call {\"op\": \"dedupe\"} → Returns groups like {rowIndex: [2,3,5]} meaning 3 duplicates\n  Step 2: Pick the best rowIndex (most complete data)\n  Step 3: Call bulkDelete with the extra rowIds only: {\"op\": \"bulkDelete\", \"params\": {\"rowIds\": [3,5]}} to keep row 2 (or supply rowIds at root).\n\n**WORKFLOW 2 – DELETE ENTIRE CONTACT (all occurrences):**\n  Call {\"op\": \"bulkDelete\", \"params\": {\"emails\": [\"john@example.com\"]}} → Deletes ALL rows with that email (root-level emails also accepted).\n\n**IMPORTANT:** bulkDelete has TWO modes:\n  • emails mode: Deletes COMPLETE contact (all rows with email)\n  • rowIds mode: Deletes SPECIFIC rows (surgical, keeps others with same email)\n\nAlways use rowIds mode for duplicate cleanup (keeps one), emails mode for complete removal.",
+        "required": [
+          "op"
+        ],
+        "description": "Contacts RPC payload backed 100% by Google Sheets (no MongoDB writes). Always include an 'op'. Parameters can be supplied either inside a nested 'params' object (legacy format) or directly at the root next to 'op'.\n\n**WORKFLOW 1 – REMOVE DUPLICATES (keep best contact, delete extras):**\n  Step 1: Call {\"op\": \"dedupe\"} → Returns groups like {rowIndex: [2,3,5]} meaning duplicates.\n  Step 2: Pick the best rowIndex (most complete data).\n  Step 3: POST /contacts/actions/bulkDelete with {\"rowIds\": [3,5]} to remove extra rows (keep row 2).\n\n**WORKFLOW 2 – DELETE ENTIRE CONTACT (all occurrences):**\n  POST /contacts/actions/bulkDelete with {\"emails\": [\"john@example.com\"]} → Deletes ALL rows with that email.\n\n**IMPORTANT:** rowIds mode = surgical delete (keeps the best row). emails mode = delete entire contact.\n\nMutating operations (modify/delete/bulkDelete) are available via /api/contacts/actions/modify, /api/contacts/actions/delete and /api/contacts/actions/bulkDelete.",
         "properties": {
           "op": {
             "type": "string",
@@ -1743,10 +2242,7 @@
               "dedupe",
               "search",
               "add",
-              "update",
-              "delete",
               "bulkUpsert",
-              "bulkDelete",
               "addressSuggest"
             ],
             "description": "Operation to perform against the Google Sheets contacts backend."
@@ -1757,16 +2253,24 @@
           }
         },
         "oneOf": [
-          { "$ref": "#/components/schemas/ContactsListRequest" },
-          { "$ref": "#/components/schemas/ContactsDedupeRequest" },
-          { "$ref": "#/components/schemas/ContactsSearchRequest" },
-          { "$ref": "#/components/schemas/ContactsAddRequest" },
-          { "$ref": "#/components/schemas/ContactsUpdateRequest" },
-          { "$ref": "#/components/schemas/ContactsDeleteRequest" },
-          { "$ref": "#/components/schemas/ContactsBulkUpsertRequest" },
-          { "$ref": "#/components/schemas/ContactsBulkDeleteByEmailsRequest" },
-          { "$ref": "#/components/schemas/ContactsBulkDeleteByRowIdsRequest" },
-          { "$ref": "#/components/schemas/ContactsAddressSuggestRequest" }
+          {
+            "$ref": "#/components/schemas/ContactsListRequest"
+          },
+          {
+            "$ref": "#/components/schemas/ContactsDedupeRequest"
+          },
+          {
+            "$ref": "#/components/schemas/ContactsSearchRequest"
+          },
+          {
+            "$ref": "#/components/schemas/ContactsAddRequest"
+          },
+          {
+            "$ref": "#/components/schemas/ContactsBulkUpsertRequest"
+          },
+          {
+            "$ref": "#/components/schemas/ContactsAddressSuggestRequest"
+          }
         ],
         "x-googleSheetsParams": {
           "list": {
@@ -1779,9 +2283,14 @@
             "description": "Search contacts. Params: {query}",
             "schema": {
               "type": "object",
-              "required": ["query"],
+              "required": [
+                "query"
+              ],
               "properties": {
-                "query": { "type": "string", "description": "Search expression (diacritics stripped)." }
+                "query": {
+                  "type": "string",
+                  "description": "Search expression (diacritics stripped)."
+                }
               }
             }
           },
@@ -1789,13 +2298,25 @@
             "description": "Add a single contact row. Params: {name, email?, phone?, realestate?, notes?}",
             "schema": {
               "type": "object",
-              "required": ["name"],
+              "required": [
+                "name"
+              ],
               "properties": {
-                "name": { "type": "string" },
-                "email": { "type": "string" },
-                "phone": { "type": "string" },
-                "realestate": { "type": "string" },
-                "notes": { "type": "string" }
+                "name": {
+                  "type": "string"
+                },
+                "email": {
+                  "type": "string"
+                },
+                "phone": {
+                  "type": "string"
+                },
+                "realestate": {
+                  "type": "string"
+                },
+                "notes": {
+                  "type": "string"
+                }
               }
             }
           },
@@ -1803,13 +2324,25 @@
             "description": "Update an existing contact (matched by email). Params: {email, name?, phone?, realestate?, notes?}",
             "schema": {
               "type": "object",
-              "required": ["email"],
+              "required": [
+                "email"
+              ],
               "properties": {
-                "email": { "type": "string" },
-                "name": { "type": "string" },
-                "phone": { "type": "string" },
-                "realestate": { "type": "string" },
-                "notes": { "type": "string" }
+                "email": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "phone": {
+                  "type": "string"
+                },
+                "realestate": {
+                  "type": "string"
+                },
+                "notes": {
+                  "type": "string"
+                }
               }
             }
           },
@@ -1818,8 +2351,12 @@
             "schema": {
               "type": "object",
               "properties": {
-                "email": { "type": "string" },
-                "name": { "type": "string" }
+                "email": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                }
               }
             }
           },
@@ -1827,7 +2364,9 @@
             "description": "Upsert up to 50 contacts. Params: {contacts: Contact[]} where Contact={name, email?, phone?, realestate?, notes?}",
             "schema": {
               "type": "object",
-              "required": ["contacts"],
+              "required": [
+                "contacts"
+              ],
               "properties": {
                 "contacts": {
                   "type": "array",
@@ -1835,13 +2374,25 @@
                   "maxItems": 50,
                   "items": {
                     "type": "object",
-                    "required": ["name"],
+                    "required": [
+                      "name"
+                    ],
                     "properties": {
-                      "name": { "type": "string" },
-                      "email": { "type": "string" },
-                      "phone": { "type": "string" },
-                      "realestate": { "type": "string" },
-                      "notes": { "type": "string" }
+                      "name": {
+                        "type": "string"
+                      },
+                      "email": {
+                        "type": "string"
+                      },
+                      "phone": {
+                        "type": "string"
+                      },
+                      "realestate": {
+                        "type": "string"
+                      },
+                      "notes": {
+                        "type": "string"
+                      }
                     }
                   }
                 }
@@ -1854,24 +2405,32 @@
               "oneOf": [
                 {
                   "type": "object",
-                  "required": ["emails"],
+                  "required": [
+                    "emails"
+                  ],
                   "properties": {
                     "emails": {
                       "type": "array",
                       "minItems": 1,
-                      "items": { "type": "string" }
+                      "items": {
+                        "type": "string"
+                      }
                     }
                   },
                   "additionalProperties": false
                 },
                 {
                   "type": "object",
-                  "required": ["rowIds"],
+                  "required": [
+                    "rowIds"
+                  ],
                   "properties": {
                     "rowIds": {
                       "type": "array",
                       "minItems": 1,
-                      "items": { "type": "integer" }
+                      "items": {
+                        "type": "integer"
+                      }
                     }
                   },
                   "additionalProperties": false
@@ -1883,9 +2442,13 @@
             "description": "Get address suggestions for the realEstate column. Params: {query}",
             "schema": {
               "type": "object",
-              "required": ["query"],
+              "required": [
+                "query"
+              ],
               "properties": {
-                "query": { "type": "string" }
+                "query": {
+                  "type": "string"
+                }
               }
             }
           }
@@ -1894,19 +2457,29 @@
       },
       "ContactsBaseRequest": {
         "type": "object",
-        "required": ["op"],
+        "required": [
+          "op"
+        ],
         "properties": {
-          "op": { "type": "string" },
-          "params": { "type": "object" }
+          "op": {
+            "type": "string"
+          },
+          "params": {
+            "type": "object"
+          }
         },
         "additionalProperties": false
       },
       "ContactsListRequest": {
         "allOf": [
-          { "$ref": "#/components/schemas/ContactsBaseRequest" },
+          {
+            "$ref": "#/components/schemas/ContactsBaseRequest"
+          },
           {
             "properties": {
-              "op": { "const": "list" },
+              "op": {
+                "const": "list"
+              },
               "params": {
                 "type": "object",
                 "description": "No params required. Omit entirely or send {}.",
@@ -1918,10 +2491,14 @@
       },
       "ContactsDedupeRequest": {
         "allOf": [
-          { "$ref": "#/components/schemas/ContactsBaseRequest" },
+          {
+            "$ref": "#/components/schemas/ContactsBaseRequest"
+          },
           {
             "properties": {
-              "op": { "const": "dedupe" },
+              "op": {
+                "const": "dedupe"
+              },
               "params": {
                 "type": "object",
                 "description": "No params required. Omit entirely or send {}.",
@@ -1933,14 +2510,22 @@
       },
       "ContactsSearchRequest": {
         "allOf": [
-          { "$ref": "#/components/schemas/ContactsBaseRequest" },
           {
-            "required": ["params"],
+            "$ref": "#/components/schemas/ContactsBaseRequest"
+          },
+          {
+            "required": [
+              "params"
+            ],
             "properties": {
-              "op": { "const": "search" },
+              "op": {
+                "const": "search"
+              },
               "params": {
                 "type": "object",
-                "required": ["query"],
+                "required": [
+                  "query"
+                ],
                 "properties": {
                   "query": {
                     "type": "string",
@@ -1955,20 +2540,40 @@
       },
       "ContactsAddRequest": {
         "allOf": [
-          { "$ref": "#/components/schemas/ContactsBaseRequest" },
           {
-            "required": ["params"],
+            "$ref": "#/components/schemas/ContactsBaseRequest"
+          },
+          {
+            "required": [
+              "params"
+            ],
             "properties": {
-              "op": { "const": "add" },
+              "op": {
+                "const": "add"
+              },
               "params": {
                 "type": "object",
-                "required": ["name", "email"],
+                "required": [
+                  "name",
+                  "email"
+                ],
                 "properties": {
-                  "name": { "type": "string" },
-                  "email": { "type": "string", "format": "email" },
-                  "phone": { "type": "string" },
-                  "realestate": { "type": "string" },
-                  "notes": { "type": "string" }
+                  "name": {
+                    "type": "string"
+                  },
+                  "email": {
+                    "type": "string",
+                    "format": "email"
+                  },
+                  "phone": {
+                    "type": "string"
+                  },
+                  "realestate": {
+                    "type": "string"
+                  },
+                  "notes": {
+                    "type": "string"
+                  }
                 },
                 "additionalProperties": false
               }
@@ -1978,20 +2583,40 @@
       },
       "ContactsUpdateRequest": {
         "allOf": [
-          { "$ref": "#/components/schemas/ContactsBaseRequest" },
           {
-            "required": ["params"],
+            "$ref": "#/components/schemas/ContactsBaseRequest"
+          },
+          {
+            "required": [
+              "params"
+            ],
             "properties": {
-              "op": { "const": "update" },
+              "op": {
+                "const": "update"
+              },
               "params": {
                 "type": "object",
-                "required": ["name", "email"],
+                "required": [
+                  "name",
+                  "email"
+                ],
                 "properties": {
-                  "name": { "type": "string" },
-                  "email": { "type": "string", "format": "email" },
-                  "phone": { "type": "string" },
-                  "realestate": { "type": "string" },
-                  "notes": { "type": "string" }
+                  "name": {
+                    "type": "string"
+                  },
+                  "email": {
+                    "type": "string",
+                    "format": "email"
+                  },
+                  "phone": {
+                    "type": "string"
+                  },
+                  "realestate": {
+                    "type": "string"
+                  },
+                  "notes": {
+                    "type": "string"
+                  }
                 },
                 "additionalProperties": false
               }
@@ -2001,22 +2626,46 @@
       },
       "ContactsDeleteRequest": {
         "allOf": [
-          { "$ref": "#/components/schemas/ContactsBaseRequest" },
           {
-            "required": ["params"],
+            "$ref": "#/components/schemas/ContactsBaseRequest"
+          },
+          {
+            "required": [
+              "params"
+            ],
             "properties": {
-              "op": { "const": "delete" },
+              "op": {
+                "const": "delete"
+              },
               "params": {
                 "type": "object",
                 "properties": {
-                  "email": { "type": "string", "format": "email" },
-                  "name": { "type": "string" }
+                  "email": {
+                    "type": "string",
+                    "format": "email"
+                  },
+                  "name": {
+                    "type": "string"
+                  }
                 },
                 "additionalProperties": false,
                 "oneOf": [
-                  { "required": ["email"] },
-                  { "required": ["name"] },
-                  { "required": ["email", "name"] }
+                  {
+                    "required": [
+                      "email"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "name"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "email",
+                      "name"
+                    ]
+                  }
                 ]
               }
             }
@@ -2025,14 +2674,22 @@
       },
       "ContactsBulkUpsertRequest": {
         "allOf": [
-          { "$ref": "#/components/schemas/ContactsBaseRequest" },
           {
-            "required": ["params"],
+            "$ref": "#/components/schemas/ContactsBaseRequest"
+          },
+          {
+            "required": [
+              "params"
+            ],
             "properties": {
-              "op": { "const": "bulkUpsert" },
+              "op": {
+                "const": "bulkUpsert"
+              },
               "params": {
                 "type": "object",
-                "required": ["contacts"],
+                "required": [
+                  "contacts"
+                ],
                 "properties": {
                   "contacts": {
                     "type": "array",
@@ -2040,13 +2697,26 @@
                     "maxItems": 50,
                     "items": {
                       "type": "object",
-                      "required": ["name"],
+                      "required": [
+                        "name"
+                      ],
                       "properties": {
-                        "name": { "type": "string" },
-                        "email": { "type": "string", "format": "email" },
-                        "phone": { "type": "string" },
-                        "realestate": { "type": "string" },
-                        "notes": { "type": "string" }
+                        "name": {
+                          "type": "string"
+                        },
+                        "email": {
+                          "type": "string",
+                          "format": "email"
+                        },
+                        "phone": {
+                          "type": "string"
+                        },
+                        "realestate": {
+                          "type": "string"
+                        },
+                        "notes": {
+                          "type": "string"
+                        }
                       },
                       "additionalProperties": false
                     }
@@ -2062,19 +2732,30 @@
         "anyOf": [
           {
             "allOf": [
-              { "$ref": "#/components/schemas/ContactsBaseRequest" },
               {
-                "required": ["params"],
+                "$ref": "#/components/schemas/ContactsBaseRequest"
+              },
+              {
+                "required": [
+                  "params"
+                ],
                 "properties": {
-                  "op": { "const": "bulkDelete" },
+                  "op": {
+                    "const": "bulkDelete"
+                  },
                   "params": {
                     "type": "object",
-                    "required": ["emails"],
+                    "required": [
+                      "emails"
+                    ],
                     "properties": {
                       "emails": {
                         "type": "array",
                         "minItems": 1,
-                        "items": { "type": "string", "format": "email" }
+                        "items": {
+                          "type": "string",
+                          "format": "email"
+                        }
                       }
                     },
                     "additionalProperties": false
@@ -2085,13 +2766,21 @@
           },
           {
             "type": "object",
-            "required": ["op", "emails"],
+            "required": [
+              "op",
+              "emails"
+            ],
             "properties": {
-              "op": { "const": "bulkDelete" },
+              "op": {
+                "const": "bulkDelete"
+              },
               "emails": {
                 "type": "array",
                 "minItems": 1,
-                "items": { "type": "string", "format": "email" }
+                "items": {
+                  "type": "string",
+                  "format": "email"
+                }
               }
             },
             "additionalProperties": false
@@ -2102,19 +2791,29 @@
         "anyOf": [
           {
             "allOf": [
-              { "$ref": "#/components/schemas/ContactsBaseRequest" },
               {
-                "required": ["params"],
+                "$ref": "#/components/schemas/ContactsBaseRequest"
+              },
+              {
+                "required": [
+                  "params"
+                ],
                 "properties": {
-                  "op": { "const": "bulkDelete" },
+                  "op": {
+                    "const": "bulkDelete"
+                  },
                   "params": {
                     "type": "object",
-                    "required": ["rowIds"],
+                    "required": [
+                      "rowIds"
+                    ],
                     "properties": {
                       "rowIds": {
                         "type": "array",
                         "minItems": 1,
-                        "items": { "type": "integer" }
+                        "items": {
+                          "type": "integer"
+                        }
                       }
                     },
                     "additionalProperties": false
@@ -2125,13 +2824,20 @@
           },
           {
             "type": "object",
-            "required": ["op", "rowIds"],
+            "required": [
+              "op",
+              "rowIds"
+            ],
             "properties": {
-              "op": { "const": "bulkDelete" },
+              "op": {
+                "const": "bulkDelete"
+              },
               "rowIds": {
                 "type": "array",
                 "minItems": 1,
-                "items": { "type": "integer" }
+                "items": {
+                  "type": "integer"
+                }
               }
             },
             "additionalProperties": false
@@ -2140,16 +2846,26 @@
       },
       "ContactsAddressSuggestRequest": {
         "allOf": [
-          { "$ref": "#/components/schemas/ContactsBaseRequest" },
           {
-            "required": ["params"],
+            "$ref": "#/components/schemas/ContactsBaseRequest"
+          },
+          {
+            "required": [
+              "params"
+            ],
             "properties": {
-              "op": { "const": "addressSuggest" },
+              "op": {
+                "const": "addressSuggest"
+              },
               "params": {
                 "type": "object",
-                "required": ["query"],
+                "required": [
+                  "query"
+                ],
                 "properties": {
-                  "query": { "type": "string" }
+                  "query": {
+                    "type": "string"
+                  }
                 },
                 "additionalProperties": false
               }
@@ -2159,7 +2875,9 @@
       },
       "TasksRpcRequest": {
         "type": "object",
-        "required": ["op"],
+        "required": [
+          "op"
+        ],
         "description": "Tasks RPC payload. Choose the shape that matches the desired operation so the Actions runtime can validate params correctly. Parameters may be wrapped in a 'params' object or provided directly beside 'op' (e.g. {\"op\":\"complete\", \"taskListId\":\"...\", \"taskId\":\"...\"}). The backend accepts both formats.",
         "properties": {
           "op": {
@@ -2181,38 +2899,72 @@
           }
         },
         "oneOf": [
-          { "$ref": "#/components/schemas/TasksListRequest" },
-          { "$ref": "#/components/schemas/TasksGetRequest" },
-          { "$ref": "#/components/schemas/TasksCreateRequest" },
-          { "$ref": "#/components/schemas/TasksUpdateRequest" },
-          { "$ref": "#/components/schemas/TasksDeleteRequest" },
-          { "$ref": "#/components/schemas/TasksCompleteRequest" },
-          { "$ref": "#/components/schemas/TasksReopenRequest" }
+          {
+            "$ref": "#/components/schemas/TasksListRequest"
+          },
+          {
+            "$ref": "#/components/schemas/TasksGetRequest"
+          },
+          {
+            "$ref": "#/components/schemas/TasksCreateRequest"
+          },
+          {
+            "$ref": "#/components/schemas/TasksUpdateRequest"
+          },
+          {
+            "$ref": "#/components/schemas/TasksDeleteRequest"
+          },
+          {
+            "$ref": "#/components/schemas/TasksCompleteRequest"
+          },
+          {
+            "$ref": "#/components/schemas/TasksReopenRequest"
+          }
         ],
         "additionalProperties": false
       },
       "TasksBaseRequest": {
         "type": "object",
-        "required": ["op"],
+        "required": [
+          "op"
+        ],
         "properties": {
-          "op": { "type": "string" },
-          "params": { "type": "object" }
+          "op": {
+            "type": "string"
+          },
+          "params": {
+            "type": "object"
+          }
         },
         "additionalProperties": false
       },
       "TasksListRequest": {
         "allOf": [
-          { "$ref": "#/components/schemas/TasksBaseRequest" },
+          {
+            "$ref": "#/components/schemas/TasksBaseRequest"
+          },
           {
             "properties": {
-              "op": { "const": "list" },
+              "op": {
+                "const": "list"
+              },
               "params": {
                 "type": "object",
                 "properties": {
-                  "taskListId": { "type": "string" },
-                  "maxResults": { "type": "integer", "minimum": 1, "maximum": 100 },
-                  "pageToken": { "type": "string" },
-                  "showCompleted": { "type": "boolean" }
+                  "taskListId": {
+                    "type": "string"
+                  },
+                  "maxResults": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 100
+                  },
+                  "pageToken": {
+                    "type": "string"
+                  },
+                  "showCompleted": {
+                    "type": "boolean"
+                  }
                 },
                 "additionalProperties": false
               }
@@ -2223,17 +2975,30 @@
       "TasksGetRequest": {
         "description": "Placeholder for future single-task retrieval. Currently returns HTTP 501 (not implemented).",
         "allOf": [
-          { "$ref": "#/components/schemas/TasksBaseRequest" },
           {
-            "required": ["params"],
+            "$ref": "#/components/schemas/TasksBaseRequest"
+          },
+          {
+            "required": [
+              "params"
+            ],
             "properties": {
-              "op": { "const": "get" },
+              "op": {
+                "const": "get"
+              },
               "params": {
                 "type": "object",
-                "required": ["taskListId", "taskId"],
+                "required": [
+                  "taskListId",
+                  "taskId"
+                ],
                 "properties": {
-                  "taskListId": { "type": "string" },
-                  "taskId": { "type": "string" }
+                  "taskListId": {
+                    "type": "string"
+                  },
+                  "taskId": {
+                    "type": "string"
+                  }
                 },
                 "additionalProperties": false
               }
@@ -2245,18 +3010,33 @@
         "anyOf": [
           {
             "allOf": [
-              { "$ref": "#/components/schemas/TasksBaseRequest" },
               {
-                "required": ["params"],
+                "$ref": "#/components/schemas/TasksBaseRequest"
+              },
+              {
+                "required": [
+                  "params"
+                ],
                 "properties": {
-                  "op": { "const": "create" },
+                  "op": {
+                    "const": "create"
+                  },
                   "params": {
                     "type": "object",
-                    "required": ["title"],
+                    "required": [
+                      "title"
+                    ],
                     "properties": {
-                      "title": { "type": "string" },
-                      "notes": { "type": "string" },
-                      "due": { "type": "string", "format": "date-time" }
+                      "title": {
+                        "type": "string"
+                      },
+                      "notes": {
+                        "type": "string"
+                      },
+                      "due": {
+                        "type": "string",
+                        "format": "date-time"
+                      }
                     },
                     "additionalProperties": false
                   }
@@ -2266,12 +3046,24 @@
           },
           {
             "type": "object",
-            "required": ["op", "title"],
+            "required": [
+              "op",
+              "title"
+            ],
             "properties": {
-              "op": { "const": "create" },
-              "title": { "type": "string" },
-              "notes": { "type": "string" },
-              "due": { "type": "string", "format": "date-time" }
+              "op": {
+                "const": "create"
+              },
+              "title": {
+                "type": "string"
+              },
+              "notes": {
+                "type": "string"
+              },
+              "due": {
+                "type": "string",
+                "format": "date-time"
+              }
             },
             "additionalProperties": false
           }
@@ -2281,24 +3073,51 @@
         "anyOf": [
           {
             "allOf": [
-              { "$ref": "#/components/schemas/TasksBaseRequest" },
               {
-                "required": ["params"],
+                "$ref": "#/components/schemas/TasksBaseRequest"
+              },
+              {
+                "required": [
+                  "params"
+                ],
                 "properties": {
-                  "op": { "const": "update" },
+                  "op": {
+                    "const": "update"
+                  },
                   "params": {
                     "type": "object",
-                    "required": ["taskListId", "taskId", "updates"],
+                    "required": [
+                      "taskListId",
+                      "taskId",
+                      "updates"
+                    ],
                     "properties": {
-                      "taskListId": { "type": "string" },
-                      "taskId": { "type": "string" },
+                      "taskListId": {
+                        "type": "string"
+                      },
+                      "taskId": {
+                        "type": "string"
+                      },
                       "updates": {
                         "type": "object",
                         "properties": {
-                          "title": { "type": "string" },
-                          "notes": { "type": "string" },
-                          "due": { "type": "string", "format": "date-time" },
-                          "status": { "type": "string", "enum": ["needsAction", "completed"] }
+                          "title": {
+                            "type": "string"
+                          },
+                          "notes": {
+                            "type": "string"
+                          },
+                          "due": {
+                            "type": "string",
+                            "format": "date-time"
+                          },
+                          "status": {
+                            "type": "string",
+                            "enum": [
+                              "needsAction",
+                              "completed"
+                            ]
+                          }
                         }
                       }
                     },
@@ -2310,18 +3129,42 @@
           },
           {
             "type": "object",
-            "required": ["op", "taskListId", "taskId", "updates"],
+            "required": [
+              "op",
+              "taskListId",
+              "taskId",
+              "updates"
+            ],
             "properties": {
-              "op": { "const": "update" },
-              "taskListId": { "type": "string" },
-              "taskId": { "type": "string" },
+              "op": {
+                "const": "update"
+              },
+              "taskListId": {
+                "type": "string"
+              },
+              "taskId": {
+                "type": "string"
+              },
               "updates": {
                 "type": "object",
                 "properties": {
-                  "title": { "type": "string" },
-                  "notes": { "type": "string" },
-                  "due": { "type": "string", "format": "date-time" },
-                  "status": { "type": "string", "enum": ["needsAction", "completed"] }
+                  "title": {
+                    "type": "string"
+                  },
+                  "notes": {
+                    "type": "string"
+                  },
+                  "due": {
+                    "type": "string",
+                    "format": "date-time"
+                  },
+                  "status": {
+                    "type": "string",
+                    "enum": [
+                      "needsAction",
+                      "completed"
+                    ]
+                  }
                 }
               }
             },
@@ -2333,17 +3176,30 @@
         "anyOf": [
           {
             "allOf": [
-              { "$ref": "#/components/schemas/TasksBaseRequest" },
               {
-                "required": ["params"],
+                "$ref": "#/components/schemas/TasksBaseRequest"
+              },
+              {
+                "required": [
+                  "params"
+                ],
                 "properties": {
-                  "op": { "const": "delete" },
+                  "op": {
+                    "const": "delete"
+                  },
                   "params": {
                     "type": "object",
-                    "required": ["taskListId", "taskId"],
+                    "required": [
+                      "taskListId",
+                      "taskId"
+                    ],
                     "properties": {
-                      "taskListId": { "type": "string" },
-                      "taskId": { "type": "string" }
+                      "taskListId": {
+                        "type": "string"
+                      },
+                      "taskId": {
+                        "type": "string"
+                      }
                     },
                     "additionalProperties": false
                   }
@@ -2353,11 +3209,21 @@
           },
           {
             "type": "object",
-            "required": ["op", "taskListId", "taskId"],
+            "required": [
+              "op",
+              "taskListId",
+              "taskId"
+            ],
             "properties": {
-              "op": { "const": "delete" },
-              "taskListId": { "type": "string" },
-              "taskId": { "type": "string" }
+              "op": {
+                "const": "delete"
+              },
+              "taskListId": {
+                "type": "string"
+              },
+              "taskId": {
+                "type": "string"
+              }
             },
             "additionalProperties": false
           }
@@ -2367,17 +3233,30 @@
         "anyOf": [
           {
             "allOf": [
-              { "$ref": "#/components/schemas/TasksBaseRequest" },
               {
-                "required": ["params"],
+                "$ref": "#/components/schemas/TasksBaseRequest"
+              },
+              {
+                "required": [
+                  "params"
+                ],
                 "properties": {
-                  "op": { "const": "complete" },
+                  "op": {
+                    "const": "complete"
+                  },
                   "params": {
                     "type": "object",
-                    "required": ["taskListId", "taskId"],
+                    "required": [
+                      "taskListId",
+                      "taskId"
+                    ],
                     "properties": {
-                      "taskListId": { "type": "string" },
-                      "taskId": { "type": "string" }
+                      "taskListId": {
+                        "type": "string"
+                      },
+                      "taskId": {
+                        "type": "string"
+                      }
                     },
                     "additionalProperties": false
                   }
@@ -2387,11 +3266,21 @@
           },
           {
             "type": "object",
-            "required": ["op", "taskListId", "taskId"],
+            "required": [
+              "op",
+              "taskListId",
+              "taskId"
+            ],
             "properties": {
-              "op": { "const": "complete" },
-              "taskListId": { "type": "string" },
-              "taskId": { "type": "string" }
+              "op": {
+                "const": "complete"
+              },
+              "taskListId": {
+                "type": "string"
+              },
+              "taskId": {
+                "type": "string"
+              }
             },
             "additionalProperties": false
           }
@@ -2401,17 +3290,30 @@
         "anyOf": [
           {
             "allOf": [
-              { "$ref": "#/components/schemas/TasksBaseRequest" },
               {
-                "required": ["params"],
+                "$ref": "#/components/schemas/TasksBaseRequest"
+              },
+              {
+                "required": [
+                  "params"
+                ],
                 "properties": {
-                  "op": { "const": "reopen" },
+                  "op": {
+                    "const": "reopen"
+                  },
                   "params": {
                     "type": "object",
-                    "required": ["taskListId", "taskId"],
+                    "required": [
+                      "taskListId",
+                      "taskId"
+                    ],
                     "properties": {
-                      "taskListId": { "type": "string" },
-                      "taskId": { "type": "string" }
+                      "taskListId": {
+                        "type": "string"
+                      },
+                      "taskId": {
+                        "type": "string"
+                      }
                     },
                     "additionalProperties": false
                   }
@@ -2421,11 +3323,129 @@
           },
           {
             "type": "object",
-            "required": ["op", "taskListId", "taskId"],
+            "required": [
+              "op",
+              "taskListId",
+              "taskId"
+            ],
             "properties": {
-              "op": { "const": "reopen" },
-              "taskListId": { "type": "string" },
-              "taskId": { "type": "string" }
+              "op": {
+                "const": "reopen"
+              },
+              "taskListId": {
+                "type": "string"
+              },
+              "taskId": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false
+          }
+        ]
+      },
+      "ContactsModifyActionRequest": {
+        "type": "object",
+        "required": [
+          "name",
+          "email"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Full name of the contact (required)."
+          },
+          "email": {
+            "type": "string",
+            "format": "email",
+            "description": "Email address (required)."
+          },
+          "phone": {
+            "type": "string",
+            "description": "Phone number (optional)."
+          },
+          "notes": {
+            "type": "string",
+            "description": "Notes field (optional)."
+          },
+          "realEstate": {
+            "type": "string",
+            "description": "Organization/company (camelCase variant)."
+          },
+          "realestate": {
+            "type": "string",
+            "description": "Organization/company (legacy lowercase alias)."
+          }
+        },
+        "additionalProperties": false,
+        "description": "Payload for /api/contacts/modify. Provide both name and email; optional fields overwrite stored values."
+      },
+      "ContactsDeleteActionRequest": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string",
+            "format": "email",
+            "description": "Email of the contact to delete."
+          },
+          "name": {
+            "type": "string",
+            "description": "Name of the contact (used when deleting by name)."
+          }
+        },
+        "additionalProperties": false,
+        "description": "Payload for /api/contacts/delete. Provide email (preferred) or name. If both supplied, both must match.",
+        "anyOf": [
+          {
+            "required": [
+              "email"
+            ]
+          },
+          {
+            "required": [
+              "name"
+            ]
+          }
+        ]
+      },
+      "ContactsBulkDeleteActionRequest": {
+        "type": "object",
+        "description": "Payload for /api/contacts/actions/bulkDelete. Choose mode: emails[] deletes full contacts, rowIds[] deletes specific rows.",
+        "oneOf": [
+          {
+            "type": "object",
+            "required": [
+              "emails"
+            ],
+            "properties": {
+              "emails": {
+                "type": "array",
+                "minItems": 1,
+                "maxItems": 100,
+                "items": {
+                  "type": "string",
+                  "format": "email"
+                },
+                "description": "Emails whose rows should be removed (deletes all rows matching each email)."
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "required": [
+              "rowIds"
+            ],
+            "properties": {
+              "rowIds": {
+                "type": "array",
+                "minItems": 1,
+                "maxItems": 100,
+                "items": {
+                  "type": "integer",
+                  "minimum": 2
+                },
+                "description": "Sheet row indexes to delete (1-based, e.g. 2 removes second contact row)."
+              }
             },
             "additionalProperties": false
           }
