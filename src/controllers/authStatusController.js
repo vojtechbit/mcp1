@@ -11,6 +11,7 @@
  * Returns user info if authenticated, triggers OAuth if not
  */
 import { handleControllerError } from '../utils/errors.js';
+import { debugStep, wrapModuleFunctions } from '../utils/advancedDebugging.js';
 
 async function getAuthStatus(req, res) {
   try {
@@ -18,6 +19,7 @@ async function getAuthStatus(req, res) {
     const { email, googleSub } = req.user;
 
     console.log('✅ [AUTH_STATUS] User is authenticated:', email);
+    debugStep('Auth status confirmed', { email, googleSub });
 
     return res.json({
       authenticated: true,
@@ -35,4 +37,8 @@ async function getAuthStatus(req, res) {
   }
 }
 
-export { getAuthStatus };
+const traced = wrapModuleFunctions('controllers.authStatusController', { getAuthStatus });
+
+const { getAuthStatus: tracedGetAuthStatus } = traced;
+
+export { tracedGetAuthStatus as getAuthStatus };

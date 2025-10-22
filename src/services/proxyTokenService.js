@@ -1,5 +1,6 @@
 import crypto from 'crypto';
 import { getDatabase } from '../config/database.js';
+import { wrapModuleFunctions } from '../utils/advancedDebugging.js';
 
 /**
  * Generate random authorization code for ChatGPT OAuth flow
@@ -210,7 +211,7 @@ async function cleanupExpiredTokens() {
   }
 }
 
-export {
+const traced = wrapModuleFunctions('services.proxyTokenService', {
   generateAuthCode,
   generateProxyToken,
   saveAuthCode,
@@ -218,4 +219,24 @@ export {
   saveProxyToken,
   findUserByProxyToken,
   cleanupExpiredTokens
+});
+
+const {
+  generateAuthCode: tracedGenerateAuthCode,
+  generateProxyToken: tracedGenerateProxyToken,
+  saveAuthCode: tracedSaveAuthCode,
+  validateAndConsumeAuthCode: tracedValidateAndConsumeAuthCode,
+  saveProxyToken: tracedSaveProxyToken,
+  findUserByProxyToken: tracedFindUserByProxyToken,
+  cleanupExpiredTokens: tracedCleanupExpiredTokens
+} = traced;
+
+export {
+  tracedGenerateAuthCode as generateAuthCode,
+  tracedGenerateProxyToken as generateProxyToken,
+  tracedSaveAuthCode as saveAuthCode,
+  tracedValidateAndConsumeAuthCode as validateAndConsumeAuthCode,
+  tracedSaveProxyToken as saveProxyToken,
+  tracedFindUserByProxyToken as findUserByProxyToken,
+  tracedCleanupExpiredTokens as cleanupExpiredTokens
 };

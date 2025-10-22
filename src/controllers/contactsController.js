@@ -2,6 +2,8 @@ import * as contactsService from '../services/contactsService.js';
 import { heavyLimiter } from '../server.js';
 import { computeETag, checkETagMatch } from '../utils/helpers.js';
 import { handleControllerError } from '../utils/errors.js';
+import { wrapModuleFunctions } from '../utils/advancedDebugging.js';
+
 
 /**
  * Contacts Controller
@@ -358,7 +360,7 @@ async function deleteContact(req, res) {
   }
 }
 
-export {
+const traced = wrapModuleFunctions('controllers.contactsController', {
   searchContacts,
   getAddressSuggestions,
   listContacts,
@@ -366,5 +368,27 @@ export {
   bulkUpsertContacts,
   bulkDeleteContacts,
   updateContact,
-  deleteContact
+  deleteContact,
+});
+
+const {
+  searchContacts: tracedSearchContacts,
+  getAddressSuggestions: tracedGetAddressSuggestions,
+  listContacts: tracedListContacts,
+  addContact: tracedAddContact,
+  bulkUpsertContacts: tracedBulkUpsertContacts,
+  bulkDeleteContacts: tracedBulkDeleteContacts,
+  updateContact: tracedUpdateContact,
+  deleteContact: tracedDeleteContact,
+} = traced;
+
+export {
+  tracedSearchContacts as searchContacts,
+  tracedGetAddressSuggestions as getAddressSuggestions,
+  tracedListContacts as listContacts,
+  tracedAddContact as addContact,
+  tracedBulkUpsertContacts as bulkUpsertContacts,
+  tracedBulkDeleteContacts as bulkDeleteContacts,
+  tracedUpdateContact as updateContact,
+  tracedDeleteContact as deleteContact,
 };

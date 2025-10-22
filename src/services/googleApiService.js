@@ -4,6 +4,7 @@ import { getUserByGoogleSub, updateTokens, updateLastUsed } from './databaseServ
 import { generateSignedAttachmentUrl } from '../utils/signedUrlGenerator.js';
 import { isBlocked } from '../utils/attachmentSecurity.js';
 import { getPragueOffsetHours } from '../utils/helpers.js';
+import { debugStep, wrapModuleFunctions } from '../utils/advancedDebugging.js';
 import dotenv from 'dotenv';
 // pdf-parse má problém s importem - načteme až když je potřeba
 import XLSX from 'xlsx-js-style';
@@ -89,9 +90,11 @@ async function handleGoogleApiCall(googleSub, apiCall, retryCount = 0) {
  */
 async function getValidAccessToken(googleSub, forceRefresh = false) {
   try {
+    debugStep('Resolving valid access token', { googleSub, forceRefresh });
     const user = await getUserByGoogleSub(googleSub);
-    
+
     if (!user) {
+      debugStep('User missing in database', { googleSub });
       throw new Error('User not found in database');
     }
 
@@ -105,14 +108,21 @@ async function getValidAccessToken(googleSub, forceRefresh = false) {
     const isExpired = now >= (expiry.getTime() - bufferTime);
 
     if (forceRefresh || isExpired) {
+      debugStep('Access token requires refresh', {
+        forceRefresh,
+        isExpired,
+        expiry: user.tokenExpiry
+      });
       if (activeRefreshes.has(googleSub)) {
         await activeRefreshes.get(googleSub);
         const updatedUser = await getUserByGoogleSub(googleSub);
+        debugStep('Awaited existing refresh promise', { googleSub });
         return updatedUser.accessToken;
       }
-      
+
       const refreshPromise = (async () => {
         try {
+          debugStep('Refreshing access token with Google', { googleSub });
           const newTokens = await refreshAccessToken(user.refreshToken);
           
           let expiryDate;
@@ -130,21 +140,28 @@ async function getValidAccessToken(googleSub, forceRefresh = false) {
           });
 
           console.log('✅ Access token refreshed successfully');
+          debugStep('Stored refreshed tokens', { googleSub, expiryDate });
           return newTokens.access_token;
         } catch (refreshError) {
+          debugStep('Refresh token request failed', {
+            googleSub,
+            error: refreshError.message
+          });
           const authError = new Error('Authentication required - please log in again');
           authError.code = 'AUTH_REQUIRED';
           authError.statusCode = 401;
           throw authError;
         } finally {
+          debugStep('Released refresh mutex', { googleSub });
           activeRefreshes.delete(googleSub);
         }
       })();
-      
+
       activeRefreshes.set(googleSub, refreshPromise);
       return await refreshPromise;
     }
 
+    debugStep('Returning cached access token', { googleSub });
     return user.accessToken;
   } catch (error) {
     console.error('❌ [TOKEN_ERROR] Failed to get valid access token:', error.message);
@@ -1474,7 +1491,7 @@ async function downloadAttachment(googleSub, messageId, attachmentId) {
   });
 }
 
-export {
+const traced = wrapModuleFunctions('services.googleApiService', {
   EMAIL_SIZE_LIMITS,
   getValidAccessToken,
   sendEmail,
@@ -1503,4 +1520,66 @@ export {
   updateCalendarEvent,
   deleteCalendarEvent,
   checkConflicts
+});
+
+const {
+  EMAIL_SIZE_LIMITS: tracedEMAIL_SIZE_LIMITS,
+  getValidAccessToken: tracedGetValidAccessToken,
+  sendEmail: tracedSendEmail,
+  readEmail: tracedReadEmail,
+  searchEmails: tracedSearchEmails,
+  replyToEmail: tracedReplyToEmail,
+  createDraft: tracedCreateDraft,
+  sendDraft: tracedSendDraft,
+  deleteEmail: tracedDeleteEmail,
+  toggleStar: tracedToggleStar,
+  markAsRead: tracedMarkAsRead,
+  listLabels: tracedListLabels,
+  modifyMessageLabels: tracedModifyMessageLabels,
+  modifyThreadLabels: tracedModifyThreadLabels,
+  getThread: tracedGetThread,
+  setThreadRead: tracedSetThreadRead,
+  replyToThread: tracedReplyToThread,
+  getAttachmentMeta: tracedGetAttachmentMeta,
+  previewAttachmentText: tracedPreviewAttachmentText,
+  previewAttachmentTable: tracedPreviewAttachmentTable,
+  downloadAttachment: tracedDownloadAttachment,
+  classifyEmailCategory: tracedClassifyEmailCategory,
+  createCalendarEvent: tracedCreateCalendarEvent,
+  getCalendarEvent: tracedGetCalendarEvent,
+  listCalendarEvents: tracedListCalendarEvents,
+  updateCalendarEvent: tracedUpdateCalendarEvent,
+  deleteCalendarEvent: tracedDeleteCalendarEvent,
+  checkConflicts: tracedCheckConflicts
+} = traced;
+
+export {
+  tracedEMAIL_SIZE_LIMITS as EMAIL_SIZE_LIMITS,
+  tracedGetValidAccessToken as getValidAccessToken,
+  tracedSendEmail as sendEmail,
+  tracedReadEmail as readEmail,
+  tracedSearchEmails as searchEmails,
+  tracedReplyToEmail as replyToEmail,
+  tracedCreateDraft as createDraft,
+  tracedSendDraft as sendDraft,
+  tracedDeleteEmail as deleteEmail,
+  tracedToggleStar as toggleStar,
+  tracedMarkAsRead as markAsRead,
+  tracedListLabels as listLabels,
+  tracedModifyMessageLabels as modifyMessageLabels,
+  tracedModifyThreadLabels as modifyThreadLabels,
+  tracedGetThread as getThread,
+  tracedSetThreadRead as setThreadRead,
+  tracedReplyToThread as replyToThread,
+  tracedGetAttachmentMeta as getAttachmentMeta,
+  tracedPreviewAttachmentText as previewAttachmentText,
+  tracedPreviewAttachmentTable as previewAttachmentTable,
+  tracedDownloadAttachment as downloadAttachment,
+  tracedClassifyEmailCategory as classifyEmailCategory,
+  tracedCreateCalendarEvent as createCalendarEvent,
+  tracedGetCalendarEvent as getCalendarEvent,
+  tracedListCalendarEvents as listCalendarEvents,
+  tracedUpdateCalendarEvent as updateCalendarEvent,
+  tracedDeleteCalendarEvent as deleteCalendarEvent,
+  tracedCheckConflicts as checkConflicts
 };

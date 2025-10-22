@@ -5,6 +5,8 @@
  * - calendar.schedule enrichment
  * - contacts.safeAdd deduplication
  */
+import { wrapModuleFunctions } from '../utils/advancedDebugging.js';
+
 
 import * as facadeService from '../services/facadeService.js';
 import {
@@ -17,7 +19,7 @@ import { handleControllerError } from '../utils/errors.js';
  * POST /api/macros/confirm
  * Complete pending confirmation
  */
-export async function confirmMacroOperation(req, res) {
+async function confirmMacroOperation(req, res) {
   try {
     const { confirmToken, action } = req.body;
 
@@ -106,7 +108,7 @@ export async function confirmMacroOperation(req, res) {
  * GET /api/macros/confirm/:confirmToken
  * Preview pending confirmation
  */
-export async function getPendingConfirmationPreview(req, res) {
+async function getPendingConfirmationPreview(req, res) {
   try {
     const { confirmToken } = req.params;
 
@@ -175,7 +177,7 @@ export async function getPendingConfirmationPreview(req, res) {
  * POST /api/macros/confirm/:confirmToken/cancel
  * Cancel pending confirmation
  */
-export async function cancelConfirmation(req, res) {
+async function cancelConfirmation(req, res) {
   try {
     const { confirmToken } = req.params;
 
@@ -204,3 +206,21 @@ export async function cancelConfirmation(req, res) {
     });
   }
 }
+
+const traced = wrapModuleFunctions('controllers.confirmationController', {
+  confirmMacroOperation,
+  getPendingConfirmationPreview,
+  cancelConfirmation,
+});
+
+const {
+  confirmMacroOperation: tracedConfirmMacroOperation,
+  getPendingConfirmationPreview: tracedGetPendingConfirmationPreview,
+  cancelConfirmation: tracedCancelConfirmation,
+} = traced;
+
+export {
+  tracedConfirmMacroOperation as confirmMacroOperation,
+  tracedGetPendingConfirmationPreview as getPendingConfirmationPreview,
+  tracedCancelConfirmation as cancelConfirmation,
+};

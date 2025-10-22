@@ -9,6 +9,8 @@ import {
 } from '../services/proxyTokenService.js';
 import { google } from 'googleapis';
 import dotenv from 'dotenv';
+import { wrapModuleFunctions } from '../utils/advancedDebugging.js';
+
 
 dotenv.config();
 
@@ -346,4 +348,20 @@ async function token(req, res) {
   }
 }
 
-export { authorize, callback, token };
+const traced = wrapModuleFunctions('controllers.oauthProxyController', {
+  authorize,
+  callback,
+  token,
+});
+
+const {
+  authorize: tracedAuthorize,
+  callback: tracedCallback,
+  token: tracedToken,
+} = traced;
+
+export {
+  tracedAuthorize as authorize,
+  tracedCallback as callback,
+  tracedToken as token,
+};

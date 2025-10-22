@@ -1,12 +1,14 @@
 /**
  * Facade Controller - Handles macro endpoints
  */
+import { wrapModuleFunctions } from '../utils/advancedDebugging.js';
+
 
 import * as facadeService from '../services/facadeService.js';
 
 // ==================== INBOX MACROS ====================
 
-export async function macroInboxOverview(req, res) {
+async function macroInboxOverview(req, res) {
   try {
     const result = await facadeService.inboxOverview(req.user.googleSub, req.body);
     res.json(result);
@@ -29,7 +31,7 @@ export async function macroInboxOverview(req, res) {
   }
 }
 
-export async function macroInboxSnippets(req, res) {
+async function macroInboxSnippets(req, res) {
   try {
     const result = await facadeService.inboxSnippets(req.user.googleSub, req.body);
     res.json(result);
@@ -52,7 +54,7 @@ export async function macroInboxSnippets(req, res) {
   }
 }
 
-export async function macroEmailQuickRead(req, res) {
+async function macroEmailQuickRead(req, res) {
   try {
     const result = await facadeService.emailQuickRead(req.user.googleSub, req.body);
     res.json(result);
@@ -85,7 +87,7 @@ export async function macroEmailQuickRead(req, res) {
 
 // ==================== CALENDAR MACROS ====================
 
-export async function macroCalendarPlan(req, res) {
+async function macroCalendarPlan(req, res) {
   try {
     const result = await facadeService.calendarPlan(req.user.googleSub, req.body);
     res.json(result);
@@ -108,7 +110,7 @@ export async function macroCalendarPlan(req, res) {
   }
 }
 
-export async function macroCalendarSchedule(req, res) {
+async function macroCalendarSchedule(req, res) {
   try {
     const result = await facadeService.calendarSchedule(req.user.googleSub, req.body);
     res.json(result);
@@ -140,7 +142,7 @@ export async function macroCalendarSchedule(req, res) {
   }
 }
 
-export async function macroCalendarReminderDrafts(req, res) {
+async function macroCalendarReminderDrafts(req, res) {
   try {
     const result = await facadeService.calendarReminderDrafts(req.user.googleSub, req.body);
     res.json(result);
@@ -165,7 +167,7 @@ export async function macroCalendarReminderDrafts(req, res) {
 
 // ==================== CONTACTS MACROS ====================
 
-export async function macroContactsSafeAdd(req, res) {
+async function macroContactsSafeAdd(req, res) {
   try {
     const result = await facadeService.contactsSafeAdd(req.user.accessToken, req.body);
     res.json(result);
@@ -190,7 +192,7 @@ export async function macroContactsSafeAdd(req, res) {
 
 // ==================== TASKS MACROS ====================
 
-export async function macroTasksOverview(req, res) {
+async function macroTasksOverview(req, res) {
   try {
     const result = await facadeService.tasksOverview(req.user.googleSub, req.body);
     res.json(result);
@@ -212,3 +214,36 @@ export async function macroTasksOverview(req, res) {
     });
   }
 }
+
+const traced = wrapModuleFunctions('controllers.facadeController', {
+  macroInboxOverview,
+  macroInboxSnippets,
+  macroEmailQuickRead,
+  macroCalendarPlan,
+  macroCalendarSchedule,
+  macroCalendarReminderDrafts,
+  macroContactsSafeAdd,
+  macroTasksOverview,
+});
+
+const {
+  macroInboxOverview: tracedMacroInboxOverview,
+  macroInboxSnippets: tracedMacroInboxSnippets,
+  macroEmailQuickRead: tracedMacroEmailQuickRead,
+  macroCalendarPlan: tracedMacroCalendarPlan,
+  macroCalendarSchedule: tracedMacroCalendarSchedule,
+  macroCalendarReminderDrafts: tracedMacroCalendarReminderDrafts,
+  macroContactsSafeAdd: tracedMacroContactsSafeAdd,
+  macroTasksOverview: tracedMacroTasksOverview,
+} = traced;
+
+export {
+  tracedMacroInboxOverview as macroInboxOverview,
+  tracedMacroInboxSnippets as macroInboxSnippets,
+  tracedMacroEmailQuickRead as macroEmailQuickRead,
+  tracedMacroCalendarPlan as macroCalendarPlan,
+  tracedMacroCalendarSchedule as macroCalendarSchedule,
+  tracedMacroCalendarReminderDrafts as macroCalendarReminderDrafts,
+  tracedMacroContactsSafeAdd as macroContactsSafeAdd,
+  tracedMacroTasksOverview as macroTasksOverview,
+};

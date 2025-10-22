@@ -58,10 +58,19 @@ git push origin main
 node test-oauth-proxy.js
 ```
 
+## Advanced debugging logs
+
+- `ADVANCED_DEBUG`: ponech `true` (default) pro zapnutí tracingu.
+- `ADVANCED_DEBUG_CONSOLE=false`: vypne logování do terminálu.
+- `ADVANCED_DEBUG_FILE=/path/advanced-debug.log`: zapne perzistentní zápis do souboru
+  (cesta může být relativní vůči rootu projektu). Logy se ukládají jako JSON řádky.
+- Pro vlastní cíle můžeš použít `registerDebugSink` z `src/utils/advancedDebugging.js`
+  a napojit si například vzdálený log collector.
+
 ## Bezpečnost
 
-✅ AES-256-GCM encryption  
-✅ OAuth 2.0  
+✅ AES-256-GCM encryption
+✅ OAuth 2.0
 ✅ Rate limiting (100 req/15min)  
 ✅ TLS 1.3  
 ✅ Audit logs (90 dní)  

@@ -4,6 +4,8 @@
  * Provides dedicated mutation endpoints that wrap the tasks service
  * directly instead of going through the generic RPC layer.
  */
+import { wrapModuleFunctions } from '../utils/advancedDebugging.js';
+
 
 import * as tasksService from '../services/tasksService.js';
 
@@ -82,7 +84,7 @@ function buildUpdatePayload(body = {}) {
   return updates;
 }
 
-export async function createTask(req, res) {
+async function createTask(req, res) {
   try {
     const { title, notes, due } = req.body || {};
 
@@ -125,7 +127,7 @@ export async function createTask(req, res) {
   }
 }
 
-export async function modifyTask(req, res) {
+async function modifyTask(req, res) {
   try {
     const body = req.body || {};
     const taskListId = normalizeTaskListId(body);
@@ -186,7 +188,7 @@ export async function modifyTask(req, res) {
   }
 }
 
-export async function deleteTask(req, res) {
+async function deleteTask(req, res) {
   try {
     const body = req.body || {};
     const taskListId = normalizeTaskListId(body);
@@ -227,3 +229,21 @@ export async function deleteTask(req, res) {
     });
   }
 }
+
+const traced = wrapModuleFunctions('controllers.tasksActionsController', {
+  createTask,
+  modifyTask,
+  deleteTask,
+});
+
+const {
+  createTask: tracedCreateTask,
+  modifyTask: tracedModifyTask,
+  deleteTask: tracedDeleteTask,
+} = traced;
+
+export {
+  tracedCreateTask as createTask,
+  tracedModifyTask as modifyTask,
+  tracedDeleteTask as deleteTask,
+};

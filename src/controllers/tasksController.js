@@ -8,6 +8,8 @@ import {
   PAGE_SIZE_MAX,
   AGGREGATE_CAP_TASKS
 } from '../config/limits.js';
+import { wrapModuleFunctions } from '../utils/advancedDebugging.js';
+
 
 /**
  * Tasks Controller
@@ -274,9 +276,23 @@ async function deleteTask(req, res) {
   }
 }
 
-export {
+const traced = wrapModuleFunctions('controllers.tasksController', {
   listTasks,
   createTask,
   updateTask,
-  deleteTask
+  deleteTask,
+});
+
+const {
+  listTasks: tracedListTasks,
+  createTask: tracedCreateTask,
+  updateTask: tracedUpdateTask,
+  deleteTask: tracedDeleteTask,
+} = traced;
+
+export {
+  tracedListTasks as listTasks,
+  tracedCreateTask as createTask,
+  tracedUpdateTask as updateTask,
+  tracedDeleteTask as deleteTask,
 };

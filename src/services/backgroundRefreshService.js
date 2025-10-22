@@ -1,6 +1,7 @@
 import { getUserByGoogleSub, updateTokens } from './databaseService.js';
 import { refreshAccessToken } from '../config/oauth.js';
 import { getDatabase } from '../config/database.js';
+import { wrapModuleFunctions } from '../utils/advancedDebugging.js';
 
 /**
  * Background Token Refresh Service
@@ -197,9 +198,23 @@ function stopBackgroundRefresh() {
   }
 }
 
-export {
+const traced = wrapModuleFunctions('services.backgroundRefreshService', {
   refreshAllTokensOnStartup,
   refreshAllActiveTokens,
   startBackgroundRefresh,
-  stopBackgroundRefresh
+  stopBackgroundRefresh,
+});
+
+const {
+  refreshAllTokensOnStartup: tracedRefreshAllTokensOnStartup,
+  refreshAllActiveTokens: tracedRefreshAllActiveTokens,
+  startBackgroundRefresh: tracedStartBackgroundRefresh,
+  stopBackgroundRefresh: tracedStopBackgroundRefresh,
+} = traced;
+
+export {
+  tracedRefreshAllTokensOnStartup as refreshAllTokensOnStartup,
+  tracedRefreshAllActiveTokens as refreshAllActiveTokens,
+  tracedStartBackgroundRefresh as startBackgroundRefresh,
+  tracedStopBackgroundRefresh as stopBackgroundRefresh,
 };
