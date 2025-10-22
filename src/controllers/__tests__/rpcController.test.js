@@ -9,7 +9,7 @@ process.env.MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/
 process.env.ENCRYPTION_KEY = process.env.ENCRYPTION_KEY || '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef';
 
 const bulkDeleteCalls = [];
-const updateTaskCalls = [];
+const listTaskCalls = [];
 const createDraftCalls = [];
 
 globalThis.__RPC_TEST_OVERRIDES = {
@@ -26,9 +26,9 @@ globalThis.__RPC_TEST_OVERRIDES = {
     }
   },
   tasksService: {
-    updateTask: async (sub, taskListId, taskId, updates) => {
-      updateTaskCalls.push({ sub, taskListId, taskId, updates });
-      return { id: taskId, status: updates?.status || 'needsAction' };
+    listTasks: async (sub, params) => {
+      listTaskCalls.push({ sub, params });
+      return { items: [{ id: 'task-1' }], nextPageToken: null };
     }
   }
 };
@@ -94,8 +94,33 @@ test('contactsRpc bulkDelete root-level payload also returns migration error', a
   assert.equal(bulkDeleteCalls.length, 0);
 });
 
-test('tasksRpc complete delegates to updateTask with completed status', async () => {
-  updateTaskCalls.length = 0;
+test('tasksRpc list delegates to tasksService listTasks', async () => {
+  listTaskCalls.length = 0;
+  const request = {
+    body: {
+      op: 'list',
+      params: { maxResults: 5 }
+    },
+    user: { googleSub: 'user-42' }
+  };
+  const response = new MockResponse();
+
+  await tasksRpc(request, response);
+
+  assert.equal(response.statusCode, 200);
+  assert.deepEqual(response.body, {
+    ok: true,
+    data: { items: [{ id: 'task-1' }], nextPageToken: null }
+  });
+  assert.deepEqual(listTaskCalls, [
+    {
+      sub: 'user-42',
+      params: { maxResults: 5 }
+    }
+  ]);
+});
+
+test('tasksRpc complete now returns migration error with hints', async () => {
   const request = {
     body: {
       op: 'complete',
@@ -107,48 +132,32 @@ test('tasksRpc complete delegates to updateTask with completed status', async ()
 
   await tasksRpc(request, response);
 
-  assert.equal(response.statusCode, 200);
-  assert.deepEqual(response.body, {
-    ok: true,
-    data: { id: 'task-9', status: 'completed' }
+  assert.equal(response.statusCode, 410);
+  assert.equal(response.body.code, 'TASKS_RPC_MUTATION_DISABLED');
+  assert.equal(response.body.hint.includes('status: "completed"'), true);
+  assert.deepEqual(response.body.endpoints, {
+    create: '/api/tasks/actions/create',
+    modify: '/api/tasks/actions/modify',
+    delete: '/api/tasks/actions/delete'
   });
-  assert.deepEqual(updateTaskCalls, [
-    {
-      sub: 'user-42',
-      taskListId: 'list-1',
-      taskId: 'task-9',
-      updates: { status: 'completed' }
-    }
-  ]);
 });
 
-test('tasksRpc complete accepts root-level identifiers', async () => {
-  updateTaskCalls.length = 0;
+test('tasksRpc create returns migration error using root level payloads', async () => {
   const request = {
     body: {
-      op: 'complete',
-      taskListId: 'list-2',
-      taskId: 'task-3'
+      op: 'create',
+      title: 'New task'
     },
-    user: { googleSub: 'user-99' }
+    user: { googleSub: 'user-77' }
   };
   const response = new MockResponse();
 
   await tasksRpc(request, response);
 
-  assert.equal(response.statusCode, 200);
-  assert.deepEqual(response.body, {
-    ok: true,
-    data: { id: 'task-3', status: 'completed' }
-  });
-  assert.deepEqual(updateTaskCalls, [
-    {
-      sub: 'user-99',
-      taskListId: 'list-2',
-      taskId: 'task-3',
-      updates: { status: 'completed' }
-    }
-  ]);
+  assert.equal(response.statusCode, 410);
+  assert.equal(response.body.code, 'TASKS_RPC_MUTATION_DISABLED');
+  assert.equal(response.body.hint.includes('/tasks/actions/create'), true);
+  assert.equal(listTaskCalls.length, 1); // unchanged from list test above
 });
 
 test('mailRpc createDraft creates draft via Gmail service', async () => {

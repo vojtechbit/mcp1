@@ -202,7 +202,8 @@ function classifyEmailCategory(message) {
 - `POST /rpc/calendar` - list, get, create, update, delete
 - `POST /rpc/contacts` - list, search, add, dedupe, bulkUpsert, addressSuggest *(mutace přesměrovány)*
 - `POST /contacts/actions/modify` / `/contacts/actions/delete` / `/contacts/actions/bulkDelete` - přímé mutace pro GPT bez RPC vrstvy
-- `POST /rpc/tasks` - list, get, create, update, delete, complete
+- `POST /rpc/tasks` - list (read-only). Mutace přesunuty na /tasks/actions/*
+- `/tasks/actions/create` / `/tasks/actions/modify` / `/tasks/actions/delete` - přímé mutace pro GPT
 
 ---
 

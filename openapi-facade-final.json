@@ -2042,8 +2042,8 @@
     "/rpc/tasks": {
       "post": {
         "operationId": "tasksRpc",
-        "summary": "Advanced tasks operations",
-        "description": "Low-level tasks RPC for list, create, update, delete, and complete. Use /macros/tasks/overview for grouped views; this endpoint returns raw tasks and accepts params either inside 'params' or alongside 'op'.",
+        "summary": "Tasks RPC (read-only)",
+        "description": "Low-level tasks RPC for read scenarios. Supports list (with pagination) and a placeholder get (returns 501). All mutating operations moved to /api/tasks/actions/* where payloads are simpler for GPT.",
         "requestBody": {
           "required": true,
           "content": {
@@ -2052,22 +2052,14 @@
                 "$ref": "#/components/schemas/TasksRpcRequest"
               },
               "examples": {
-                "createTask": {
-                  "summary": "Create new task",
+                "list": {
+                  "summary": "List tasks with pagination",
                   "value": {
-                    "op": "create",
+                    "op": "list",
                     "params": {
-                      "title": "Review proposal",
-                      "due": "2025-10-25T12:00:00Z"
+                      "maxResults": 10,
+                      "showCompleted": false
                     }
-                  }
-                },
-                "completeTaskDirect": {
-                  "summary": "Complete a task using direct root-level identifiers",
-                  "value": {
-                    "op": "complete",
-                    "taskListId": "primary",
-                    "taskId": "task-42"
                   }
                 }
               }
@@ -2077,6 +2069,9 @@
         "responses": {
           "200": {
             "description": "Operation completed"
+          },
+          "410": {
+            "description": "Mutation attempted via RPC. Client should call /api/tasks/actions/* endpoints."
           }
         }
       }
@@ -2255,6 +2250,143 @@
           },
           "409": {
             "description": "Conflict"
+          },
+          "500": {
+            "description": "Server error"
+          }
+        }
+      }
+    },
+    "/tasks/actions/create": {
+      "post": {
+        "operationId": "tasksCreateAction",
+        "tags": [
+          "Tasks"
+        ],
+        "summary": "Create a new task in the default list",
+        "description": "Creates a task in the user's primary Google Tasks list. Due dates accept YYYY-MM-DD or full RFC3339 timestamps; backend normalizes bare dates to midnight UTC.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TasksActionCreateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Task created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": { "type": "boolean" },
+                    "task": { "type": "object" },
+                    "message": { "type": "string" }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request - invalid parameters"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "500": {
+            "description": "Server error"
+          }
+        }
+      }
+    },
+    "/tasks/actions/modify": {
+      "post": {
+        "operationId": "tasksModifyAction",
+        "tags": [
+          "Tasks"
+        ],
+        "summary": "Update an existing task",
+        "description": "Updates an existing task using Google Tasks patch semantics. Supply taskListId + taskId and at least one of status/title/notes/due. Use status=completed or status=needsAction for complete/reopen flows.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TasksActionModifyRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Task updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": { "type": "boolean" },
+                    "task": { "type": "object" },
+                    "message": { "type": "string" }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request - invalid parameters"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "500": {
+            "description": "Server error"
+          }
+        }
+      }
+    },
+    "/tasks/actions/delete": {
+      "post": {
+        "operationId": "tasksDeleteAction",
+        "tags": [
+          "Tasks"
+        ],
+        "summary": "Delete a task",
+        "description": "Deletes a Google Task identified by taskListId and taskId. Request is idempotent; deleting an already-removed task is treated as success.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TasksActionDeleteRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Task deleted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": { "type": "boolean" },
+                    "message": { "type": "string" }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request - invalid parameters"
+          },
+          "401": {
+            "description": "Authentication required"
           },
           "500": {
             "description": "Server error"
@@ -2915,18 +3047,13 @@
         "required": [
           "op"
         ],
-        "description": "Tasks RPC payload. Choose the shape that matches the desired operation so the Actions runtime can validate params correctly. Parameters may be wrapped in a 'params' object or provided directly beside 'op' (e.g. {\"op\":\"complete\", \"taskListId\":\"...\", \"taskId\":\"...\"}). The backend accepts both formats.",
+        "description": "Tasks RPC payload (read-only). Parameters may be wrapped in a 'params' object or provided directly beside 'op'. Mutating operations were migrated to /api/tasks/actions/*.",
         "properties": {
           "op": {
             "type": "string",
             "enum": [
               "list",
-              "get",
-              "create",
-              "update",
-              "delete",
-              "complete",
-              "reopen"
+              "get"
             ],
             "description": "Operation to execute on Google Tasks."
           },
@@ -2941,21 +3068,6 @@
           },
           {
             "$ref": "#/components/schemas/TasksGetRequest"
-          },
-          {
-            "$ref": "#/components/schemas/TasksCreateRequest"
-          },
-          {
-            "$ref": "#/components/schemas/TasksUpdateRequest"
-          },
-          {
-            "$ref": "#/components/schemas/TasksDeleteRequest"
-          },
-          {
-            "$ref": "#/components/schemas/TasksCompleteRequest"
-          },
-          {
-            "$ref": "#/components/schemas/TasksReopenRequest"
           }
         ],
         "additionalProperties": false
@@ -3040,343 +3152,6 @@
                 "additionalProperties": false
               }
             }
-          }
-        ]
-      },
-      "TasksCreateRequest": {
-        "anyOf": [
-          {
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/TasksBaseRequest"
-              },
-              {
-                "required": [
-                  "params"
-                ],
-                "properties": {
-                  "op": {
-                    "const": "create"
-                  },
-                  "params": {
-                    "type": "object",
-                    "required": [
-                      "title"
-                    ],
-                    "properties": {
-                      "title": {
-                        "type": "string"
-                      },
-                      "notes": {
-                        "type": "string"
-                      },
-                      "due": {
-                        "type": "string",
-                        "format": "date-time"
-                      }
-                    },
-                    "additionalProperties": false
-                  }
-                }
-              }
-            ]
-          },
-          {
-            "type": "object",
-            "required": [
-              "op",
-              "title"
-            ],
-            "properties": {
-              "op": {
-                "const": "create"
-              },
-              "title": {
-                "type": "string"
-              },
-              "notes": {
-                "type": "string"
-              },
-              "due": {
-                "type": "string",
-                "format": "date-time"
-              }
-            },
-            "additionalProperties": false
-          }
-        ]
-      },
-      "TasksUpdateRequest": {
-        "anyOf": [
-          {
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/TasksBaseRequest"
-              },
-              {
-                "required": [
-                  "params"
-                ],
-                "properties": {
-                  "op": {
-                    "const": "update"
-                  },
-                  "params": {
-                    "type": "object",
-                    "required": [
-                      "taskListId",
-                      "taskId",
-                      "updates"
-                    ],
-                    "properties": {
-                      "taskListId": {
-                        "type": "string"
-                      },
-                      "taskId": {
-                        "type": "string"
-                      },
-                      "updates": {
-                        "type": "object",
-                        "properties": {
-                          "title": {
-                            "type": "string"
-                          },
-                          "notes": {
-                            "type": "string"
-                          },
-                          "due": {
-                            "type": "string",
-                            "format": "date-time"
-                          },
-                          "status": {
-                            "type": "string",
-                            "enum": [
-                              "needsAction",
-                              "completed"
-                            ]
-                          }
-                        }
-                      }
-                    },
-                    "additionalProperties": false
-                  }
-                }
-              }
-            ]
-          },
-          {
-            "type": "object",
-            "required": [
-              "op",
-              "taskListId",
-              "taskId",
-              "updates"
-            ],
-            "properties": {
-              "op": {
-                "const": "update"
-              },
-              "taskListId": {
-                "type": "string"
-              },
-              "taskId": {
-                "type": "string"
-              },
-              "updates": {
-                "type": "object",
-                "properties": {
-                  "title": {
-                    "type": "string"
-                  },
-                  "notes": {
-                    "type": "string"
-                  },
-                  "due": {
-                    "type": "string",
-                    "format": "date-time"
-                  },
-                  "status": {
-                    "type": "string",
-                    "enum": [
-                      "needsAction",
-                      "completed"
-                    ]
-                  }
-                }
-              }
-            },
-            "additionalProperties": false
-          }
-        ]
-      },
-      "TasksDeleteRequest": {
-        "anyOf": [
-          {
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/TasksBaseRequest"
-              },
-              {
-                "required": [
-                  "params"
-                ],
-                "properties": {
-                  "op": {
-                    "const": "delete"
-                  },
-                  "params": {
-                    "type": "object",
-                    "required": [
-                      "taskListId",
-                      "taskId"
-                    ],
-                    "properties": {
-                      "taskListId": {
-                        "type": "string"
-                      },
-                      "taskId": {
-                        "type": "string"
-                      }
-                    },
-                    "additionalProperties": false
-                  }
-                }
-              }
-            ]
-          },
-          {
-            "type": "object",
-            "required": [
-              "op",
-              "taskListId",
-              "taskId"
-            ],
-            "properties": {
-              "op": {
-                "const": "delete"
-              },
-              "taskListId": {
-                "type": "string"
-              },
-              "taskId": {
-                "type": "string"
-              }
-            },
-            "additionalProperties": false
-          }
-        ]
-      },
-      "TasksCompleteRequest": {
-        "anyOf": [
-          {
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/TasksBaseRequest"
-              },
-              {
-                "required": [
-                  "params"
-                ],
-                "properties": {
-                  "op": {
-                    "const": "complete"
-                  },
-                  "params": {
-                    "type": "object",
-                    "required": [
-                      "taskListId",
-                      "taskId"
-                    ],
-                    "properties": {
-                      "taskListId": {
-                        "type": "string"
-                      },
-                      "taskId": {
-                        "type": "string"
-                      }
-                    },
-                    "additionalProperties": false
-                  }
-                }
-              }
-            ]
-          },
-          {
-            "type": "object",
-            "required": [
-              "op",
-              "taskListId",
-              "taskId"
-            ],
-            "properties": {
-              "op": {
-                "const": "complete"
-              },
-              "taskListId": {
-                "type": "string"
-              },
-              "taskId": {
-                "type": "string"
-              }
-            },
-            "additionalProperties": false
-          }
-        ]
-      },
-      "TasksReopenRequest": {
-        "anyOf": [
-          {
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/TasksBaseRequest"
-              },
-              {
-                "required": [
-                  "params"
-                ],
-                "properties": {
-                  "op": {
-                    "const": "reopen"
-                  },
-                  "params": {
-                    "type": "object",
-                    "required": [
-                      "taskListId",
-                      "taskId"
-                    ],
-                    "properties": {
-                      "taskListId": {
-                        "type": "string"
-                      },
-                      "taskId": {
-                        "type": "string"
-                      }
-                    },
-                    "additionalProperties": false
-                  }
-                }
-              }
-            ]
-          },
-          {
-            "type": "object",
-            "required": [
-              "op",
-              "taskListId",
-              "taskId"
-            ],
-            "properties": {
-              "op": {
-                "const": "reopen"
-              },
-              "taskListId": {
-                "type": "string"
-              },
-              "taskId": {
-                "type": "string"
-              }
-            },
-            "additionalProperties": false
           }
         ]
       },
@@ -3487,6 +3262,113 @@
             "additionalProperties": false
           }
         ]
+      },
+      "TasksActionCreateRequest": {
+        "type": "object",
+        "required": [
+          "title"
+        ],
+        "properties": {
+          "title": {
+            "type": "string",
+            "description": "Task title (required)."
+          },
+          "notes": {
+            "type": "string",
+            "description": "Optional task notes."
+          },
+          "due": {
+            "type": "string",
+            "description": "Due date. Accepts YYYY-MM-DD or full RFC3339 timestamp."
+          }
+        },
+        "additionalProperties": false
+      },
+      "TasksActionModifyRequest": {
+        "type": "object",
+        "required": [
+          "taskListId",
+          "taskId"
+        ],
+        "properties": {
+          "taskListId": {
+            "type": "string",
+            "description": "Google Tasks list identifier."
+          },
+          "taskId": {
+            "type": "string",
+            "description": "Task identifier within the list."
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "needsAction",
+              "completed"
+            ],
+            "description": "Set to completed or needsAction to close/reopen."
+          },
+          "title": {
+            "type": "string",
+            "description": "New task title."
+          },
+          "notes": {
+            "type": "string",
+            "description": "New task notes."
+          },
+          "due": {
+            "type": "string",
+            "description": "Updated due date (YYYY-MM-DD or RFC3339)."
+          },
+          "updates": {
+            "type": "object",
+            "description": "Alternative nested patch payload. Supports title/notes/due/status keys.",
+            "properties": {
+              "status": {
+                "type": "string",
+                "enum": [
+                  "needsAction",
+                  "completed"
+                ]
+              },
+              "title": {
+                "type": "string"
+              },
+              "notes": {
+                "type": "string"
+              },
+              "due": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "oneOf": [
+          { "required": ["status"] },
+          { "required": ["title"] },
+          { "required": ["notes"] },
+          { "required": ["due"] },
+          { "required": ["updates"] }
+        ],
+        "additionalProperties": false
+      },
+      "TasksActionDeleteRequest": {
+        "type": "object",
+        "required": [
+          "taskListId",
+          "taskId"
+        ],
+        "properties": {
+          "taskListId": {
+            "type": "string",
+            "description": "Google Tasks list identifier."
+          },
+          "taskId": {
+            "type": "string",
+            "description": "Task identifier within the list."
+          }
+        },
+        "additionalProperties": false
       }
     }
   }

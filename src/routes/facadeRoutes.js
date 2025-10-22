@@ -13,6 +13,7 @@ import * as facadeController from '../controllers/facadeController.js';
 import * as rpcController from '../controllers/rpcController.js';
 import * as confirmationController from '../controllers/confirmationController.js';
 import * as contactsActionsController from '../controllers/contactsActionsController.js';
+import * as tasksActionsController from '../controllers/tasksActionsController.js';
 
 const router = express.Router();
 
@@ -47,6 +48,11 @@ router.post('/macros/contacts/safeAdd', facadeController.macroContactsSafeAdd);
 router.post('/contacts/actions/modify', contactsActionsController.modifyContact);
 router.post('/contacts/actions/delete', contactsActionsController.deleteContact);
 router.post('/contacts/actions/bulkDelete', contactsActionsController.bulkDeleteContacts);
+
+// Tasks direct actions (mutation shortcuts for GPT)
+router.post('/tasks/actions/create', tasksActionsController.createTask);
+router.post('/tasks/actions/modify', tasksActionsController.modifyTask);
+router.post('/tasks/actions/delete', tasksActionsController.deleteTask);
 
 // Tasks Macros
 router.post('/macros/tasks/overview', facadeController.macroTasksOverview);
