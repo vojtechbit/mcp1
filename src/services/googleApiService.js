@@ -211,7 +211,8 @@ function truncateText(text, maxLength) {
 /**
  * FIX: Classify email into inbox category based on Gmail labels
  * @param {object} message - Gmail message object with labelIds
- * @returns {string} Category: primary, work, promotions, social, updates, forums, other
+ * @returns {string} Category: primary, work, promotions, social, updates, forums,
+ *                   sent, draft, archived, trash, spam, other
  */
 function classifyEmailCategory(message) {
   if (!message || !message.labelIds) {
@@ -224,9 +225,33 @@ function classifyEmailCategory(message) {
   // Gmail system labels (canonical names)
   const hasLabel = (name) => labelIdLowercase.includes(name.toLowerCase());
 
+  // Sent/Drafts/Trash/Spam should be recognized regardless of Inbox status
+  if (hasLabel('TRASH')) {
+    return 'trash';
+  }
+
+  if (hasLabel('SPAM')) {
+    return 'spam';
+  }
+
+  if (hasLabel('SENT')) {
+    return 'sent';
+  }
+
+  if (hasLabel('DRAFT')) {
+    return 'draft';
+  }
+
+  const inInbox = hasLabel('INBOX');
+
+  // Messages outside of the inbox (but not sent/draft/trash/spam) are archived
+  if (!inInbox) {
+    return 'archived';
+  }
+
   // Check categories in priority order
   // Note: Gmail category labels are internal - check by label name patterns
-  
+
   // CATEGORY_PROMOTIONS
   if (hasLabel('CATEGORY_PROMOTIONS')) {
     return 'promotions';
@@ -259,7 +284,7 @@ function classifyEmailCategory(message) {
       return 'work';
     }
   }
-  
+
   // If none matched, return other
   return 'other';
 }
@@ -375,6 +400,7 @@ async function readEmail(googleSub, messageId, options = {}) {
         snippet: snippet,
         sizeEstimate: sizeEstimate,
         headers: metadataResult.data.payload.headers,
+        labelIds: metadataResult.data.labelIds || [],
         format: 'snippet'
       };
     }
