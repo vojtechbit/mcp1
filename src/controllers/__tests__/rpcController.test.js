@@ -10,8 +10,15 @@ process.env.ENCRYPTION_KEY = process.env.ENCRYPTION_KEY || '0123456789abcdef0123
 
 const bulkDeleteCalls = [];
 const updateTaskCalls = [];
+const createDraftCalls = [];
 
 globalThis.__RPC_TEST_OVERRIDES = {
+  gmailService: {
+    createDraft: async (sub, payload) => {
+      createDraftCalls.push({ sub, payload });
+      return { id: 'draft-123', message: { id: 'msg-456' } };
+    }
+  },
   contactsService: {
     bulkDelete: async (token, payload) => {
       bulkDeleteCalls.push({ token, payload });
@@ -26,7 +33,7 @@ globalThis.__RPC_TEST_OVERRIDES = {
   }
 };
 
-const { contactsRpc, tasksRpc } = await import('../rpcController.js');
+const { contactsRpc, tasksRpc, mailRpc } = await import('../rpcController.js');
 delete globalThis.__RPC_TEST_OVERRIDES;
 
 class MockResponse {
@@ -142,4 +149,60 @@ test('tasksRpc complete accepts root-level identifiers', async () => {
       updates: { status: 'completed' }
     }
   ]);
+});
+
+test('mailRpc createDraft creates draft via Gmail service', async () => {
+  createDraftCalls.length = 0;
+  const request = {
+    body: {
+      op: 'createDraft',
+      params: {
+        to: ' coworker@example.com ',
+        subject: ' Weekly status ',
+        body: 'Čau, posílám koncept meetingu.'
+      }
+    },
+    user: { googleSub: 'user-sub-1' }
+  };
+  const response = new MockResponse();
+
+  await mailRpc(request, response);
+
+  assert.equal(response.statusCode, 200);
+  assert.deepEqual(response.body, {
+    ok: true,
+    data: { id: 'draft-123', message: { id: 'msg-456' } }
+  });
+  assert.deepEqual(createDraftCalls, [
+    {
+      sub: 'user-sub-1',
+      payload: {
+        to: 'coworker@example.com',
+        subject: 'Weekly status',
+        body: 'Čau, posílám koncept meetingu.'
+      }
+    }
+  ]);
+});
+
+test('mailRpc createDraft rejects missing subject', async () => {
+  createDraftCalls.length = 0;
+  const request = {
+    body: {
+      op: 'createDraft',
+      params: {
+        to: 'coworker@example.com',
+        body: 'Návrh zprávy'
+      }
+    },
+    user: { googleSub: 'user-sub-2' }
+  };
+  const response = new MockResponse();
+
+  await mailRpc(request, response);
+
+  assert.equal(response.statusCode, 400);
+  assert.equal(response.body.code, 'INVALID_PARAM');
+  assert.match(response.body.message, /subject/);
+  assert.equal(createDraftCalls.length, 0);
 });

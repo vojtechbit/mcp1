@@ -1533,7 +1533,7 @@
       "post": {
         "operationId": "mailRpc",
         "summary": "Advanced mail operations",
-        "description": "Low-level Gmail RPC. Operations: search, preview, read, send, reply, modify labels, preview attachments. Use macros for common tasks, RPC for advanced control. Returns ALL matching results (within op limits). Attachment URLs expire 1h.",
+        "description": "Low-level Gmail RPC. Operations: search, preview, read, create drafts, send, reply, modify labels, preview attachments. Use macros for common tasks, RPC for advanced control. Returns ALL matching results (within op limits). Attachment URLs expire 1h.",
         "requestBody": {
           "required": true,
           "content": {
@@ -1611,6 +1611,32 @@
                           "bcc": {
                             "type": "string",
                             "description": "BCC recipients (comma-separated, optional)"
+                          }
+                        }
+                      },
+                      {
+                        "type": "object",
+                        "title": "Create Draft",
+                        "description": "Create Gmail draft without sending (op=createDraft)",
+                        "required": ["to", "subject", "body"],
+                        "properties": {
+                          "to": {
+                            "type": "string",
+                            "format": "email",
+                            "example": "coworker@example.com",
+                            "description": "Recipient for the draft"
+                          },
+                          "subject": {
+                            "type": "string",
+                            "maxLength": 255,
+                            "example": "Weekly status update",
+                            "description": "Draft email subject"
+                          },
+                          "body": {
+                            "type": "string",
+                            "maxLength": 20000,
+                            "example": "Ahoj, tady je návrh status reportu...",
+                            "description": "Plain-text body saved to the draft"
                           }
                         }
                       },
@@ -1738,6 +1764,17 @@
                       "to": "recipient@example.com",
                       "subject": "Meeting tomorrow",
                       "body": "Hi, reminder about meeting at 7am"
+                    }
+                  }
+                },
+                "createDraft": {
+                  "summary": "Create draft without sending",
+                  "value": {
+                    "op": "createDraft",
+                    "params": {
+                      "to": "coworker@example.com",
+                      "subject": "Weekly status update",
+                      "body": "Ahoj! Posílám koncept reportu ke schválení."
                     }
                   }
                 },
