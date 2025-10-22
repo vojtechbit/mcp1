@@ -47,6 +47,12 @@ git push origin main
 # Přidej environment variables na Render.com
 ```
 
+> ℹ️ **`ADVANCED_DEBUG` flag:** Tento volitelný env var můžeš přidat na Render, pokud chceš
+> mít podrobný tracing a logování. Stačí použít hodnotu `true`, `1`, `yes` nebo `on` pro
+> zapnutí. Pokud proměnnou nenastavíš, produkční běh zůstane v "quiet" režimu, ale testy
+> ji automaticky zapínají. Nastavení na `false`, `0`, `no`, `off` nebo `quiet` ji naopak
+> vypne i při běhu testů, kdyby bylo potřeba otestovat tichý režim.
+
 ### 4. Nastav Custom GPT
 - **Instructions:** Zkopíruj z `GPT_CONFIG.md`
 - **OAuth:** Viz `CUSTOM_GPT_SETUP.md`
