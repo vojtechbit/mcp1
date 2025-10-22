@@ -432,47 +432,14 @@
                       "description": "'single'=1 email (use 'item'), 'batch'=multiple emails (use 'items' array)"
                     },
                     "item": {
-                      "type": "object",
-                      "description": "Single email (when mode='single'). Contains full content.",
-                      "properties": {
-                        "messageId": {
-                          "type": "string"
-                        },
-                        "subject": {
-                          "type": "string"
-                        },
-                        "body": {
-                          "type": "string",
-                          "description": "Email body in requested format. Plain text with line breaks preserved."
-                        },
-                        "attachments": {
-                          "type": "array",
-                          "description": "Attachments with download URLs (expire 1h). Blocked files have blocked=true, url=null.",
-                          "items": {
-                            "type": "object",
-                            "properties": {
-                              "name": {
-                                "type": "string"
-                              },
-                              "mimeType": {
-                                "type": "string"
-                              },
-                              "url": {
-                                "type": "string",
-                                "description": "Signed URL (expires 1h). Null if blocked."
-                              },
-                              "blocked": {
-                                "type": "boolean",
-                                "description": "True if blocked by security. No URL provided."
-                              }
-                            }
-                          }
-                        }
-                      }
+                      "$ref": "#/components/schemas/MacroEmailQuickReadItem"
                     },
                     "items": {
                       "type": "array",
-                      "description": "Array of emails (when mode='batch'). Contains ALL requested/matching emails."
+                      "description": "Array of emails (when mode='batch'). Contains ALL requested/matching emails.",
+                      "items": {
+                        "$ref": "#/components/schemas/MacroEmailQuickReadItem"
+                      }
                     }
                   }
                 }
@@ -2476,6 +2443,162 @@
   },
   "components": {
     "schemas": {
+      "MacroEmailQuickReadItem": {
+        "type": "object",
+        "description": "Email payload returned by /macros/email/quickRead including body availability metadata and Gmail web links.",
+        "properties": {
+          "messageId": {
+            "type": "string",
+            "description": "Gmail message ID"
+          },
+          "subject": {
+            "type": "string",
+            "description": "Email subject"
+          },
+          "body": {
+            "type": "string",
+            "description": "Email body rendered according to requested format"
+          },
+          "attachments": {
+            "type": "array",
+            "description": "Attachments with signed download URLs (expire 1 hour). Blocked files expose blocked=true and omit URL.",
+            "items": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "mimeType": {
+                  "type": "string"
+                },
+                "url": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "description": "Signed URL (expires 1h). Null when blocked."
+                },
+                "blocked": {
+                  "type": "boolean",
+                  "description": "True when file blocked by security policy"
+                }
+              }
+            }
+          },
+          "links": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "description": "Direct Gmail web links for quick manual review",
+            "properties": {
+              "thread": {
+                "type": "string",
+                "description": "Link to open the full Gmail thread"
+              },
+              "message": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "description": "Single message view link (null if not available)"
+              }
+            }
+          },
+          "truncated": {
+            "type": "boolean",
+            "description": "True if backend truncated large body for safety"
+          },
+          "truncationInfo": {
+            "type": "object",
+            "description": "Original size statistics when truncation occurred",
+            "properties": {
+              "originalSize": {
+                "type": "integer",
+                "description": "Original Gmail payload size in bytes"
+              },
+              "maxAllowedSize": {
+                "type": "integer",
+                "description": "Backend safety limit in bytes"
+              },
+              "truncatedBodyLength": {
+                "type": "integer",
+                "description": "Number of characters kept after truncation"
+              }
+            }
+          },
+          "contentMetadata": {
+            "type": "object",
+            "description": "Availability of plain text vs HTML body variants and inline assets",
+            "properties": {
+              "plainText": {
+                "type": "object",
+                "properties": {
+                  "available": {
+                    "type": "boolean",
+                    "description": "True when a text/plain part exists"
+                  },
+                  "bytes": {
+                    "type": "integer",
+                    "description": "Decoded byte size of available text/plain parts"
+                  },
+                  "preview": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "description": "First ~500 characters of plain text body when available"
+                  },
+                  "truncated": {
+                    "type": "boolean",
+                    "description": "True if preview was shortened to 500 characters"
+                  }
+                }
+              },
+              "html": {
+                "type": "object",
+                "properties": {
+                  "available": {
+                    "type": "boolean",
+                    "description": "True when an HTML body exists"
+                  },
+                  "inline": {
+                    "type": "boolean",
+                    "description": "True if HTML body was delivered inline"
+                  },
+                  "viaAttachments": {
+                    "type": "boolean",
+                    "description": "True when HTML is stored as attachment requiring extra fetch"
+                  },
+                  "bytes": {
+                    "type": "integer",
+                    "description": "Decoded byte size of HTML segments returned inline"
+                  },
+                  "preview": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "description": "First ~500 characters of decoded HTML"
+                  },
+                  "truncated": {
+                    "type": "boolean",
+                    "description": "True if HTML preview trimmed to 500 characters"
+                  }
+                }
+              },
+              "inlineImages": {
+                "type": "integer",
+                "description": "Count of inline image MIME parts"
+              },
+              "inlineAttachments": {
+                "type": "integer",
+                "description": "Count of other inline attachments (e.g., buttons, logos)"
+              }
+            }
+          }
+        }
+      },
       "ContactsRpcRequest": {
         "type": "object",
         "required": [
