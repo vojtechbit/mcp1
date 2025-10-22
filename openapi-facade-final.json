@@ -3242,44 +3242,41 @@
       "ContactsBulkDeleteActionRequest": {
         "type": "object",
         "description": "Payload for /api/contacts/actions/bulkDelete. Choose mode: emails[] deletes full contacts, rowIds[] deletes specific rows.",
-        "oneOf": [
+        "properties": {
+          "emails": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 100,
+            "items": {
+              "type": "string",
+              "format": "email"
+            },
+            "description": "Emails whose rows should be removed (deletes all rows matching each email)."
+          },
+          "rowIds": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 100,
+            "items": {
+              "type": "integer",
+              "minimum": 2
+            },
+            "description": "Sheet row indexes to delete (1-based, e.g. 2 removes second contact row)."
+          }
+        },
+        "additionalProperties": false,
+        "minProperties": 1,
+        "maxProperties": 1,
+        "anyOf": [
           {
-            "type": "object",
             "required": [
               "emails"
-            ],
-            "properties": {
-              "emails": {
-                "type": "array",
-                "minItems": 1,
-                "maxItems": 100,
-                "items": {
-                  "type": "string",
-                  "format": "email"
-                },
-                "description": "Emails whose rows should be removed (deletes all rows matching each email)."
-              }
-            },
-            "additionalProperties": false
+            ]
           },
           {
-            "type": "object",
             "required": [
               "rowIds"
-            ],
-            "properties": {
-              "rowIds": {
-                "type": "array",
-                "minItems": 1,
-                "maxItems": 100,
-                "items": {
-                  "type": "integer",
-                  "minimum": 2
-                },
-                "description": "Sheet row indexes to delete (1-based, e.g. 2 removes second contact row)."
-              }
-            },
-            "additionalProperties": false
+            ]
           }
         ]
       },
