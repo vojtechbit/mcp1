@@ -9,18 +9,18 @@
 ## 1. Triage doručené pošty
 1. `email.search` s vhodnými filtry (čas, label, kategorie).
 2. Výsledek zobraz jako Email Overview (viz formát). Pokud backend neposkytuje snippets, zobraz pouze dostupná pole.
-3. Je-li `hasMore/partial`, uveď subset banner a nabídni pokračování.
+3. Jakmile response obsahuje `subset:true`, `hasMore:true` nebo `partial:true`, uveď subset banner a nabídni pokračování.
 4. Nabídni další kroky: detail, odpověď, archivace, vytvoření úkolu, připomenutí.
 
 ## 2. Čtení e-mailu na přání
 1. Získej ID (z přehledu nebo dotazu).
 2. Na detail vždy použij `email.read` v režimu **full**.
 3. Pokud jsou přílohy, zeptej se, zda načíst metadata nebo otevřít (pokud to Actions dovolují).
-4. Zobraz tělo dle šablony Email Detail. Je-li `truncated:true`, nabídni dočtení.
+4. Zobraz tělo dle šablony Email Detail. Pokud response přiloží `note` o zkrácení nebo jiný limit, sděl to a nabídni další kroky (jiný formát, filtrování).
 5. Relevantní akce (odpovědět, přeposlat, vytvořit úkol/event) navrhuj až po přečtení celého obsahu, aby úkoly vznikaly z ověřených informací.
 
 ## 3. Kategorizace důležitosti ("Co důležitého mi dnes přišlo")
-1. Pro dané období spusť `email.search` a získej seznam zpráv včetně `macroSnippet/snippet`, kategorie inboxu a odesílatele.
+1. Pro dané období spusť `email.search` a získej seznam zpráv včetně `snippet`/`bodyPreview`, kategorie inboxu a odesílatele.
 2. Předběžné skórování:
    - Pokud `mailboxCategory` ∈ {`Primary`, `Work`}, přiřaď vysokou váhu (např. +2).
    - U ostatních kategorií přidej pouze +1, pokud snippet nebo metadata obsahují klíčové indicie (klient, šéf, smlouva, změna schůzky, fakturace, urgentní deadline, osobní závazky). Marketingové/promotions texty obdrží 0.
@@ -37,7 +37,7 @@
 2. Vytvoř návrh textu podle zadání (shrnutí, body, přílohy, podpis).
 3. Jasně uveď, že jde o draft. „Chceš odeslat?“
 4. Před odesláním zopakuj příjemce, předmět, tělo, přílohy a získej souhlas.
-5. Odeslání proveď příslušnou mutací s Idempotency-Key a potvrď úspěch.
+5. Odeslání proveď příslušnou mutací; pokud endpoint podporuje Idempotency-Key, přidej jej a potvrď úspěch.
 
 ## 5. Odpověď na e-mail
 1. Načti plný obsah původní zprávy (Playbook 2).
@@ -47,7 +47,7 @@
 5. Po odeslání potvrď v sekci Mutace.
 
 ## 6. Práce s přílohami
-1. V response hledej metadata: název, velikost, typ, expirační URL.
+1. V response hledej metadata: název, typ, velikost (`sizeBytes`, pokud je přítomna) a expirační URL.
 2. Při žádosti o otevření ověř, zda API podporuje download/preview.
 3. Pokud narazíš na limit (velký Excel apod.), informuj uživatele a navrhni další kroky (stáhnout, požádat o menší výřez).
 4. Nebezpečné přípony doplň varováním.
@@ -55,7 +55,7 @@
 ## 7. Kalendář – vytvoření události
 1. Ujasni časové pásmo (default Europe/Prague) a délku události.
 2. Nabídni kontrolu kolizí, pokud endpoint existuje.
-3. Použij `calendar.create` s Idempotency-Key.
+3. Použij `calendar.create` s Idempotency-Key, pokud jej endpoint podporuje.
 4. Potvrď úspěch (`eventId`) a nabídni sdílení/link.
 
 ## 8. Úkoly – připomenutí a souhrny
@@ -67,8 +67,8 @@
 ## 9. Kontakty – práce se jmény a duplicitami
 1. `contacts.search` při neurčeném e-mailu nebo pro ověření identity.
 2. Pokud je více výsledků, ukaž tabulku a zdůrazni relevantní metadata (např. poslední interakci).
-3. Funkce `dedupe` pouze zobrazuje duplicity; jasně sděl, že nic nemaže. Nabídni ruční vyřešení nebo postup dle backendu.
-4. Nový kontakt? Po potvrzení použij `contacts.create`, následně informuj o případných duplicích.
+3. Funkce `dedupe` a výsledky ve `skipped`/`existing` pouze zobrazuje duplicity; jasně sděl, že nic nemaže. Nabídni ruční vyřešení nebo postup dle backendu.
+4. Nový kontakt? Po potvrzení použij `contacts.create`, následně informuj o případných duplicích, pokud se ve response objevily.
 5. Po práci s kontakty nabídni navazující akce (e-mail, událost, úkol).
 
 ## 10. Kombinované scénáře
