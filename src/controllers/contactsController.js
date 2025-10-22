@@ -8,7 +8,7 @@ import { wrapModuleFunctions } from '../utils/advancedDebugging.js';
 /**
  * Contacts Controller
  * Manages contact list stored in Google Sheets
- * Structure: Name | Email | Notes | RealEstate | Phone
+ * Structure: Name | Email | Phone | RealEstate | Notes
  */
 
 /**
@@ -46,7 +46,7 @@ async function searchContacts(req, res) {
       return res.status(404).json({
         error: 'Contact sheet not found',
         message: error.message,
-        instructions: 'Please create a Google Sheet named "MCP1 Contacts" with columns: Name | Email | Notes | RealEstate | Phone'
+        instructions: 'Please create a Google Sheet named "MCP1 Contacts" with columns: Name | Email | Phone | RealEstate | Notes'
       });
     }
 
@@ -121,7 +121,7 @@ async function listContacts(req, res) {
       return res.status(404).json({
         error: 'Contact sheet not found',
         message: error.message,
-        instructions: 'Please create a Google Sheet named "MCP1 Contacts" with columns: Name | Email | Notes | RealEstate | Phone'
+        instructions: 'Please create a Google Sheet named "MCP1 Contacts" with columns: Name | Email | Phone | RealEstate | Notes'
       });
     }
 
@@ -136,7 +136,7 @@ async function listContacts(req, res) {
 /**
  * Add new contact
  * POST /api/contacts
- * Body: { name, email, notes?, realEstate?, phone? }
+ * Body: { name, email, phone?, realEstate?, notes? }
  */
 async function addContact(req, res) {
   try {
@@ -172,7 +172,7 @@ async function addContact(req, res) {
       return res.status(404).json({
         error: 'Contact sheet not found',
         message: error.message,
-        instructions: 'Please create a Google Sheet named "MCP1 Contacts" with columns: Name | Email | Notes | RealEstate | Phone'
+        instructions: 'Please create a Google Sheet named "MCP1 Contacts" with columns: Name | Email | Phone | RealEstate | Notes'
       });
     }
 
@@ -187,7 +187,7 @@ async function addContact(req, res) {
 /**
  * Bulk upsert contacts
  * POST /api/contacts/bulkUpsert
- * Body: { contacts: [{name, email, notes?, realEstate?, phone?}] }
+ * Body: { contacts: [{name, email, phone?, realEstate?, notes?}] }
  */
 async function bulkUpsertContacts(req, res) {
   // Apply heavy limiter
@@ -276,7 +276,7 @@ async function bulkDeleteContacts(req, res) {
 /**
  * Update contact (finds by name+email and updates all fields)
  * PUT /api/contacts
- * Body: { name, email, notes?, realEstate?, phone? }
+ * Body: { name, email, phone?, realEstate?, notes? }
  */
 async function updateContact(req, res) {
   try {
@@ -358,7 +358,7 @@ async function deleteContact(req, res) {
       return res.status(404).json({
         error: 'Contact sheet not found',
         message: error.message,
-        instructions: 'Please create a Google Sheet named "MCP1 Contacts" with columns: Name | Email | Notes | RealEstate | Phone'
+        instructions: 'Please create a Google Sheet named "MCP1 Contacts" with columns: Name | Email | Phone | RealEstate | Notes'
       });
     }
 

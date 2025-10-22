@@ -12,12 +12,12 @@ dotenv.config();
  * All contact data is stored in Google Sheets.
  * Authentication tokens are passed from caller (controller/RPC).
  * 
- * STRUCTURE: Name | Email | Notes | RealEstate | Phone
+ * STRUCTURE: Name | Email | Phone | RealEstate | Notes
  */
 
 const CONTACTS_SHEET_NAME = 'MCP1 Contacts';
 const CONTACTS_RANGE = 'A2:E';
-const CONTACTS_EXPECTED_HEADERS = ['Name', 'Email', 'Notes', 'RealEstate', 'Phone'];
+const CONTACTS_EXPECTED_HEADERS = ['Name', 'Email', 'Phone', 'RealEstate', 'Notes'];
 const GPT_RETRY_EXAMPLE_EMAIL = 'alex@example.com';
 
 /**
@@ -362,19 +362,19 @@ async function searchContacts(accessToken, searchQuery) {
       .filter(row => {
         const name = (row[0] || '').toLowerCase();
         const email = (row[1] || '').toLowerCase();
-        const notes = (row[2] || '').toLowerCase();
+        const phone = (row[2] || '').toLowerCase();
         const realEstate = (row[3] || '').toLowerCase();
-        const phone = (row[4] || '').toLowerCase();
-        return name.includes(query) || email.includes(query) || 
-               notes.includes(query) || realEstate.includes(query) || 
-               phone.includes(query);
+        const notes = (row[4] || '').toLowerCase();
+        return name.includes(query) || email.includes(query) ||
+               phone.includes(query) || realEstate.includes(query) ||
+               notes.includes(query);
       })
       .map(row => ({
         name: row[0] || '',
         email: row[1] || '',
-        notes: row[2] || '',
+        phone: row[2] || '',
         realEstate: row[3] || '',
-        phone: row[4] || ''
+        notes: row[4] || ''
       }));
 
   } catch (error) {
@@ -447,9 +447,9 @@ async function listAllContacts(accessToken) {
       rowIndex: index + 2,
       name: row[0] || '',
       email: row[1] || '',
-      notes: row[2] || '',
+      phone: row[2] || '',
       realEstate: row[3] || '',
-      phone: row[4] || ''
+      notes: row[4] || ''
     }));
 
   } catch (error) {
@@ -480,9 +480,9 @@ async function addContact(accessToken, contactData) {
         rowIndex: index + 2,
         name: row[0] || '',
         email: row[1] || '',
-        notes: row[2] || '',
+        phone: row[2] || '',
         realEstate: row[3] || '',
-        phone: row[4] || ''
+        notes: row[4] || ''
       }));
 
     await sheets.spreadsheets.values.append({
@@ -490,11 +490,11 @@ async function addContact(accessToken, contactData) {
       range: 'A:E',
       valueInputOption: 'RAW',
       requestBody: {
-        values: [[name, email, notes || '', realEstate || '', phone || '']]
+        values: [[name, email, phone || '', realEstate || '', notes || '']]
       }
     });
 
-    const result = { name, email, notes: notes || '', realEstate: realEstate || '', phone: phone || '' };
+    const result = { name, email, phone: phone || '', realEstate: realEstate || '', notes: notes || '' };
     if (duplicates.length > 0) result.duplicates = duplicates;
     return result;
 
@@ -528,9 +528,9 @@ async function bulkUpsert(accessToken, contacts) {
           rowIndex: index + 2,
           name: row[0] || '',
           email: row[1] || '',
-          notes: row[2] || '',
+          phone: row[2] || '',
           realEstate: row[3] || '',
-          phone: row[4] || ''
+          notes: row[4] || ''
         });
       }
     });
@@ -538,9 +538,9 @@ async function bulkUpsert(accessToken, contacts) {
     const newRows = contacts.map(c => [
       c.name || '',
       c.email || '',
-      c.notes || '',
+      c.phone || '',
       c.realEstate || '',
-      c.phone || ''
+      c.notes || ''
     ]);
 
     await sheets.spreadsheets.values.append({
@@ -706,11 +706,11 @@ async function updateContact(accessToken, contactData) {
       range: `A${rowIndex}:E${rowIndex}`,
       valueInputOption: 'RAW',
       requestBody: {
-        values: [[name, email, notes || '', realEstate || '', phone || '']]
+        values: [[name, email, phone || '', realEstate || '', notes || '']]
       }
     });
 
-    return { name, email, notes: notes || '', realEstate: realEstate || '', phone: phone || '' };
+    return { name, email, phone: phone || '', realEstate: realEstate || '', notes: notes || '' };
 
   } catch (error) {
     console.error('❌ [SHEETS_ERROR] Failed to update contact');
@@ -783,9 +783,9 @@ async function deleteContact(accessToken, { email, name }) {
           deletedContact = {
             name: rows[i][0] || '',
             email: rows[i][1] || '',
-            notes: rows[i][2] || '',
+            phone: rows[i][2] || '',
             realEstate: rows[i][3] || '',
-            phone: rows[i][4] || ''
+            notes: rows[i][4] || ''
           };
           break;
         }
@@ -804,9 +804,9 @@ async function deleteContact(accessToken, { email, name }) {
             contact: {
               name: rows[i][0] || '',
               email: rows[i][1] || '',
-              notes: rows[i][2] || '',
+              phone: rows[i][2] || '',
               realEstate: rows[i][3] || '',
-              phone: rows[i][4] || ''
+              notes: rows[i][4] || ''
             }
           });
         }
@@ -951,9 +951,9 @@ async function findDuplicates(accessToken) {
         emailMap[email].push({
           name: rows[i][0] || '',
           email: rows[i][1] || '',
-          notes: rows[i][2] || '',
+          phone: rows[i][2] || '',
           realestate: rows[i][3] || '',
-          phone: rows[i][4] || '',
+          notes: rows[i][4] || '',
           rowIndex: i + 2
         });
       }

@@ -211,7 +211,7 @@ Major backend enhancements for consistency, stability, and advanced features.
 - POST /contacts/bulkUpsert - append multiple contacts, report duplicates
 - POST /contacts/bulkDelete - delete by emails or rowIds
 - Heavy rate limiter applied for resource-intensive operations
-- Fixed range: A2:E (Name | Email | Notes | RealEstate | Phone)
+- Fixed range: A2:E (Name | Email | Phone | RealEstate | Notes)
 
 ##### Address Suggestions
 - GET /contacts/address-suggest?query=...
