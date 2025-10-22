@@ -4,7 +4,41 @@ import crypto from 'crypto';
 const debugStorage = new AsyncLocalStorage();
 const MAX_STRING_LENGTH = 200;
 const SENSITIVE_KEYS = ['token', 'password', 'secret', 'authorization', 'cookie'];
-const isDebugEnabled = process.env.ADVANCED_DEBUG !== 'false';
+const TRUTHY_DEBUG_VALUES = new Set(['1', 'true', 'yes', 'on']);
+const FALSY_DEBUG_VALUES = new Set(['0', 'false', 'no', 'off', 'quiet']);
+
+function resolveBooleanFromEnv(value) {
+  if (typeof value !== 'string') {
+    return null;
+  }
+
+  const normalized = value.trim().toLowerCase();
+
+  if (TRUTHY_DEBUG_VALUES.has(normalized)) {
+    return true;
+  }
+
+  if (FALSY_DEBUG_VALUES.has(normalized)) {
+    return false;
+  }
+
+  return null;
+}
+
+function isAdvancedDebugEnabled() {
+  const explicitSetting = resolveBooleanFromEnv(process.env.ADVANCED_DEBUG);
+
+  if (process.env.NODE_ENV === 'test') {
+    // Tests default to verbose tracing unless explicitly disabled.
+    return explicitSetting !== false;
+  }
+
+  if (explicitSetting !== null) {
+    return explicitSetting;
+  }
+
+  return false;
+}
 
 function maskValue(value) {
   if (value === null || value === undefined) {
@@ -104,7 +138,7 @@ function createTraceId() {
 }
 
 function log(level, message, payload = {}) {
-  if (!isDebugEnabled) return;
+  if (!isAdvancedDebugEnabled()) return;
 
   const formattedPayload = Object.fromEntries(
     Object.entries(payload).map(([key, value]) => [key, maskValue(value)])
@@ -191,7 +225,7 @@ function captureStartContext(context) {
 }
 
 function debugStep(description, metadata = {}) {
-  if (!isDebugEnabled) return;
+  if (!isAdvancedDebugEnabled()) return;
 
   const context = debugStorage.getStore();
   if (!context) {
@@ -279,7 +313,7 @@ function withAdvancedDebugging(label, fn) {
   }
 
   const wrapped = function wrappedWithDebugging(...args) {
-    if (!isDebugEnabled) {
+    if (!isAdvancedDebugEnabled()) {
       return fn.apply(this, args);
     }
 
@@ -326,5 +360,6 @@ export {
   debugStep,
   annotateTrace,
   createNamespaceTracer,
-  wrapModuleFunctions
+  wrapModuleFunctions,
+  isAdvancedDebugEnabled
 };
