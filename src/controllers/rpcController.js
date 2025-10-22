@@ -582,9 +582,6 @@ export async function tasksRpc(req, res) {
       const fallbackKeys = {
         list: ['taskListId', 'maxResults', 'pageToken', 'showCompleted'],
         get: ['taskListId', 'taskId'],
-        create: ['title', 'notes', 'due'],
-        update: ['taskListId', 'taskId', 'updates'],
-        delete: ['taskListId', 'taskId'],
         complete: ['taskListId', 'taskId'],
         reopen: ['taskListId', 'taskId']
       }[op] || [];
@@ -607,66 +604,62 @@ export async function tasksRpc(req, res) {
       params = {};
     }
 
-    let result;
+    const mutationRedirect = (operation) => {
+      const endpoints = {
+        create: '/api/tasks/actions/create',
+        modify: '/api/tasks/actions/modify',
+        delete: '/api/tasks/actions/delete'
+      };
+
+      const hintMap = {
+        create: 'POST /api/tasks/actions/create with {title, notes?, due?}',
+        update: 'POST /api/tasks/actions/modify with {taskListId, taskId, ...updates}',
+        complete: 'POST /api/tasks/actions/modify with {taskListId, taskId, status: "completed"}',
+        reopen: 'POST /api/tasks/actions/modify with {taskListId, taskId, status: "needsAction"}',
+        delete: 'POST /api/tasks/actions/delete with {taskListId, taskId}'
+      };
+
+      return res.status(410).json({
+        ok: false,
+        error: 'Tasks RPC mutation disabled',
+        message: `The tasks RPC no longer supports the "${operation}" operation. Call the dedicated facade endpoint instead.`,
+        code: 'TASKS_RPC_MUTATION_DISABLED',
+        endpoints,
+        hint: hintMap[operation]
+      });
+    };
 
     switch (op) {
-      case 'list':
-        result = await tasksSvc.listTasks(req.user.googleSub, params);
-        break;
-        
+      case 'list': {
+        const result = await tasksSvc.listTasks(req.user.googleSub, params);
+        return res.json({
+          ok: true,
+          data: result
+        });
+      }
+
       case 'get':
-        // TODO: tasksSvc.getTask not exported - needs implementation
         return res.status(501).json({
           error: 'Not implemented',
           message: 'Get single task not yet implemented',
           code: 'NOT_IMPLEMENTED'
         });
-        // result = await tasksSvc.getTask(
-        //   req.user.googleSub,
-        //   params.taskListId,
-        //   params.taskId
-        // );
-        // break;
-        
+
       case 'create':
-        result = await tasksSvc.createTask(req.user.googleSub, params);
-        break;
-        
+        return mutationRedirect('create');
+
       case 'update':
-        result = await tasksSvc.updateTask(
-          req.user.googleSub,
-          params.taskListId,
-          params.taskId,
-          params.updates
-        );
-        break;
-        
+        return mutationRedirect('update');
+
       case 'delete':
-        result = await tasksSvc.deleteTask(
-          req.user.googleSub,
-          params.taskListId,
-          params.taskId
-        );
-        break;
-        
+        return mutationRedirect('delete');
+
       case 'complete':
-        result = await tasksSvc.updateTask(
-          req.user.googleSub,
-          params.taskListId,
-          params.taskId,
-          { status: 'completed' }
-        );
-        break;
-        
+        return mutationRedirect('complete');
+
       case 'reopen':
-        result = await tasksSvc.updateTask(
-          req.user.googleSub,
-          params.taskListId,
-          params.taskId,
-          { status: 'needsAction' }
-        );
-        break;
-        
+        return mutationRedirect('reopen');
+
       default:
         return res.status(400).json({
           error: 'Bad request',
@@ -674,11 +667,6 @@ export async function tasksRpc(req, res) {
           code: 'INVALID_PARAM'
         });
     }
-    
-    res.json({
-      ok: true,
-      data: result
-    });
     
   } catch (error) {
     console.error('❌ Tasks RPC failed:', error.message);
