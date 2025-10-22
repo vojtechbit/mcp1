@@ -1,7 +1,7 @@
 # Alfréd — Operativní playbooky
 
 ## 0. Jak playbooky používat
-- Playbook je doporučený minimální postup. Přizpůsobuj ho situaci, ale nikdy neporuš zásady z `instructionsalfred.md`.
+- Playbook je doporučený minimální postup. Přizpůsobuj ho situaci, ale nikdy neporuš zásady z tvých instrukcí.
 - Pokud výsledek nesedí, vysvětli proč a navrhni další akci.
 
 ---
