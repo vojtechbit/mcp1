@@ -489,7 +489,7 @@ async function contactsRpc(req, res) {
         if (!params || !params.email || !params.name) {
           return res.status(400).json({
             error: 'Bad request',
-            message: 'add requires params: {name, email, notes?, realEstate?, phone?}',
+        message: 'add requires params: {name, email, phone?, realEstate?, notes?}',
             code: 'INVALID_PARAM',
             expectedFormat: { op: 'add', params: { name: 'string', email: 'string', notes: 'string?', realEstate: 'string?', phone: 'string?' } }
           });
@@ -511,7 +511,7 @@ async function contactsRpc(req, res) {
         if (!params || !params.contacts || !Array.isArray(params.contacts)) {
           return res.status(400).json({
             error: 'Bad request',
-            message: 'bulkUpsert requires params: {contacts: [{name, email, notes?, realEstate?, phone?}]}',
+        message: 'bulkUpsert requires params: {contacts: [{name, email, phone?, realEstate?, notes?}]}',
             code: 'INVALID_PARAM',
             expectedFormat: { op: 'bulkUpsert', params: { contacts: [{ name: 'string', email: 'string' }] } }
           });

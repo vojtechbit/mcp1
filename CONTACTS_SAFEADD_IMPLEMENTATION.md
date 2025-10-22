@@ -4,7 +4,7 @@
 - `contactsSafeAdd` v facadeService.js pracuje s **Google Contacts API**
 - Ale contactsService.js pracuje s **Google Sheets**
 - Formáty se liší! Google Contacts má `connections`, `phoneNumbers`, apod
-- Google Sheets má jednoduché `{name, email, notes, realEstate, phone, rowIndex}`
+- Google Sheets má jednoduché `{name, email, phone, realEstate, notes, rowIndex}`
 
 ## Solution
 Přepsat contactsSafeAdd aby:
@@ -43,13 +43,13 @@ A **NAHRADIT** touto implementací:
  * 4. Otherwise → add according to strategy (create/skip/merge)
  * 
  * NOTE: Works with Google Sheets storage (not Google Contacts API)
- * Contact format: {name, email, notes, realEstate, phone}
+ * Contact format: {name, email, phone, realEstate, notes}
  */
 export async function contactsSafeAdd(googleSub, params) {
   const { entries, dedupeStrategy = 'ask' } = params;
 
   if (!entries || !Array.isArray(entries) || entries.length === 0) {
-    const error = new Error('entries parameter required: array of {name, email, phone?, notes?, realEstate?}');
+    const error = new Error('entries parameter required: array of {name, email, phone?, realEstate?, notes?}');
     error.statusCode = 400;
     throw error;
   }

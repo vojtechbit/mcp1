@@ -3254,10 +3254,6 @@
             "type": "string",
             "description": "Phone number (optional)."
           },
-          "notes": {
-            "type": "string",
-            "description": "Notes field (optional)."
-          },
           "realEstate": {
             "type": "string",
             "description": "Organization/company (camelCase variant)."
@@ -3265,6 +3261,10 @@
           "realestate": {
             "type": "string",
             "description": "Organization/company (legacy lowercase alias)."
+          },
+          "notes": {
+            "type": "string",
+            "description": "Notes field (optional)."
           }
         },
         "additionalProperties": false,
