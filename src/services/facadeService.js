@@ -1228,9 +1228,11 @@ function enrichEmailWithAttachments(message, messageId) {
     inboxCategory: categorizeEmail(message),
     label: message.labelIds?.[0] || null,
     headers: {},
-    body: message.snippet || message.body || null
+    body: message.snippet || message.body || null,
+    truncated: Boolean(message.truncated),
+    links: message.links || (message.threadId ? buildGmailLinks(message.threadId, messageId) : null)
   };
-  
+
   // Process attachments
   if (message.payload?.parts) {
     const rawAttachments = extractAttachmentMetadata(message.payload);
@@ -1241,13 +1243,33 @@ function enrichEmailWithAttachments(message, messageId) {
   } else {
     base.attachments = [];
   }
-  
+
+  if (message.contentMetadata) {
+    base.contentMetadata = message.contentMetadata;
+  }
+
+  if (message.truncationInfo) {
+    base.truncationInfo = message.truncationInfo;
+  }
+
   return base;
 }
 
 function generateMapsUrl(locationText) {
   const encoded = encodeURIComponent(locationText);
   return `https://www.google.com/maps/search/?api=1&query=${encoded}`;
+}
+
+function buildGmailLinks(threadId, messageId) {
+  if (!threadId) {
+    return null;
+  }
+
+  const threadLink = `https://mail.google.com/mail/u/0/#inbox/${threadId}`;
+  return {
+    thread: threadLink,
+    message: messageId ? `${threadLink}?projector=1&messageId=${messageId}` : null
+  };
 }
 
 /**
