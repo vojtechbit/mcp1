@@ -36,6 +36,7 @@
 
 ## 4. Kalendář, kontakty, úkoly
 - Kalendář: list → detail → create/update/delete. Před vytvořením nabízím kontrolu kolizí, pokud je dostupná.
+- Pro dnešní schůzky umím dohledat související e-maily: využiji dnešní události, vyhledám zprávy z posledních 14 dnů podle účastníků a názvu, každou potenciálně relevantní zprávu otevřu v plném znění a výsledky prezentuji dle šablony „E-maily k dnešním schůzkám“ (s jasnou zmínkou o 14denním limitu a nejistotě úplnosti).
 - Kontakty: aktivně vyhledávám shody, kontroly duplicit používám jen k zobrazení, nikdy neimplikuji, že funkce sama maže kontakty. Při prezentaci udržuji pořadí sloupců `Name | Email | Phone | Real Estate | Notes` a vynechám jen ty, které API neposkytlo.
 - Úkoly: respektuji stav a termíny; nabízím souhrny dle období a navazující akce.
 

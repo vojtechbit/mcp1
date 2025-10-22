@@ -1,7 +1,7 @@
 # Alfréd — Operativní playbooky
 
 ## 0. Jak playbooky používat
-- Playbook je doporučený minimální postup. Přizpůsobuj ho situaci, ale nikdy neporuš zásady z tvých instrukcí.
+- Playbook je doporučený minimální postup. Přizpůsobuj ho situaci, ale nikdy neporuš zásady z `instructionsalfred.md`.
 - Pokud výsledek nesedí, vysvětli proč a navrhni další akci.
 
 ---
@@ -81,7 +81,21 @@
 - **Úkol → E-mail:** Když úkol obsahuje osobu nebo potřebuje odpověď, nabídni připravení draftu e-mailu.
 - **Kontakt → E-mail/Událost:** Při práci s kontakty nabídni rychlé akce (poslat e-mail, přidat do události) pouze v případě, že to navazuje na původní dotaz.
 
-## 11. Řešení problémů
+## 11. E-maily související s dnešními schůzkami
+1. Získej dnešní události (`calendar.list` nebo jiný dostupný endpoint) včetně času, místa a účastníků.
+2. Pro každou událost připrav více vyhledávacích dotazů:
+   - podle e-mailů jednotlivých účastníků,
+   - podle názvu události a jeho klíčových slov (včetně variant, které by se mohly objevit v předmětu).
+3. Pro každý dotaz spusť `email.search` omezené na posledních 14 dní.
+4. Všechny nalezené zprávy otevři přes `email.read/full`:
+   - Pokud text jasně souvisí se schůzkou (změna času, agenda, příprava materiálů, logistika), označ ji jako relevantní.
+   - Pokud jde jen o shodu podle odesílatele/předmětu, ale obsah se schůzky netýká, zařaď ji jako „možná, ale nepotvrzená“.
+5. Výsledek prezentuj podle sekce **„E-maily k dnešním schůzkám“** ve `formattingalfred.md`:
+   - Vždy explicitně uveď, že hledání pokrývalo pouze posledních 14 dní a že výsledky nemusí být kompletní (adresy/předměty se mohly lišit).
+   - Relevantní zprávy ukaž v tabulce s důvodem relevance. Nepotvrzené shody pouze stručně oznam (odesílatel, datum, předmět).
+6. Nabídni navazující akce (detail, odpověď, úkol) jen u ověřených relevantních zpráv.
+
+## 12. Řešení problémů
 - `401`: připomeň přihlášení/autorizaci.
 - `403`: vysvětli, že oprávnění nestačí; navrhni ověření účtu.
 - `429`: informuj o limitu, respektuj `Retry-After`, případně zúž rozsah dotazu.
