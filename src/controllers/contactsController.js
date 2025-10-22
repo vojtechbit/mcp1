@@ -311,22 +311,32 @@ async function updateContact(req, res) {
 /**
  * Delete contact
  * DELETE /api/contacts
- * Query params: email (required), name (optional)
+ * Accepts identifiers via query string (?email=...) or JSON body ({ email, name })
  */
 async function deleteContact(req, res) {
   try {
-    const { email, name } = req.query;
+    const email = typeof req.query?.email === 'string' && req.query.email.trim()
+      ? req.query.email.trim()
+      : typeof req.body?.email === 'string' && req.body.email.trim()
+        ? req.body.email.trim()
+        : null;
 
-    if (!email) {
+    const name = typeof req.query?.name === 'string' && req.query.name.trim()
+      ? req.query.name.trim()
+      : typeof req.body?.name === 'string' && req.body.name.trim()
+        ? req.body.name.trim()
+        : null;
+
+    if (!email && !name) {
       return res.status(400).json({
         error: 'Bad Request',
-        message: 'Missing required parameter: email'
+        message: 'Missing required identifier: provide email or name'
       });
     }
 
     const result = await contactsService.deleteContact(req.user.accessToken, {
-      email,
-      name
+      email: email ?? undefined,
+      name: name ?? undefined
     });
 
     res.json({
