@@ -17,7 +17,8 @@
 2. Na detail vždy použij `email.read` v režimu **full**.
 3. Pokud jsou přílohy, zeptej se, zda načíst metadata nebo otevřít (pokud to Actions dovolují).
 4. Zobraz tělo dle šablony Email Detail. Pokud response přiloží `note` o zkrácení nebo jiný limit, sděl to a nabídni další kroky (jiný formát, filtrování).
-5. Relevantní akce (odpovědět, přeposlat, vytvořit úkol/event) navrhuj až po přečtení celého obsahu, aby úkoly vznikaly z ověřených informací.
+5. Využij `contentMetadata` a `truncated` k diagnostice: informuj o existenci HTML/inline prvků, které API nedoručilo, a přidej Gmail odkazy z `links` pro ruční otevření.
+6. Relevantní akce (odpovědět, přeposlat, vytvořit úkol/event) navrhuj až po přečtení celého obsahu, aby úkoly vznikaly z ověřených informací.
 
 ## 3. Kategorizace důležitosti ("Co důležitého mi dnes přišlo")
 1. Pro dané období spusť `email.search` a získej seznam zpráv včetně `snippet`/`bodyPreview`, kategorie inboxu a odesílatele.

@@ -22,6 +22,8 @@ const EMAIL_SIZE_LIMITS = {
   WARNING_SIZE_BYTES: 50000
 };
 
+const CONTENT_PREVIEW_LIMIT = 500;
+
 /**
  * Create authenticated Google API client
  */
@@ -173,9 +175,9 @@ async function getValidAccessToken(googleSub, forceRefresh = false) {
 
 function extractPlainText(payload) {
   let text = '';
-  
+
   if (!payload) return text;
-  
+
   if (payload.body && payload.body.data) {
     try {
       text = Buffer.from(payload.body.data, 'base64').toString('utf-8');
@@ -199,13 +201,142 @@ function extractPlainText(payload) {
       }
     }
   }
-  
+
   return text;
 }
 
 function truncateText(text, maxLength) {
   if (!text || text.length <= maxLength) return text;
   return text.substring(0, maxLength) + '\n\n[... Text zkrácen kvůli velikosti ...]';
+}
+
+function generateGmailLinks(threadId, messageId) {
+  if (!threadId) {
+    return null;
+  }
+
+  const threadLink = `https://mail.google.com/mail/u/0/#inbox/${threadId}`;
+  const messageLink = messageId
+    ? `${threadLink}?projector=1&messageId=${messageId}`
+    : null;
+
+  return {
+    thread: threadLink,
+    message: messageLink
+  };
+}
+
+function buildContentMetadata(payload) {
+  if (!payload) {
+    return null;
+  }
+
+  const state = {
+    plainText: {
+      available: false,
+      bytes: 0,
+      preview: null,
+      truncated: false
+    },
+    html: {
+      available: false,
+      inline: false,
+      viaAttachments: false,
+      bytes: 0,
+      preview: null,
+      truncated: false
+    },
+    inlineImages: 0,
+    inlineAttachments: 0
+  };
+
+  function updatePreview(target, text) {
+    if (!text) {
+      return;
+    }
+
+    if (!target.preview) {
+      const trimmed = text.length > CONTENT_PREVIEW_LIMIT
+        ? text.substring(0, CONTENT_PREVIEW_LIMIT)
+        : text;
+      target.preview = trimmed;
+      target.truncated = text.length > CONTENT_PREVIEW_LIMIT;
+    }
+  }
+
+  function decodeBody(body) {
+    if (!body) return { text: '', bytes: 0 };
+
+    if (body.data) {
+      try {
+        const buffer = Buffer.from(body.data, 'base64');
+        return {
+          text: buffer.toString('utf-8'),
+          bytes: buffer.length
+        };
+      } catch (error) {
+        console.error('Failed to decode MIME part:', error.message);
+        return { text: '', bytes: 0 };
+      }
+    }
+
+    if (typeof body.size === 'number') {
+      return { text: '', bytes: body.size };
+    }
+
+    return { text: '', bytes: 0 };
+  }
+
+  function processPart(part) {
+    if (!part) return;
+
+    const mimeType = part.mimeType || '';
+    const lowerMime = mimeType.toLowerCase();
+
+    if (lowerMime.startsWith('multipart/')) {
+      (part.parts || []).forEach(processPart);
+      return;
+    }
+
+    const { text, bytes } = decodeBody(part.body);
+
+    if (lowerMime === 'text/plain') {
+      state.plainText.available = true;
+      state.plainText.bytes += bytes;
+      updatePreview(state.plainText, text);
+    } else if (lowerMime === 'text/html') {
+      state.html.available = true;
+      state.html.bytes += bytes;
+      if (part.body?.data) {
+        state.html.inline = true;
+        updatePreview(state.html, text);
+      }
+      if (part.body?.attachmentId) {
+        state.html.viaAttachments = true;
+      }
+    } else {
+      const headers = part.headers || [];
+      const hasContentId = headers.some(h => h.name?.toLowerCase() === 'content-id');
+      const disposition = headers.find(h => h.name?.toLowerCase() === 'content-disposition')?.value || '';
+      const isInline = hasContentId || disposition.toLowerCase().includes('inline');
+
+      if (isInline) {
+        if (lowerMime.startsWith('image/')) {
+          state.inlineImages += 1;
+        } else {
+          state.inlineAttachments += 1;
+        }
+      }
+    }
+
+    if (part.parts) {
+      part.parts.forEach(processPart);
+    }
+  }
+
+  processPart(payload);
+
+  return state;
 }
 
 /**
@@ -401,7 +532,9 @@ async function readEmail(googleSub, messageId, options = {}) {
         sizeEstimate: sizeEstimate,
         headers: metadataResult.data.payload.headers,
         labelIds: metadataResult.data.labelIds || [],
-        format: 'snippet'
+        format: 'snippet',
+        threadId: metadataResult.data.threadId,
+        links: generateGmailLinks(metadataResult.data.threadId, messageId)
       };
     }
 
@@ -435,7 +568,8 @@ async function readEmail(googleSub, messageId, options = {}) {
         fromName: fromName,
         subject: subjectHeader,
         date: pragueIso,
-        snippet: snippet
+        snippet: snippet,
+        links: generateGmailLinks(metadataResult.data.threadId, messageId)
       };
     }
 
@@ -460,13 +594,19 @@ async function readEmail(googleSub, messageId, options = {}) {
           originalSize: sizeEstimate,
           maxAllowedSize: EMAIL_SIZE_LIMITS.MAX_SIZE_BYTES,
           truncatedBodyLength: EMAIL_SIZE_LIMITS.MAX_BODY_LENGTH
-        }
+        },
+        links: generateGmailLinks(metadataResult.data.threadId, messageId)
       };
-      
+
       if (includeAttachments) {
         response.attachments = extractAttachments(fullResult.data.payload, messageId);
       }
-      
+
+      const contentMetadata = buildContentMetadata(fullResult.data.payload);
+      if (contentMetadata) {
+        response.contentMetadata = contentMetadata;
+      }
+
       return response;
     }
 
@@ -478,11 +618,17 @@ async function readEmail(googleSub, messageId, options = {}) {
 
     const response = {
       ...result.data,
-      truncated: false
+      truncated: false,
+      links: generateGmailLinks(result.data.threadId, messageId)
     };
-    
+
     if (includeAttachments) {
       response.attachments = extractAttachments(result.data.payload, messageId);
+    }
+
+    const contentMetadata = buildContentMetadata(result.data.payload);
+    if (contentMetadata) {
+      response.contentMetadata = contentMetadata;
     }
 
     return response;

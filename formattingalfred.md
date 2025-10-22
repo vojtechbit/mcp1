@@ -21,7 +21,9 @@
 - **Gate:** `email.id` a `snippet` nebo `payload`.
 - **Struktura:**
   - Hlavička: From | To | Subject | Datum/čas | Kategorie (pokud je k dispozici).
+  - Odkazy: pokud `links.message` nebo `links.thread` existují, přidej řádek `🔗 Otevřít v Gmailu: [zpráva]` (+ `vlákno`, pokud dává smysl).
   - Tělo: zobraz plain text nebo render HTML. Pokud response obsahuje `note` nebo jiné upozornění na zkrácení, předej jej uživateli vlastními slovy a nabídni dostupné další kroky.
+  - Obsahová diagnostika: když dorazí `contentMetadata`, přidej krátké shrnutí (např. `Obsah: Plain text ✓ (~1,4 kB); HTML ✓ (inline, 3 obrázky)`). Zmínku o `truncated:true`/`truncationInfo` přidej ve stejné větě.
   - Přílohy: seznam s názvem, typem, velikostí (`sizeBytes`, pokud je přítomen) a podepsanou URL. Nebezpečné formáty označ varováním.
 
 ## 3. Categorized Email Overview (Důležitost)
