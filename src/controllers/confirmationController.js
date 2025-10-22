@@ -11,6 +11,7 @@ import {
   getPendingConfirmation,
   cancelPendingConfirmation
 } from '../utils/confirmationStore.js';
+import { handleControllerError } from '../utils/errors.js';
 
 /**
  * POST /api/macros/confirm
@@ -93,28 +94,10 @@ export async function confirmMacroOperation(req, res) {
       data: result
     });
   } catch (error) {
-    console.error('❌ Confirmation failed:', error.message);
-
-    if (error.statusCode === 400) {
-      return res.status(400).json({
-        error: error.message || 'Invalid request',
-        message: error.message,
-        code: error.code || 'BAD_REQUEST'
-      });
-    }
-
-    if (error.statusCode === 401) {
-      return res.status(401).json({
-        error: 'Authentication required',
-        message: error.message,
-        code: 'REAUTH_REQUIRED'
-      });
-    }
-
-    res.status(500).json({
-      error: 'Confirmation failed',
-      message: error.message,
-      code: 'SERVER_ERROR'
+    return handleControllerError(res, error, {
+      context: 'confirmation.confirmMacroOperation',
+      defaultMessage: 'Confirmation failed',
+      defaultCode: 'CONFIRMATION_FAILED'
     });
   }
 }
@@ -180,12 +163,10 @@ export async function getPendingConfirmationPreview(req, res) {
       expiresAt: confirmation.expiresAt
     });
   } catch (error) {
-    console.error('❌ Failed to get confirmation preview:', error.message);
-
-    res.status(500).json({
-      error: 'Failed to retrieve confirmation',
-      message: error.message,
-      code: 'SERVER_ERROR'
+    return handleControllerError(res, error, {
+      context: 'confirmation.getPendingConfirmationPreview',
+      defaultMessage: 'Failed to retrieve confirmation',
+      defaultCode: 'CONFIRMATION_PREVIEW_FAILED'
     });
   }
 }
@@ -216,12 +197,10 @@ export async function cancelConfirmation(req, res) {
       confirmToken
     });
   } catch (error) {
-    console.error('❌ Failed to cancel confirmation:', error.message);
-
-    res.status(500).json({
-      error: 'Failed to cancel confirmation',
-      message: error.message,
-      code: 'SERVER_ERROR'
+    return handleControllerError(res, error, {
+      context: 'confirmation.cancelConfirmation',
+      defaultMessage: 'Failed to cancel confirmation',
+      defaultCode: 'CONFIRMATION_CANCEL_FAILED'
     });
   }
 }

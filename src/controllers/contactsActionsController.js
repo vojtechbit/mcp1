@@ -6,6 +6,7 @@
  */
 
 import * as contactsService from '../services/contactsService.js';
+import { handleControllerError } from '../utils/errors.js';
 
 const overrides = globalThis.__CONTACTS_ACTIONS_TEST_OVERRIDES || {};
 const contactsSvc = overrides.contactsService || contactsService;
@@ -47,19 +48,10 @@ export async function modifyContact(req, res) {
     });
 
   } catch (error) {
-    console.error('❌ Contacts modify failed:', error.message);
-
-    if (error.code === 'AUTH_REQUIRED' || error.statusCode === 401) {
-      return res.status(401).json({
-        error: 'Authentication required',
-        message: 'Your session has expired. Please log in again.',
-        code: 'AUTH_REQUIRED'
-      });
-    }
-
-    return res.status(error.statusCode || 500).json({
-      error: 'Contact modify failed',
-      message: error.message
+    return handleControllerError(res, error, {
+      context: 'contactsActions.modifyContact',
+      defaultMessage: 'Contact modify failed',
+      defaultCode: 'CONTACT_MODIFY_FAILED'
     });
   }
 }
@@ -88,8 +80,6 @@ export async function deleteContact(req, res) {
     });
 
   } catch (error) {
-    console.error('❌ Contacts delete failed:', error.message);
-
     if (error.code === 'CONTACT_NOT_FOUND') {
       return res.status(404).json({
         error: 'Contact not found',
@@ -107,24 +97,10 @@ export async function deleteContact(req, res) {
       });
     }
 
-    if (error.code === 'AUTH_REQUIRED' || error.statusCode === 401) {
-      return res.status(401).json({
-        error: 'Authentication required',
-        message: 'Your session has expired. Please log in again.',
-        code: 'AUTH_REQUIRED'
-      });
-    }
-
-    if (error.statusCode === 404) {
-      return res.status(404).json({
-        error: 'Contact delete failed',
-        message: error.message
-      });
-    }
-
-    return res.status(error.statusCode || 500).json({
-      error: 'Contact delete failed',
-      message: error.message
+    return handleControllerError(res, error, {
+      context: 'contactsActions.deleteContact',
+      defaultMessage: 'Contact delete failed',
+      defaultCode: 'CONTACT_DELETE_FAILED'
     });
   }
 }
@@ -160,19 +136,10 @@ export async function bulkDeleteContacts(req, res) {
     });
 
   } catch (error) {
-    console.error('❌ Contacts bulkDelete failed:', error.message);
-
-    if (error.code === 'AUTH_REQUIRED' || error.statusCode === 401) {
-      return res.status(401).json({
-        error: 'Authentication required',
-        message: 'Your session has expired. Please log in again.',
-        code: 'AUTH_REQUIRED'
-      });
-    }
-
-    return res.status(error.statusCode || 500).json({
-      error: 'Contact bulkDelete failed',
-      message: error.message
+    return handleControllerError(res, error, {
+      context: 'contactsActions.bulkDeleteContacts',
+      defaultMessage: 'Contact bulkDelete failed',
+      defaultCode: 'CONTACT_BULK_DELETE_FAILED'
     });
   }
 }

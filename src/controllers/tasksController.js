@@ -2,6 +2,7 @@ import * as tasksService from '../services/tasksService.js';
 import { heavyLimiter } from '../server.js';
 import { computeETag, checkETagMatch } from '../utils/helpers.js';
 import { createSnapshot, getSnapshot } from '../utils/snapshotStore.js';
+import { handleControllerError } from '../utils/errors.js';
 import {
   PAGE_SIZE_DEFAULT,
   PAGE_SIZE_MAX,
@@ -148,19 +149,10 @@ async function listTasks(req, res) {
       }
 
     } catch (error) {
-      console.error('❌ Failed to list tasks');
-
-      if (error.code === 'AUTH_REQUIRED' || error.statusCode === 401) {
-        return res.status(401).json({
-          error: 'Authentication required',
-          message: 'Your session has expired. Please log in again.',
-          code: 'AUTH_REQUIRED'
-        });
-      }
-
-      res.status(error.statusCode || 500).json({
-        error: 'Tasks list failed',
-        message: error.message
+      return handleControllerError(res, error, {
+        context: 'tasks.listTasks',
+        defaultMessage: 'Tasks list failed',
+        defaultCode: 'TASKS_LIST_FAILED'
       });
     }
   };
@@ -205,19 +197,10 @@ async function createTask(req, res) {
     });
 
   } catch (error) {
-    console.error('❌ Failed to create task');
-
-    if (error.code === 'AUTH_REQUIRED' || error.statusCode === 401) {
-      return res.status(401).json({
-        error: 'Authentication required',
-        message: 'Your session has expired. Please log in again.',
-        code: 'AUTH_REQUIRED'
-      });
-    }
-
-    res.status(error.statusCode || 500).json({
-      error: 'Task creation failed',
-      message: error.message
+    return handleControllerError(res, error, {
+      context: 'tasks.createTask',
+      defaultMessage: 'Task creation failed',
+      defaultCode: 'TASK_CREATE_FAILED'
     });
   }
 }
@@ -256,19 +239,10 @@ async function updateTask(req, res) {
     });
 
   } catch (error) {
-    console.error('❌ Failed to update task');
-
-    if (error.code === 'AUTH_REQUIRED' || error.statusCode === 401) {
-      return res.status(401).json({
-        error: 'Authentication required',
-        message: 'Your session has expired. Please log in again.',
-        code: 'AUTH_REQUIRED'
-      });
-    }
-
-    res.status(error.statusCode || 500).json({
-      error: 'Task update failed',
-      message: error.message
+    return handleControllerError(res, error, {
+      context: 'tasks.updateTask',
+      defaultMessage: 'Task update failed',
+      defaultCode: 'TASK_UPDATE_FAILED'
     });
   }
 }
@@ -292,19 +266,10 @@ async function deleteTask(req, res) {
     });
 
   } catch (error) {
-    console.error('❌ Failed to delete task');
-
-    if (error.code === 'AUTH_REQUIRED' || error.statusCode === 401) {
-      return res.status(401).json({
-        error: 'Authentication required',
-        message: 'Your session has expired. Please log in again.',
-        code: 'AUTH_REQUIRED'
-      });
-    }
-
-    res.status(error.statusCode || 500).json({
-      error: 'Task deletion failed',
-      message: error.message
+    return handleControllerError(res, error, {
+      context: 'tasks.deleteTask',
+      defaultMessage: 'Task deletion failed',
+      defaultCode: 'TASK_DELETE_FAILED'
     });
   }
 }

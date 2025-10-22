@@ -1,12 +1,13 @@
 import * as gmailService from '../services/googleApiService.js';
 import { heavyLimiter } from '../server.js';
-import { 
-  parseRelativeTime, 
-  normalizeQuery as normalizeQueryUtil, 
-  computeETag, 
-  checkETagMatch 
+import {
+  parseRelativeTime,
+  normalizeQuery as normalizeQueryUtil,
+  computeETag,
+  checkETagMatch
 } from '../utils/helpers.js';
 import { createSnapshot, getSnapshot } from '../utils/snapshotStore.js';
+import { handleControllerError } from '../utils/errors.js';
 import { 
   PAGE_SIZE_DEFAULT, 
   PAGE_SIZE_MAX, 
@@ -53,20 +54,10 @@ async function sendEmail(req, res) {
       preview: { to, subject, body, cc, bcc }
     });
   } catch (error) {
-    console.error('❌ Failed to send email:', error.message);
-    
-    if (error.statusCode === 401) {
-      return res.status(401).json({
-        error: 'Authentication required',
-        message: error.message,
-        code: error.code,
-        requiresReauth: true
-      });
-    }
-    
-    res.status(500).json({
-      error: 'Email send failed',
-      message: error.message
+    return handleControllerError(res, error, {
+      context: 'gmail.sendEmail',
+      defaultMessage: 'Email send failed',
+      defaultCode: 'EMAIL_SEND_FAILED'
     });
   }
 }
@@ -101,20 +92,10 @@ async function replyToEmail(req, res) {
       repliedToSelf: toSelf === true
     });
   } catch (error) {
-    console.error('❌ Failed to reply:', error.message);
-    
-    if (error.statusCode === 401) {
-      return res.status(401).json({
-        error: 'Authentication required',
-        message: error.message,
-        code: error.code,
-        requiresReauth: true
-      });
-    }
-    
-    res.status(500).json({
-      error: 'Email reply failed',
-      message: error.message
+    return handleControllerError(res, error, {
+      context: 'gmail.replyToEmail',
+      defaultMessage: 'Email reply failed',
+      defaultCode: 'EMAIL_REPLY_FAILED'
     });
   }
 }
@@ -153,20 +134,10 @@ async function readEmail(req, res) {
       truncated: result.truncated || false
     });
   } catch (error) {
-    console.error('❌ Failed to read email:', error.message);
-    
-    if (error.statusCode === 401) {
-      return res.status(401).json({
-        error: 'Authentication required',
-        message: error.message,
-        code: error.code,
-        requiresReauth: true
-      });
-    }
-    
-    res.status(500).json({
-      error: 'Email read failed',
-      message: error.message
+    return handleControllerError(res, error, {
+      context: 'gmail.readEmail',
+      defaultMessage: 'Email read failed',
+      defaultCode: 'EMAIL_READ_FAILED'
     });
   }
 }
@@ -195,20 +166,10 @@ async function getEmailSnippet(req, res) {
       headers: result.headers
     });
   } catch (error) {
-    console.error('❌ Failed to get snippet:', error.message);
-    
-    if (error.statusCode === 401) {
-      return res.status(401).json({
-        error: 'Authentication required',
-        message: error.message,
-        code: error.code,
-        requiresReauth: true
-      });
-    }
-    
-    res.status(500).json({
-      error: 'Snippet retrieval failed',
-      message: error.message
+    return handleControllerError(res, error, {
+      context: 'gmail.getEmailSnippet',
+      defaultMessage: 'Snippet retrieval failed',
+      defaultCode: 'EMAIL_SNIPPET_FAILED'
     });
   }
 }
@@ -294,19 +255,10 @@ async function batchPreview(req, res) {
       items: allResults
     });
   } catch (error) {
-    console.error('❌ Batch preview failed:', error.message);
-    
-    if (error.statusCode === 401) {
-      return res.status(401).json({
-        error: 'Authentication required',
-        message: error.message,
-        code: 'AUTH_REQUIRED'
-      });
-    }
-    
-    res.status(500).json({
-      error: 'Batch preview failed',
-      message: error.message
+    return handleControllerError(res, error, {
+      context: 'gmail.batchPreview',
+      defaultMessage: 'Batch preview failed',
+      defaultCode: 'BATCH_PREVIEW_FAILED'
     });
   }
 }
@@ -359,19 +311,10 @@ async function batchRead(req, res) {
 
     res.json(response);
   } catch (error) {
-    console.error('❌ Batch read failed:', error.message);
-    
-    if (error.statusCode === 401) {
-      return res.status(401).json({
-        error: 'Authentication required',
-        message: error.message,
-        code: 'AUTH_REQUIRED'
-      });
-    }
-    
-    res.status(500).json({
-      error: 'Batch read failed',
-      message: error.message
+    return handleControllerError(res, error, {
+      context: 'gmail.batchRead',
+      defaultMessage: 'Batch read failed',
+      defaultCode: 'BATCH_READ_FAILED'
     });
   }
 }
@@ -586,22 +529,12 @@ async function searchEmails(req, res) {
 
         res.setHeader('ETag', etag);
         return res.json(response);
-      }
-    } catch (error) {
-      console.error('❌ Search failed:', error.message);
-      
-      if (error.statusCode === 401) {
-        return res.status(401).json({
-          error: 'Authentication required',
-          message: error.message,
-          code: error.code,
-          requiresReauth: true
-        });
-      }
-      
-      res.status(500).json({
-        error: 'Email search failed',
-        message: error.message
+    }
+  } catch (error) {
+      return handleControllerError(res, error, {
+        context: 'gmail.searchEmails',
+        defaultMessage: 'Email search failed',
+        defaultCode: 'EMAIL_SEARCH_FAILED'
       });
     }
   };
@@ -634,19 +567,10 @@ async function createDraft(req, res) {
       message: 'Draft created successfully'
     });
   } catch (error) {
-    console.error('❌ Draft creation failed:', error.message);
-    
-    if (error.statusCode === 401) {
-      return res.status(401).json({
-        error: 'Authentication required',
-        message: error.message,
-        code: 'AUTH_REQUIRED'
-      });
-    }
-    
-    res.status(500).json({
-      error: 'Draft creation failed',
-      message: error.message
+    return handleControllerError(res, error, {
+      context: 'gmail.createDraft',
+      defaultMessage: 'Draft creation failed',
+      defaultCode: 'DRAFT_CREATE_FAILED'
     });
   }
 }
@@ -663,20 +587,10 @@ async function deleteEmail(req, res) {
       message: 'Email moved to trash'
     });
   } catch (error) {
-    console.error('❌ Delete failed:', error.message);
-    
-    if (error.statusCode === 401) {
-      return res.status(401).json({
-        error: 'Authentication required',
-        message: error.message,
-        code: error.code,
-        requiresReauth: true
-      });
-    }
-    
-    res.status(500).json({
-      error: 'Email deletion failed',
-      message: error.message
+    return handleControllerError(res, error, {
+      context: 'gmail.deleteEmail',
+      defaultMessage: 'Email deletion failed',
+      defaultCode: 'EMAIL_DELETE_FAILED'
     });
   }
 }
@@ -699,20 +613,10 @@ async function toggleStar(req, res) {
       success: true
     });
   } catch (error) {
-    console.error('❌ Toggle star failed:', error.message);
-    
-    if (error.statusCode === 401) {
-      return res.status(401).json({
-        error: 'Authentication required',
-        message: error.message,
-        code: error.code,
-        requiresReauth: true
-      });
-    }
-    
-    res.status(500).json({
-      error: 'Star toggle failed',
-      message: error.message
+    return handleControllerError(res, error, {
+      context: 'gmail.toggleStar',
+      defaultMessage: 'Star toggle failed',
+      defaultCode: 'STAR_TOGGLE_FAILED'
     });
   }
 }
@@ -735,20 +639,10 @@ async function markAsRead(req, res) {
       success: true
     });
   } catch (error) {
-    console.error('❌ Mark as read failed:', error.message);
-    
-    if (error.statusCode === 401) {
-      return res.status(401).json({
-        error: 'Authentication required',
-        message: error.message,
-        code: error.code,
-        requiresReauth: true
-      });
-    }
-    
-    res.status(500).json({
-      error: 'Mark as read failed',
-      message: error.message
+    return handleControllerError(res, error, {
+      context: 'gmail.markAsRead',
+      defaultMessage: 'Mark as read failed',
+      defaultCode: 'MARK_READ_FAILED'
     });
   }
 }
@@ -764,18 +658,10 @@ async function listLabels(req, res) {
       labels
     });
   } catch (error) {
-    console.error('❌ List labels failed:', error.message);
-    
-    if (error.statusCode === 401) {
-      return res.status(401).json({
-        error: 'Authentication required',
-        message: error.message
-      });
-    }
-    
-    res.status(500).json({
-      error: 'Label listing failed',
-      message: error.message
+    return handleControllerError(res, error, {
+      context: 'gmail.listLabels',
+      defaultMessage: 'Label listing failed',
+      defaultCode: 'LABEL_LIST_FAILED'
     });
   }
 }
@@ -791,18 +677,10 @@ async function modifyMessageLabels(req, res) {
       success: true
     });
   } catch (error) {
-    console.error('❌ Modify labels failed:', error.message);
-    
-    if (error.statusCode === 401) {
-      return res.status(401).json({
-        error: 'Authentication required',
-        message: error.message
-      });
-    }
-    
-    res.status(500).json({
-      error: 'Label modification failed',
-      message: error.message
+    return handleControllerError(res, error, {
+      context: 'gmail.modifyMessageLabels',
+      defaultMessage: 'Label modification failed',
+      defaultCode: 'LABEL_MODIFY_FAILED'
     });
   }
 }
@@ -818,18 +696,10 @@ async function modifyThreadLabels(req, res) {
       success: true
     });
   } catch (error) {
-    console.error('❌ Modify thread labels failed:', error.message);
-    
-    if (error.statusCode === 401) {
-      return res.status(401).json({
-        error: 'Authentication required',
-        message: error.message
-      });
-    }
-    
-    res.status(500).json({
-      error: 'Thread label modification failed',
-      message: error.message
+    return handleControllerError(res, error, {
+      context: 'gmail.modifyThreadLabels',
+      defaultMessage: 'Thread label modification failed',
+      defaultCode: 'THREAD_LABEL_MODIFY_FAILED'
     });
   }
 }
@@ -847,18 +717,10 @@ async function getThread(req, res) {
       thread
     });
   } catch (error) {
-    console.error('❌ Get thread failed:', error.message);
-    
-    if (error.statusCode === 401) {
-      return res.status(401).json({
-        error: 'Authentication required',
-        message: error.message
-      });
-    }
-    
-    res.status(500).json({
-      error: 'Thread retrieval failed',
-      message: error.message
+    return handleControllerError(res, error, {
+      context: 'gmail.getThread',
+      defaultMessage: 'Thread retrieval failed',
+      defaultCode: 'THREAD_GET_FAILED'
     });
   }
 }
@@ -881,18 +743,10 @@ async function setThreadRead(req, res) {
       success: true
     });
   } catch (error) {
-    console.error('❌ Set thread read failed:', error.message);
-    
-    if (error.statusCode === 401) {
-      return res.status(401).json({
-        error: 'Authentication required',
-        message: error.message
-      });
-    }
-    
-    res.status(500).json({
-      error: 'Thread read status change failed',
-      message: error.message
+    return handleControllerError(res, error, {
+      context: 'gmail.setThreadRead',
+      defaultMessage: 'Thread read status change failed',
+      defaultCode: 'THREAD_READ_STATUS_FAILED'
     });
   }
 }
@@ -925,18 +779,10 @@ async function replyToThread(req, res) {
       threadId: result.threadId
     });
   } catch (error) {
-    console.error('❌ Reply to thread failed:', error.message);
-    
-    if (error.statusCode === 401) {
-      return res.status(401).json({
-        error: 'Authentication required',
-        message: error.message
-      });
-    }
-    
-    res.status(500).json({
-      error: 'Thread reply failed',
-      message: error.message
+    return handleControllerError(res, error, {
+      context: 'gmail.replyToThread',
+      defaultMessage: 'Thread reply failed',
+      defaultCode: 'THREAD_REPLY_FAILED'
     });
   }
 }
@@ -958,8 +804,6 @@ async function getAttachmentMeta(req, res) {
       attachment
     });
   } catch (error) {
-    console.error('❌ Get attachment meta failed:', error.message);
-    
     if (error.statusCode === 451) {
       return res.status(451).json({
         error: 'Attachment blocked',
@@ -967,17 +811,11 @@ async function getAttachmentMeta(req, res) {
         code: error.code || 'ATTACHMENT_BLOCKED'
       });
     }
-    
-    if (error.statusCode === 401) {
-      return res.status(401).json({
-        error: 'Authentication required',
-        message: error.message
-      });
-    }
-    
-    res.status(500).json({
-      error: 'Attachment metadata retrieval failed',
-      message: error.message
+
+    return handleControllerError(res, error, {
+      context: 'gmail.getAttachmentMeta',
+      defaultMessage: 'Attachment metadata retrieval failed',
+      defaultCode: 'ATTACHMENT_META_FAILED'
     });
   }
 }
@@ -996,18 +834,18 @@ async function previewAttachmentText(req, res) {
 
     res.json(preview);
   } catch (error) {
-    console.error('❌ Preview attachment text failed:', error.message);
-    
-    if (error.statusCode === 401) {
-      return res.status(401).json({
-        error: 'Authentication required',
-        message: error.message
+    if (error.statusCode === 451) {
+      return res.status(451).json({
+        error: 'Attachment blocked',
+        message: error.message,
+        code: error.code || 'ATTACHMENT_BLOCKED'
       });
     }
-    
-    res.status(500).json({
-      error: 'Attachment text preview failed',
-      message: error.message
+
+    return handleControllerError(res, error, {
+      context: 'gmail.previewAttachmentText',
+      defaultMessage: 'Attachment text preview failed',
+      defaultCode: 'ATTACHMENT_TEXT_PREVIEW_FAILED'
     });
   }
 }
@@ -1026,18 +864,18 @@ async function previewAttachmentTable(req, res) {
 
     res.json(preview);
   } catch (error) {
-    console.error('❌ Preview attachment table failed:', error.message);
-    
-    if (error.statusCode === 401) {
-      return res.status(401).json({
-        error: 'Authentication required',
-        message: error.message
+    if (error.statusCode === 451) {
+      return res.status(451).json({
+        error: 'Attachment blocked',
+        message: error.message,
+        code: error.code || 'ATTACHMENT_BLOCKED'
       });
     }
-    
-    res.status(500).json({
-      error: 'Attachment table preview failed',
-      message: error.message
+
+    return handleControllerError(res, error, {
+      context: 'gmail.previewAttachmentTable',
+      defaultMessage: 'Attachment table preview failed',
+      defaultCode: 'ATTACHMENT_TABLE_PREVIEW_FAILED'
     });
   }
 }
@@ -1086,25 +924,10 @@ async function downloadAttachment(req, res) {
     res.send(attachment.data);
 
   } catch (error) {
-    console.error('❌ Download attachment failed:', error.message);
-    
-    if (error.statusCode === 401) {
-      return res.status(401).json({
-        error: 'Authentication required',
-        message: error.message
-      });
-    }
-    
-    if (error.statusCode === 404) {
-      return res.status(404).json({
-        error: 'Not found',
-        message: 'Attachment not found'
-      });
-    }
-    
-    res.status(500).json({
-      error: 'Attachment download failed',
-      message: error.message
+    return handleControllerError(res, error, {
+      context: 'gmail.downloadAttachment',
+      defaultMessage: 'Attachment download failed',
+      defaultCode: 'ATTACHMENT_DOWNLOAD_FAILED'
     });
   }
 }

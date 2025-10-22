@@ -10,6 +10,8 @@
  * 
  * Returns user info if authenticated, triggers OAuth if not
  */
+import { handleControllerError } from '../utils/errors.js';
+
 async function getAuthStatus(req, res) {
   try {
     // User info is already attached by authMiddleware
@@ -25,15 +27,10 @@ async function getAuthStatus(req, res) {
     });
 
   } catch (error) {
-    console.error('❌ [AUTH_STATUS_ERROR] Failed to check auth status');
-    console.error('Details:', {
-      errorMessage: error.message,
-      timestamp: new Date().toISOString()
-    });
-
-    return res.status(500).json({
-      error: 'Internal server error',
-      message: 'Unable to check authentication status'
+    return handleControllerError(res, error, {
+      context: 'authStatus.getAuthStatus',
+      defaultMessage: 'Unable to check authentication status',
+      defaultCode: 'AUTH_STATUS_FAILED'
     });
   }
 }

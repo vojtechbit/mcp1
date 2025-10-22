@@ -1,5 +1,6 @@
 import { getAuthUrl, getTokensFromCode } from '../config/oauth.js';
 import { saveUser } from '../services/databaseService.js';
+import { handleControllerError } from '../utils/errors.js';
 import dotenv from 'dotenv';
 
 dotenv.config();
@@ -23,15 +24,10 @@ async function initiateOAuth(req, res) {
     res.redirect(authUrl);
 
   } catch (error) {
-    console.error('❌ [OAUTH_ERROR] Failed to initiate OAuth');
-    console.error('Details:', {
-      errorMessage: error.message,
-      timestamp: new Date().toISOString()
-    });
-
-    res.status(500).json({
-      error: 'OAuth initialization failed',
-      message: 'Unable to start authentication process'
+    return handleControllerError(res, error, {
+      context: 'auth.initiateOAuth',
+      defaultMessage: 'Unable to start authentication process',
+      defaultCode: 'OAUTH_INIT_FAILED'
     });
   }
 }
@@ -191,15 +187,10 @@ async function checkStatus(req, res) {
     });
 
   } catch (error) {
-    console.error('❌ [AUTH_ERROR] Status check failed');
-    console.error('Details:', {
-      errorMessage: error.message,
-      timestamp: new Date().toISOString()
-    });
-
-    res.status(500).json({
-      error: 'Status check failed',
-      message: 'Unable to verify authentication status'
+    return handleControllerError(res, error, {
+      context: 'auth.checkStatus',
+      defaultMessage: 'Unable to verify authentication status',
+      defaultCode: 'AUTH_STATUS_FAILED'
     });
   }
 }
