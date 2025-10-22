@@ -16,14 +16,14 @@
       "post": {
         "operationId": "macroInboxOverview",
         "summary": "Get lightweight inbox overview",
-        "description": "Quick email overview without body text. Perfect for 'Who emailed me today?' Returns sender, subject, timestamp. Default returns ALL emails in timeRange (up to 200). For body snippets, use /macros/inbox/snippets.",
+        "description": "Quick inbox digest with sender, subject, timestamp, and Gmail snippet preview. Perfect for 'Who emailed me today?' Returns ALL emails in timeRange (up to 200).",
         "requestBody": {
           "required": false,
           "content": {
             "application/json": {
               "schema": {
                 "type": "object",
-                "description": "Returns ALL emails in specified timeRange by default (up to 200 max). Use filters to narrow results. If user asks 'Who emailed me today?', this returns complete list of today's emails, not just a subset. Only use maxItems if user explicitly wants to limit results (e.g., 'show me last 10 emails').",
+                "description": "Returns ALL emails in specified timeRange by default (up to 200 max). Includes Gmail snippet preview text for quick scanning. Use filters to narrow results. If user asks 'Who emailed me today?', this returns complete list of today's emails, not just a subset. Only use maxItems if user explicitly wants to limit results (e.g., 'show me last 10 emails').",
                 "properties": {
                   "timeRange": {
                     "type": "object",
@@ -36,6 +36,7 @@
                           "last3h",
                           "last24h",
                           "today",
+                          "tomorrow",
                           "yesterday",
                           "thisWeek",
                           "last7d"
@@ -48,8 +49,8 @@
                     "type": "integer",
                     "minimum": 1,
                     "maximum": 200,
-                    "default": 100,
-                    "description": "Maximum emails to return (1-200). Default 100 suits typical daily or weekly requests. Lower it only when the user explicitly asks for a smaller sample (e.g. \"last 5 emails\"). When more exist the response sets subset=true."
+                    "default": 50,
+                    "description": "Maximum emails to return (1-200). Default 50 matches backend default and balances performance with coverage. Lower it only when the user explicitly asks for a smaller sample (e.g. \"last 5 emails\"). When more exist the response sets subset=true."
                   },
                   "filters": {
                     "type": "object",
@@ -74,6 +75,13 @@
                           "forums"
                         ],
                         "description": "Limit overview results to a Gmail category/label. Examples: {category:\"primary\"}, {category:\"promotions\"}, {category:\"social\"}. Maps to Gmail CATEGORY_* labels. Omit this field to inspect all categories."
+                      },
+                      "labelIds": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        },
+                        "description": "Advanced filtering using raw Gmail label IDs (e.g., 'Label_123'). Useful for custom labels or saved Gmail filters."
                       }
                     }
                   }
@@ -149,6 +157,10 @@
                           "inboxCategory": {
                             "type": "string",
                             "description": "Auto-category: 'primary'(important), 'work', 'alerts', 'newsletters', 'social', 'updates', 'forums', 'other'"
+                          },
+                          "snippet": {
+                            "type": "string",
+                            "description": "Gmail preview text (max ~160 chars). Always included in overview responses for quick context."
                           }
                         }
                       }
@@ -504,6 +516,15 @@
                     "type": "boolean",
                     "default": false,
                     "description": "If false (default), ONLY current and future events (status='ongoing' or 'upcoming'). If true, includes ALL events including past (status='past'). Use false for 'what's next?', true for 'show all today's meetings'."
+                  },
+                  "pastTreatment": {
+                    "type": "string",
+                    "enum": [
+                      "minimal",
+                      "full"
+                    ],
+                    "default": "minimal",
+                    "description": "How much detail to keep for past events when includePast=true. 'minimal' (default) trims map/attendees to reduce noise; 'full' keeps complete event context."
                   }
                 }
               },
@@ -563,7 +584,7 @@
                     },
                     "items": {
                       "type": "array",
-                      "description": "ALL events in range (up to 50), sorted by start time. Complete schedule for user's query.",
+                      "description": "ALL events in range (up to 50), sorted by start time. When pastTreatment='minimal', past events omit location/map/attendees to reduce noise.",
                       "items": {
                         "type": "object",
                         "properties": {
@@ -595,9 +616,28 @@
                             "type": "string",
                             "description": "Location: room, address, or video link"
                           },
+                          "mapUrl": {
+                            "type": "string",
+                            "nullable": true,
+                            "description": "Google Maps search URL generated when a location is present. Null if no location."
+                          },
                           "attendees": {
                             "type": "array",
-                            "description": "Meeting attendees"
+                            "description": "Meeting attendees",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "name": {
+                                  "type": "string",
+                                  "nullable": true,
+                                  "description": "Display name if known"
+                                },
+                                "email": {
+                                  "type": "string",
+                                  "description": "Attendee email address"
+                                }
+                              }
+                            }
                           }
                         }
                       }
@@ -1327,7 +1367,7 @@
                 "required": [
                   "scope"
                 ],
-                "description": "Returns ALL tasks in specified scope grouped by due date. Daily=ALL today's tasks, weekly=ALL this week's tasks. Four sections: 'today', 'thisWeek', 'overdue', 'completed' (if includeCompleted=true). Complete task list, not subset.",
+                "description": "Returns ALL tasks in specified scope grouped by due date. Daily=ALL today's tasks, weekly=ALL this week's tasks. Four sections: 'today', 'thisWeek', 'overdue', 'completed' (if includeCompleted=true). Supports filtering by project name or label IDs when user asks for a specific bucket. Complete task list, not subset.",
                 "properties": {
                   "scope": {
                     "type": "string",
@@ -1341,6 +1381,17 @@
                     "type": "boolean",
                     "default": false,
                     "description": "If true, includes completed tasks in 'completed' section. If false (default), only active tasks. Use true for 'what I accomplished', false for 'what's left to do'."
+                  },
+                  "project": {
+                    "type": "string",
+                    "description": "Optional project/list name filter. Matches against task list titles or project keywords (case-insensitive substring)."
+                  },
+                  "labelIds": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "description": "Filter tasks that have any of the provided Tasks label IDs. Useful for GTD contexts or custom labels."
                   }
                 }
               },
@@ -1350,6 +1401,13 @@
                   "value": {
                     "scope": "daily",
                     "includeCompleted": false
+                  }
+                },
+                "marketingProject": {
+                  "summary": "ALL today's Marketing tasks",
+                  "value": {
+                    "scope": "daily",
+                    "project": "Marketing"
                   }
                 },
                 "weeklyTasks": {
