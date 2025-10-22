@@ -1,6 +1,7 @@
 import { google } from 'googleapis';
 import { refreshAccessToken } from '../config/oauth.js';
 import dotenv from 'dotenv';
+import { wrapModuleFunctions } from '../utils/advancedDebugging.js';
 
 dotenv.config();
 
@@ -695,7 +696,7 @@ async function findDuplicates(accessToken) {
   }
 }
 
-export {
+const traced = wrapModuleFunctions('services.contactsService', {
   searchContacts,
   getAddressSuggestions,
   listAllContacts,
@@ -704,5 +705,29 @@ export {
   bulkDelete,
   updateContact,
   deleteContact,
-  findDuplicates
+  findDuplicates,
+});
+
+const {
+  searchContacts: tracedSearchContacts,
+  getAddressSuggestions: tracedGetAddressSuggestions,
+  listAllContacts: tracedListAllContacts,
+  addContact: tracedAddContact,
+  bulkUpsert: tracedBulkUpsert,
+  bulkDelete: tracedBulkDelete,
+  updateContact: tracedUpdateContact,
+  deleteContact: tracedDeleteContact,
+  findDuplicates: tracedFindDuplicates,
+} = traced;
+
+export {
+  tracedSearchContacts as searchContacts,
+  tracedGetAddressSuggestions as getAddressSuggestions,
+  tracedListAllContacts as listAllContacts,
+  tracedAddContact as addContact,
+  tracedBulkUpsert as bulkUpsert,
+  tracedBulkDelete as bulkDelete,
+  tracedUpdateContact as updateContact,
+  tracedDeleteContact as deleteContact,
+  tracedFindDuplicates as findDuplicates,
 };

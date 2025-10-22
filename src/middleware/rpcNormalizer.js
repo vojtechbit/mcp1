@@ -9,8 +9,10 @@
  * 
  * This makes backend tolerant of both ChatGPT schema formats.
  */
+import { wrapModuleFunctions } from '../utils/advancedDebugging.js';
 
-export function normalizeRpcRequest(req, res, next) {
+
+function normalizeRpcRequest(req, res, next) {
   try {
     const { body } = req;
     
@@ -149,3 +151,15 @@ export function normalizeRpcRequest(req, res, next) {
     next(); // Pass through to controller for error handling
   }
 }
+
+const traced = wrapModuleFunctions('middleware.rpcNormalizer', {
+  normalizeRpcRequest,
+});
+
+const {
+  normalizeRpcRequest: tracedNormalizeRpcRequest,
+} = traced;
+
+export {
+  tracedNormalizeRpcRequest as normalizeRpcRequest,
+};

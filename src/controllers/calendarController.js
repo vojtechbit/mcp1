@@ -3,11 +3,12 @@ import { heavyLimiter } from '../server.js';
 import { computeETag, checkETagMatch } from '../utils/helpers.js';
 import { createSnapshot, getSnapshot } from '../utils/snapshotStore.js';
 import { handleControllerError } from '../utils/errors.js';
-import { 
-  PAGE_SIZE_DEFAULT, 
+import {
+  PAGE_SIZE_DEFAULT,
   PAGE_SIZE_MAX,
   AGGREGATE_CAP_CAL
 } from '../config/limits.js';
+import { debugStep, wrapModuleFunctions } from '../utils/advancedDebugging.js';
 
 /**
  * Create a calendar event
@@ -16,10 +17,18 @@ import {
  */
 async function createEvent(req, res) {
   try {
-    const { 
+    const {
       summary, start, end, description, location, attendees, timeZone, reminders,
       checkConflicts, force
     } = req.body;
+
+    debugStep('Validating createEvent payload', {
+      hasSummary: Boolean(summary),
+      hasStart: Boolean(start),
+      hasEnd: Boolean(end),
+      checkConflicts: Boolean(checkConflicts),
+      forceOverride: Boolean(force)
+    });
 
     if (!summary || !start || !end) {
       return res.status(400).json({
@@ -31,11 +40,16 @@ async function createEvent(req, res) {
     // Check for conflicts if requested
     if (checkConflicts) {
       console.log(`🔍 Checking for calendar conflicts...`);
-      
+
       const conflicts = await calendarService.checkConflicts(
         req.user.googleSub,
         { start, end }
       );
+
+      debugStep('Conflict check completed', {
+        conflictCount: conflicts.length,
+        forced: Boolean(force)
+      });
 
       if (conflicts.length > 0 && !force) {
         // Conflicts found and force not set - do not create event
@@ -68,7 +82,17 @@ async function createEvent(req, res) {
       reminders
     };
 
+    debugStep('Sending create event request to Google API', {
+      attendeeCount: Array.isArray(attendees) ? attendees.length : 0,
+      hasLocation: Boolean(location)
+    });
+
     const result = await calendarService.createCalendarEvent(req.user.googleSub, eventData);
+
+    debugStep('Calendar API responded with event', {
+      eventId: result?.id,
+      hasHtmlLink: Boolean(result?.htmlLink)
+    });
 
     const response = {
       success: true,
@@ -83,10 +107,15 @@ async function createEvent(req, res) {
         req.user.googleSub,
         { start, end, excludeEventId: result.id }
       );
-      
+
+      debugStep('Post-create conflict audit', {
+        conflictCount: conflicts.length,
+        excludedEventId: result.id
+      });
+
       response.checkedConflicts = true;
       response.conflictsCount = conflicts.length;
-      
+
       if (conflicts.length > 0) {
         response.conflicts = conflicts;
         response.note = 'Event created despite conflicts (force=true)';
@@ -113,12 +142,16 @@ async function getEvent(req, res) {
     const { eventId } = req.params;
 
     console.log(`📖 Getting calendar event ${eventId}...`);
+    debugStep('Fetching calendar event', { eventId });
 
     const result = await calendarService.getCalendarEvent(req.user.googleSub, eventId);
+    debugStep('Calendar event retrieved', { hasEvent: Boolean(result) });
 
     // ETag support
     const etag = computeETag(result);
+    debugStep('Computed event ETag', { etag });
     if (checkETagMatch(req.headers['if-none-match'], etag)) {
+      debugStep('ETag matched client cache', { eventId });
       return res.status(304).end();
     }
 
@@ -150,8 +183,8 @@ async function getEvent(req, res) {
 async function listEvents(req, res) {
   const runList = async (req, res) => {
     try {
-      let { 
-        timeMin, 
+      let {
+        timeMin,
         timeMax, 
         maxResults, 
         pageToken,
@@ -165,16 +198,26 @@ async function listEvents(req, res) {
       if (snapshotToken) {
         snapshot = getSnapshot(snapshotToken);
         if (!snapshot) {
+          debugStep('Snapshot token invalid', { snapshotToken });
           return res.status(400).json({
             error: 'Invalid or expired snapshot token',
             message: 'Please start a new query'
           });
         }
+        debugStep('Restored snapshot from token', {
+          itemsRestored: snapshot.items?.length || 0,
+          hasMore: Boolean(snapshot.hasMore)
+        });
       }
 
       const aggregateMode = aggregate === 'true';
 
       console.log(`📋 Listing calendar events (aggregate: ${aggregateMode})`);
+      debugStep('Preparing to list events', {
+        aggregateMode,
+        requestedPageToken: pageToken,
+        requestedMaxResults: maxResults
+      });
 
       if (aggregateMode) {
         // Aggregate mode: paginate internally
@@ -196,12 +239,22 @@ async function listEvents(req, res) {
           const items = result.items || [];
           allItems = allItems.concat(items);
           pagesConsumed++;
+          debugStep('Fetched aggregate page', {
+            pagesConsumed,
+            itemsFetched: items.length,
+            totalAccumulated: allItems.length,
+            hasNextPage: Boolean(result.nextPageToken)
+          });
 
           // Check if we hit the cap
           if (allItems.length >= AGGREGATE_CAP_CAL) {
             hasMore = true;
             partial = true;
             allItems = allItems.slice(0, AGGREGATE_CAP_CAL);
+            debugStep('Aggregate cap reached', {
+              cap: AGGREGATE_CAP_CAL,
+              trimmedTo: allItems.length
+            });
             break;
           }
 
@@ -210,15 +263,23 @@ async function listEvents(req, res) {
             currentPageToken = result.nextPageToken;
           } else {
             hasMore = false;
+            debugStep('No additional pages available', { pagesConsumed });
             break;
           }
         }
 
         // Create snapshot token
         const newSnapshotToken = createSnapshot(
-          JSON.stringify({ timeMin, timeMax, query }), 
+          JSON.stringify({ timeMin, timeMax, query }),
           { aggregate: true }
         );
+
+        debugStep('Aggregate snapshot created', {
+          totalItems: allItems.length,
+          pagesConsumed,
+          hasMore,
+          partial
+        });
 
         const response = {
           success: true,
@@ -257,6 +318,13 @@ async function listEvents(req, res) {
         const items = result.items || [];
         const hasMore = !!result.nextPageToken;
         const nextPageToken = result.nextPageToken;
+
+        debugStep('Fetched single page of events', {
+          pageSize,
+          itemsReturned: items.length,
+          hasMore,
+          nextPageToken
+        });
 
         const response = {
           success: true,
@@ -302,6 +370,13 @@ async function updateEvent(req, res) {
     const { eventId } = req.params;
     const { checkConflicts, force, ...updates } = req.body;
 
+    debugStep('Received updateEvent request', {
+      eventId,
+      checkConflicts: Boolean(checkConflicts),
+      forceOverride: Boolean(force),
+      fieldsProvided: Object.keys(updates)
+    });
+
     if (Object.keys(updates).length === 0) {
       return res.status(400).json({
         error: 'Bad Request',
@@ -312,20 +387,35 @@ async function updateEvent(req, res) {
     // Check for conflicts if requested and time is being updated
     if (checkConflicts && (updates.start || updates.end)) {
       console.log(`🔍 Checking for calendar conflicts...`);
-      
+
       // Get current event to determine time range
       const currentEvent = await calendarService.getCalendarEvent(
         req.user.googleSub,
         eventId
       );
 
+      debugStep('Loaded current event for conflict check', {
+        hasStartUpdate: Boolean(updates.start),
+        hasEndUpdate: Boolean(updates.end)
+      });
+
       const start = updates.start || currentEvent.start.dateTime || currentEvent.start.date;
       const end = updates.end || currentEvent.end.dateTime || currentEvent.end.date;
+
+      debugStep('Evaluating conflicts for updated time window', {
+        start,
+        end
+      });
 
       const conflicts = await calendarService.checkConflicts(
         req.user.googleSub,
         { start, end, excludeEventId: eventId }
       );
+
+      debugStep('Conflict check completed', {
+        conflictCount: conflicts.length,
+        forced: Boolean(force)
+      });
 
       if (conflicts.length > 0 && !force) {
         // Conflicts found and force not set - do not update event
@@ -347,11 +437,21 @@ async function updateEvent(req, res) {
 
     console.log(`✏️  Updating calendar event ${eventId}...`);
 
+    debugStep('Sending update to Google API', {
+      eventId,
+      updateKeys: Object.keys(updates)
+    });
+
     const result = await calendarService.updateCalendarEvent(
       req.user.googleSub,
       eventId,
       updates
     );
+
+    debugStep('Update applied', {
+      eventId: result?.id,
+      hasHtmlLink: Boolean(result?.htmlLink)
+    });
 
     const response = {
       success: true,
@@ -364,15 +464,19 @@ async function updateEvent(req, res) {
     if (checkConflicts && (updates.start || updates.end)) {
       const start = updates.start || result.start.dateTime || result.start.date;
       const end = updates.end || result.end.dateTime || result.end.date;
-      
+
       const conflicts = await calendarService.checkConflicts(
         req.user.googleSub,
         { start, end, excludeEventId: eventId }
       );
-      
+
+      debugStep('Post-update conflict audit', {
+        conflictCount: conflicts.length
+      });
+
       response.checkedConflicts = true;
       response.conflictsCount = conflicts.length;
-      
+
       if (conflicts.length > 0) {
         response.conflicts = conflicts;
         response.note = 'Event updated despite conflicts (force=true)';
@@ -399,8 +503,14 @@ async function deleteEvent(req, res) {
     const { eventId } = req.params;
 
     console.log(`🗑️  Deleting calendar event ${eventId}...`);
+    debugStep('Deleting calendar event', { eventId });
 
     const result = await calendarService.deleteCalendarEvent(req.user.googleSub, eventId);
+
+    debugStep('Calendar event deleted', {
+      eventId: result?.eventId,
+      status: result?.status || 'unknown'
+    });
 
     res.json({
       success: true,
@@ -417,10 +527,26 @@ async function deleteEvent(req, res) {
   }
 }
 
-export {
+const traced = wrapModuleFunctions('controllers.calendarController', {
   createEvent,
   getEvent,
   listEvents,
   updateEvent,
   deleteEvent
+});
+
+const {
+  createEvent: tracedCreateEvent,
+  getEvent: tracedGetEvent,
+  listEvents: tracedListEvents,
+  updateEvent: tracedUpdateEvent,
+  deleteEvent: tracedDeleteEvent
+} = traced;
+
+export {
+  tracedCreateEvent as createEvent,
+  tracedGetEvent as getEvent,
+  tracedListEvents as listEvents,
+  tracedUpdateEvent as updateEvent,
+  tracedDeleteEvent as deleteEvent
 };

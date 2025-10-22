@@ -1,5 +1,6 @@
 import dotenv from 'dotenv';
 import { ApiError, resolveStatusTitle } from '../utils/errors.js';
+import { wrapModuleFunctions } from '../utils/advancedDebugging.js';
 
 dotenv.config();
 
@@ -70,4 +71,20 @@ function asyncHandler(fn) {
   };
 }
 
-export { errorHandler, notFoundHandler, asyncHandler };
+const traced = wrapModuleFunctions('middleware.errorHandler', {
+  errorHandler,
+  notFoundHandler,
+  asyncHandler,
+});
+
+const {
+  errorHandler: tracedErrorHandler,
+  notFoundHandler: tracedNotFoundHandler,
+  asyncHandler: tracedAsyncHandler,
+} = traced;
+
+export {
+  tracedErrorHandler as errorHandler,
+  tracedNotFoundHandler as notFoundHandler,
+  tracedAsyncHandler as asyncHandler,
+};

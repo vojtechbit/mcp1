@@ -4,6 +4,8 @@
  * Dispatches RPC calls to appropriate service operations
  * based on `op` parameter.
  */
+import { wrapModuleFunctions } from '../utils/advancedDebugging.js';
+
 
 import * as gmailService from '../services/googleApiService.js';
 import * as calendarService from '../services/googleApiService.js';
@@ -18,7 +20,7 @@ const tasksSvc = rpcTestOverrides.tasksService || tasksService;
 
 // ==================== MAIL RPC ====================
 
-export async function mailRpc(req, res) {
+async function mailRpc(req, res) {
   try {
     const { op, params } = req.body;
     
@@ -263,7 +265,7 @@ export async function mailRpc(req, res) {
 
 // ==================== CALENDAR RPC ====================
 
-export async function calendarRpc(req, res) {
+async function calendarRpc(req, res) {
   try {
     const { op, params } = req.body;
     
@@ -417,7 +419,7 @@ export async function calendarRpc(req, res) {
 
 // ==================== CONTACTS RPC ====================
 
-export async function contactsRpc(req, res) {
+async function contactsRpc(req, res) {
   try {
     let { op, params } = req.body;
     
@@ -566,7 +568,7 @@ export async function contactsRpc(req, res) {
 
 // ==================== TASKS RPC ====================
 
-export async function tasksRpc(req, res) {
+async function tasksRpc(req, res) {
   try {
     let { op, params } = req.body;
 
@@ -686,3 +688,24 @@ export async function tasksRpc(req, res) {
     });
   }
 }
+
+const traced = wrapModuleFunctions('controllers.rpcController', {
+  mailRpc,
+  calendarRpc,
+  contactsRpc,
+  tasksRpc,
+});
+
+const {
+  mailRpc: tracedMailRpc,
+  calendarRpc: tracedCalendarRpc,
+  contactsRpc: tracedContactsRpc,
+  tasksRpc: tracedTasksRpc,
+} = traced;
+
+export {
+  tracedMailRpc as mailRpc,
+  tracedCalendarRpc as calendarRpc,
+  tracedContactsRpc as contactsRpc,
+  tracedTasksRpc as tasksRpc,
+};

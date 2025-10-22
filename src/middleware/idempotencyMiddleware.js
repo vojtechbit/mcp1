@@ -1,5 +1,7 @@
 import crypto from 'crypto';
 import { getDatabase } from '../config/database.js';
+import { wrapModuleFunctions } from '../utils/advancedDebugging.js';
+
 
 /**
  * Idempotency Middleware
@@ -68,7 +70,7 @@ function hashKey(key) {
  * Idempotency middleware
  * Apply to routes that need idempotency protection
  */
-export async function idempotencyMiddleware(req, res, next) {
+async function idempotencyMiddleware(req, res, next) {
   // Only apply to mutations
   const method = req.method;
   if (!['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) {
@@ -181,7 +183,7 @@ export async function idempotencyMiddleware(req, res, next) {
  * Clean up expired idempotency records manually (optional)
  * MongoDB TTL index handles this automatically, but this can force cleanup
  */
-export async function cleanupExpiredRecords() {
+async function cleanupExpiredRecords() {
   try {
     const db = await getDatabase();
     const collection = db.collection('idempotency_records');
@@ -199,3 +201,18 @@ export async function cleanupExpiredRecords() {
     return 0;
   }
 }
+
+const traced = wrapModuleFunctions('middleware.idempotencyMiddleware', {
+  idempotencyMiddleware,
+  cleanupExpiredRecords,
+});
+
+const {
+  idempotencyMiddleware: tracedIdempotencyMiddleware,
+  cleanupExpiredRecords: tracedCleanupExpiredRecords,
+} = traced;
+
+export {
+  tracedIdempotencyMiddleware as idempotencyMiddleware,
+  tracedCleanupExpiredRecords as cleanupExpiredRecords,
+};

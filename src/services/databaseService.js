@@ -1,5 +1,6 @@
 import { getDatabase } from '../config/database.js';
 import { encryptToken, decryptToken } from './tokenService.js';
+import { wrapModuleFunctions } from '../utils/advancedDebugging.js';
 
 /**
  * Retry wrapper for database operations
@@ -230,10 +231,26 @@ async function updateLastUsed(googleSub) {
   }
 }
 
-export {
+const traced = wrapModuleFunctions('services.databaseService', {
   saveUser,
   getUserByGoogleSub,
   updateTokens,
   deleteUser,
-  updateLastUsed
+  updateLastUsed,
+});
+
+const {
+  saveUser: tracedSaveUser,
+  getUserByGoogleSub: tracedGetUserByGoogleSub,
+  updateTokens: tracedUpdateTokens,
+  deleteUser: tracedDeleteUser,
+  updateLastUsed: tracedUpdateLastUsed,
+} = traced;
+
+export {
+  tracedSaveUser as saveUser,
+  tracedGetUserByGoogleSub as getUserByGoogleSub,
+  tracedUpdateTokens as updateTokens,
+  tracedDeleteUser as deleteUser,
+  tracedUpdateLastUsed as updateLastUsed,
 };

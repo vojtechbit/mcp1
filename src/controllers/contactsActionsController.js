@@ -4,6 +4,8 @@
  * Provides dedicated mutation endpoints that wrap the contacts service
  * directly instead of going through the generic RPC layer.
  */
+import { wrapModuleFunctions } from '../utils/advancedDebugging.js';
+
 
 import * as contactsService from '../services/contactsService.js';
 import { handleControllerError } from '../utils/errors.js';
@@ -15,7 +17,7 @@ function pickRealEstate(payload = {}) {
   return payload.realEstate ?? payload.realestate ?? null;
 }
 
-export async function modifyContact(req, res) {
+async function modifyContact(req, res) {
   try {
     const {
       name,
@@ -56,7 +58,7 @@ export async function modifyContact(req, res) {
   }
 }
 
-export async function deleteContact(req, res) {
+async function deleteContact(req, res) {
   try {
     const { email, name } = req.body || {};
 
@@ -105,7 +107,7 @@ export async function deleteContact(req, res) {
   }
 }
 
-export async function bulkDeleteContacts(req, res) {
+async function bulkDeleteContacts(req, res) {
   try {
     const { emails, rowIds } = req.body || {};
 
@@ -143,3 +145,21 @@ export async function bulkDeleteContacts(req, res) {
     });
   }
 }
+
+const traced = wrapModuleFunctions('controllers.contactsActionsController', {
+  modifyContact,
+  deleteContact,
+  bulkDeleteContacts,
+});
+
+const {
+  modifyContact: tracedModifyContact,
+  deleteContact: tracedDeleteContact,
+  bulkDeleteContacts: tracedBulkDeleteContacts,
+} = traced;
+
+export {
+  tracedModifyContact as modifyContact,
+  tracedDeleteContact as deleteContact,
+  tracedBulkDeleteContacts as bulkDeleteContacts,
+};

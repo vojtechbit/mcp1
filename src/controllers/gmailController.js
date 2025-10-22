@@ -16,6 +16,8 @@ import {
   BATCH_READ_CONCURRENCY,
   AGGREGATE_CAP_MAIL 
 } from '../config/limits.js';
+import { wrapModuleFunctions } from '../utils/advancedDebugging.js';
+
 
 // ==================== EMAIL OPERATIONS ====================
 
@@ -932,7 +934,7 @@ async function downloadAttachment(req, res) {
   }
 }
 
-export {
+const traced = wrapModuleFunctions('controllers.gmailController', {
   sendEmail,
   replyToEmail,
   readEmail,
@@ -953,5 +955,53 @@ export {
   getAttachmentMeta,
   previewAttachmentText,
   previewAttachmentTable,
-  downloadAttachment
+  downloadAttachment,
+});
+
+const {
+  sendEmail: tracedSendEmail,
+  replyToEmail: tracedReplyToEmail,
+  readEmail: tracedReadEmail,
+  batchPreview: tracedBatchPreview,
+  batchRead: tracedBatchRead,
+  getEmailSnippet: tracedGetEmailSnippet,
+  searchEmails: tracedSearchEmails,
+  createDraft: tracedCreateDraft,
+  deleteEmail: tracedDeleteEmail,
+  toggleStar: tracedToggleStar,
+  markAsRead: tracedMarkAsRead,
+  listLabels: tracedListLabels,
+  modifyMessageLabels: tracedModifyMessageLabels,
+  modifyThreadLabels: tracedModifyThreadLabels,
+  getThread: tracedGetThread,
+  setThreadRead: tracedSetThreadRead,
+  replyToThread: tracedReplyToThread,
+  getAttachmentMeta: tracedGetAttachmentMeta,
+  previewAttachmentText: tracedPreviewAttachmentText,
+  previewAttachmentTable: tracedPreviewAttachmentTable,
+  downloadAttachment: tracedDownloadAttachment,
+} = traced;
+
+export {
+  tracedSendEmail as sendEmail,
+  tracedReplyToEmail as replyToEmail,
+  tracedReadEmail as readEmail,
+  tracedBatchPreview as batchPreview,
+  tracedBatchRead as batchRead,
+  tracedGetEmailSnippet as getEmailSnippet,
+  tracedSearchEmails as searchEmails,
+  tracedCreateDraft as createDraft,
+  tracedDeleteEmail as deleteEmail,
+  tracedToggleStar as toggleStar,
+  tracedMarkAsRead as markAsRead,
+  tracedListLabels as listLabels,
+  tracedModifyMessageLabels as modifyMessageLabels,
+  tracedModifyThreadLabels as modifyThreadLabels,
+  tracedGetThread as getThread,
+  tracedSetThreadRead as setThreadRead,
+  tracedReplyToThread as replyToThread,
+  tracedGetAttachmentMeta as getAttachmentMeta,
+  tracedPreviewAttachmentText as previewAttachmentText,
+  tracedPreviewAttachmentTable as previewAttachmentTable,
+  tracedDownloadAttachment as downloadAttachment,
 };

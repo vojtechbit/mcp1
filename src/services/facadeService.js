@@ -4,6 +4,8 @@
  * Orchestrates existing backend services into high-level macros
  * optimized for GPT consumption.
  */
+import { wrapModuleFunctions } from '../utils/advancedDebugging.js';
+
 
 import * as gmailService from './googleApiService.js';
 import * as calendarService from './googleApiService.js';
@@ -29,7 +31,7 @@ import {
  * Step 2: Batch fetch metadata for all messages
  * Step 3: Return enriched items with sender, subject, etc.
  */
-export async function inboxOverview(googleSub, params) {
+async function inboxOverview(googleSub, params) {
   const { timeRange, maxItems = 50, filters = {} } = params;
   
   // Build Gmail search query
@@ -138,7 +140,7 @@ export async function inboxOverview(googleSub, params) {
 /**
  * Inbox Snippets - overview with snippets and attachment URLs
  */
-export async function inboxSnippets(googleSub, params) {
+async function inboxSnippets(googleSub, params) {
   const { includeAttachments = true } = params;
   
   // Start with overview - already has metadata
@@ -203,7 +205,7 @@ export async function inboxSnippets(googleSub, params) {
 /**
  * Email Quick Read - single or batch read with attachments
  */
-export async function emailQuickRead(googleSub, params) {
+async function emailQuickRead(googleSub, params) {
   const { ids, searchQuery, format = 'minimal' } = params;
   
   // Validate format parameter
@@ -259,7 +261,7 @@ export async function emailQuickRead(googleSub, params) {
 /**
  * Calendar Plan - daily/weekly view with status
  */
-export async function calendarPlan(googleSub, params) {
+async function calendarPlan(googleSub, params) {
   const { scope, date, includePast = false, pastTreatment = 'minimal' } = params;
   
   // Validate scope parameter
@@ -402,7 +404,7 @@ export async function calendarPlan(googleSub, params) {
  * 3. User confirms with /api/macros/confirm endpoint
  * 4. Complete operation with enriched data
  */
-export async function calendarSchedule(googleSub, params) {
+async function calendarSchedule(googleSub, params) {
   const {
     title,
     when,
@@ -659,7 +661,7 @@ export async function calendarSchedule(googleSub, params) {
 /**
  * Complete enriched calendar schedule (after user confirms via confirmToken)
  */
-export async function completeCalendarScheduleEnrichment(
+async function completeCalendarScheduleEnrichment(
   googleSub,
   confirmToken,
   action
@@ -760,7 +762,7 @@ export async function completeCalendarScheduleEnrichment(
  * - 'skip': Skip entries with duplicates
  * - 'merge': Auto-merge into existing contacts (>70% match)
  */
-export async function contactsSafeAdd(googleSub, params) {
+async function contactsSafeAdd(googleSub, params) {
   const { entries, dedupeStrategy = 'ask' } = params;
 
   if (!entries || !Array.isArray(entries) || entries.length === 0) {
@@ -881,7 +883,7 @@ export async function contactsSafeAdd(googleSub, params) {
 /**
  * Complete deduplication workflow (after user confirms via confirmToken)
  */
-export async function completeContactsDeduplication(
+async function completeContactsDeduplication(
   googleSub,
   confirmToken,
   action // 'create', 'skip', or 'merge'
@@ -917,7 +919,7 @@ export async function completeContactsDeduplication(
 /**
  * Tasks Overview - grouped by section
  */
-export async function tasksOverview(googleSub, params) {
+async function tasksOverview(googleSub, params) {
   const { scope, includeCompleted = false, project, labelIds = [] } = params;
   
   // Validate scope parameter
@@ -1051,7 +1053,7 @@ function formatTimeForEmail(isoString) {
 /**
  * Reminder Drafts - bulk email reminders for today's events
  */
-export async function calendarReminderDrafts(googleSub, params) {
+async function calendarReminderDrafts(googleSub, params) {
   const {
     window = 'today',
     hours,
@@ -1396,3 +1398,42 @@ function extractSenderName(fromHeader) {
   // If no angle brackets, return as-is (or null if it looks like email)
   return fromHeader.includes('@') ? null : fromHeader.trim();
 }
+
+const traced = wrapModuleFunctions('services.facadeService', {
+  inboxOverview,
+  inboxSnippets,
+  emailQuickRead,
+  calendarPlan,
+  calendarSchedule,
+  completeCalendarScheduleEnrichment,
+  contactsSafeAdd,
+  completeContactsDeduplication,
+  tasksOverview,
+  calendarReminderDrafts,
+});
+
+const {
+  inboxOverview: tracedInboxOverview,
+  inboxSnippets: tracedInboxSnippets,
+  emailQuickRead: tracedEmailQuickRead,
+  calendarPlan: tracedCalendarPlan,
+  calendarSchedule: tracedCalendarSchedule,
+  completeCalendarScheduleEnrichment: tracedCompleteCalendarScheduleEnrichment,
+  contactsSafeAdd: tracedContactsSafeAdd,
+  completeContactsDeduplication: tracedCompleteContactsDeduplication,
+  tasksOverview: tracedTasksOverview,
+  calendarReminderDrafts: tracedCalendarReminderDrafts,
+} = traced;
+
+export {
+  tracedInboxOverview as inboxOverview,
+  tracedInboxSnippets as inboxSnippets,
+  tracedEmailQuickRead as emailQuickRead,
+  tracedCalendarPlan as calendarPlan,
+  tracedCalendarSchedule as calendarSchedule,
+  tracedCompleteCalendarScheduleEnrichment as completeCalendarScheduleEnrichment,
+  tracedContactsSafeAdd as contactsSafeAdd,
+  tracedCompleteContactsDeduplication as completeContactsDeduplication,
+  tracedTasksOverview as tasksOverview,
+  tracedCalendarReminderDrafts as calendarReminderDrafts,
+};

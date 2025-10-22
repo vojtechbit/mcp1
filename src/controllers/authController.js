@@ -2,6 +2,8 @@ import { getAuthUrl, getTokensFromCode } from '../config/oauth.js';
 import { saveUser } from '../services/databaseService.js';
 import { handleControllerError } from '../utils/errors.js';
 import dotenv from 'dotenv';
+import { wrapModuleFunctions } from '../utils/advancedDebugging.js';
+
 
 dotenv.config();
 
@@ -195,4 +197,20 @@ async function checkStatus(req, res) {
   }
 }
 
-export { initiateOAuth, handleCallback, checkStatus };
+const traced = wrapModuleFunctions('controllers.authController', {
+  initiateOAuth,
+  handleCallback,
+  checkStatus,
+});
+
+const {
+  initiateOAuth: tracedInitiateOAuth,
+  handleCallback: tracedHandleCallback,
+  checkStatus: tracedCheckStatus,
+} = traced;
+
+export {
+  tracedInitiateOAuth as initiateOAuth,
+  tracedHandleCallback as handleCallback,
+  tracedCheckStatus as checkStatus,
+};
