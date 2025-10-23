@@ -1178,11 +1178,9 @@
                 "type": "object",
                 "description": "No parameters required.",
                 "properties": {},
-                "additionalProperties": false,
-                "examples": [
-                  {}
-                ]
-              }
+                "additionalProperties": false
+              },
+              "example": {}
             }
           }
         },
