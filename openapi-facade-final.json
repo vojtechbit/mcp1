@@ -1176,7 +1176,12 @@
             "application/json": {
               "schema": {
                 "type": "object",
-                "description": "No parameters required."
+                "description": "No parameters required.",
+                "properties": {},
+                "additionalProperties": false,
+                "examples": [
+                  {}
+                ]
               }
             }
           }
