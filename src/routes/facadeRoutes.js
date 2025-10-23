@@ -40,6 +40,7 @@ router.post('/macros/email/quickRead', facadeController.macroEmailQuickRead);
 router.post('/macros/calendar/plan', facadeController.macroCalendarPlan);
 router.post('/macros/calendar/schedule', facadeController.macroCalendarSchedule);
 router.post('/macros/calendar/reminderDrafts', facadeController.macroCalendarReminderDrafts);
+router.post('/macros/calendar/listCalendars', facadeController.macroCalendarListCalendars);
 
 // Contacts Macros
 router.post('/macros/contacts/safeAdd', facadeController.macroContactsSafeAdd);

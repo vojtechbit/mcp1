@@ -265,7 +265,13 @@ async function emailQuickRead(googleSub, params) {
  * Calendar Plan - daily/weekly view with status
  */
 async function calendarPlan(googleSub, params) {
-  const { scope, date, includePast = false, pastTreatment = 'minimal' } = params;
+  const {
+    scope,
+    date,
+    includePast = false,
+    pastTreatment = 'minimal',
+    calendarId = 'primary'
+  } = params;
   
   // Validate scope parameter
   const validScopes = ['daily', 'weekly'];
@@ -334,6 +340,7 @@ async function calendarPlan(googleSub, params) {
   
   // Fetch events
   const events = await calendarService.listCalendarEvents(googleSub, {
+    calendarId,
     timeMin: start.toISOString(),
     timeMax: end.toISOString(),
     orderBy: 'startTime',
@@ -398,6 +405,11 @@ async function calendarPlan(googleSub, params) {
   };
 }
 
+async function calendarListCalendars(googleSub) {
+  const calendars = await calendarService.listCalendars(googleSub);
+  return calendars;
+}
+
 /**
  * Calendar Schedule - create event with optional contact enrichment
  * 
@@ -417,7 +429,8 @@ async function calendarSchedule(googleSub, params) {
     location,
     notes,
     reminders = [],
-    privacy = 'default'
+    privacy = 'default',
+    calendarId = 'primary'
   } = params;
 
   // Validate attendees parameter
@@ -458,6 +471,7 @@ async function calendarSchedule(googleSub, params) {
       when.proposals.map(async (proposal) => {
         try {
           const conflicts = await calendarService.checkConflicts(googleSub, {
+            calendarId,
             start: proposal.start,
             end: proposal.end
           });
@@ -539,7 +553,8 @@ async function calendarSchedule(googleSub, params) {
                 location,
                 notes,
                 reminders,
-                privacy
+                privacy,
+                calendarId
               },
               contactId: contact.resourceName,
               suggestedFields: enrichmentSuggestions
@@ -637,7 +652,8 @@ async function calendarSchedule(googleSub, params) {
 
   // Create event in calendar
   const event = await calendarService.createCalendarEvent(googleSub, eventData, {
-  conferenceDataVersion: conference === 'meet' ? 1 : 0
+    calendarId,
+    conferenceDataVersion: conference === 'meet' ? 1 : 0
   });
 
   return {
@@ -729,6 +745,9 @@ async function completeCalendarScheduleEnrichment(
             }))
           : undefined
     }
+  }, {
+    calendarId: updatedEventData.calendarId || 'primary',
+    conferenceDataVersion: updatedEventData.conference === 'meet' ? 1 : 0
   });
 
   await completePendingConfirmation(confirmToken);
@@ -1063,7 +1082,8 @@ async function calendarReminderDrafts(googleSub, params) {
     template,
     includeLocation = true,
     createDrafts = true,
-    perAttendee = 'separate'
+    perAttendee = 'separate',
+    calendarId = 'primary'
   } = params;
   
   // Validate window parameter
@@ -1099,6 +1119,7 @@ async function calendarReminderDrafts(googleSub, params) {
   
   // Fetch upcoming events with attendees
   const events = await calendarService.listCalendarEvents(googleSub, {
+    calendarId,
     timeMin: start.toISOString(),
     timeMax: end.toISOString(),
     orderBy: 'startTime',
@@ -1447,6 +1468,7 @@ const traced = wrapModuleFunctions('services.facadeService', {
   completeContactsDeduplication,
   tasksOverview,
   calendarReminderDrafts,
+  calendarListCalendars,
 });
 
 const {
@@ -1460,6 +1482,7 @@ const {
   completeContactsDeduplication: tracedCompleteContactsDeduplication,
   tasksOverview: tracedTasksOverview,
   calendarReminderDrafts: tracedCalendarReminderDrafts,
+  calendarListCalendars: tracedCalendarListCalendars,
 } = traced;
 
 export {
@@ -1473,4 +1496,5 @@ export {
   tracedCompleteContactsDeduplication as completeContactsDeduplication,
   tracedTasksOverview as tasksOverview,
   tracedCalendarReminderDrafts as calendarReminderDrafts,
+  tracedCalendarListCalendars as calendarListCalendars,
 };

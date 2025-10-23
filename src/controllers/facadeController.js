@@ -165,6 +165,29 @@ async function macroCalendarReminderDrafts(req, res) {
   }
 }
 
+async function macroCalendarListCalendars(req, res) {
+  try {
+    const result = await facadeService.calendarListCalendars(req.user.googleSub);
+    res.json(result);
+  } catch (error) {
+    console.error('❌ Macro calendar list calendars failed:', error.message);
+
+    if (error.statusCode === 401) {
+      return res.status(401).json({
+        error: 'Authentication required',
+        message: error.message,
+        code: 'REAUTH_REQUIRED'
+      });
+    }
+
+    res.status(500).json({
+      error: 'Calendar list calendars failed',
+      message: error.message,
+      code: 'SERVER_ERROR'
+    });
+  }
+}
+
 // ==================== CONTACTS MACROS ====================
 
 async function macroContactsSafeAdd(req, res) {
@@ -222,6 +245,7 @@ const traced = wrapModuleFunctions('controllers.facadeController', {
   macroCalendarPlan,
   macroCalendarSchedule,
   macroCalendarReminderDrafts,
+  macroCalendarListCalendars,
   macroContactsSafeAdd,
   macroTasksOverview,
 });
@@ -233,6 +257,7 @@ const {
   macroCalendarPlan: tracedMacroCalendarPlan,
   macroCalendarSchedule: tracedMacroCalendarSchedule,
   macroCalendarReminderDrafts: tracedMacroCalendarReminderDrafts,
+  macroCalendarListCalendars: tracedMacroCalendarListCalendars,
   macroContactsSafeAdd: tracedMacroContactsSafeAdd,
   macroTasksOverview: tracedMacroTasksOverview,
 } = traced;
@@ -244,6 +269,7 @@ export {
   tracedMacroCalendarPlan as macroCalendarPlan,
   tracedMacroCalendarSchedule as macroCalendarSchedule,
   tracedMacroCalendarReminderDrafts as macroCalendarReminderDrafts,
+  tracedMacroCalendarListCalendars as macroCalendarListCalendars,
   tracedMacroContactsSafeAdd as macroContactsSafeAdd,
   tracedMacroTasksOverview as macroTasksOverview,
 };
