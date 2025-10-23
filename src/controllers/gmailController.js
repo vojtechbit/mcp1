@@ -165,7 +165,8 @@ async function getEmailSnippet(req, res) {
       snippet: result.snippet,
       messageId: result.id,
       sizeEstimate: result.sizeEstimate,
-      headers: result.headers
+      headers: result.headers,
+      readState: result.readState
     });
   } catch (error) {
     return handleControllerError(res, error, {
@@ -195,13 +196,15 @@ async function fetchBatchPreview(googleSub, ids, kind) {
             id,
             from: msg.from,
             subject: msg.subject,
-            date: msg.date
+            date: msg.date,
+            readState: msg.readState
           };
         } else if (kind === 'snippet') {
           const msg = await gmailService.readEmail(googleSub, id, { format: 'snippet' });
           return {
             id,
-            snippet: msg.snippet
+            snippet: msg.snippet,
+            readState: msg.readState
           };
         } else {
           const msg = await gmailService.readEmail(googleSub, id, { format: 'metadata' });
