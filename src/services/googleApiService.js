@@ -1443,7 +1443,12 @@ async function previewAttachmentTable(googleSub, messageId, attachmentId, option
 
 // ==================== CALENDAR FUNCTIONS ====================
 
-async function createCalendarEvent(googleSub, eventData) {
+async function createCalendarEvent(googleSub, eventData, options = {}) {
+  const {
+    calendarId = 'primary',
+    conferenceDataVersion
+  } = options;
+
   return await handleGoogleApiCall(googleSub, async () => {
     const authClient = await getAuthenticatedClient(googleSub);
     const calendar = google.calendar({ version: 'v3', auth: authClient });
@@ -1476,23 +1481,33 @@ async function createCalendarEvent(googleSub, eventData) {
       event.reminders = eventData.reminders;
     }
 
-    const result = await calendar.events.insert({
-      calendarId: 'primary',
+    const insertConfig = {
+      calendarId,
       requestBody: event,
       sendUpdates: eventData.attendees ? 'all' : 'none'
-    });
+    };
+
+    if (typeof conferenceDataVersion === 'number') {
+      insertConfig.conferenceDataVersion = conferenceDataVersion;
+    } else if (eventData.conferenceData) {
+      insertConfig.conferenceDataVersion = 1;
+    }
+
+    const result = await calendar.events.insert(insertConfig);
 
     return result.data;
   });
 }
 
-async function getCalendarEvent(googleSub, eventId) {
+async function getCalendarEvent(googleSub, eventId, options = {}) {
+  const { calendarId = 'primary' } = options;
+
   return await handleGoogleApiCall(googleSub, async () => {
     const authClient = await getAuthenticatedClient(googleSub);
     const calendar = google.calendar({ version: 'v3', auth: authClient });
 
     const result = await calendar.events.get({
-      calendarId: 'primary',
+      calendarId,
       eventId: eventId
     });
 
@@ -1500,13 +1515,19 @@ async function getCalendarEvent(googleSub, eventId) {
   });
 }
 
-async function listCalendarEvents(googleSub, { timeMin, timeMax, maxResults = 10, query }) {
+async function listCalendarEvents(googleSub, {
+  calendarId = 'primary',
+  timeMin,
+  timeMax,
+  maxResults = 10,
+  query
+} = {}) {
   return await handleGoogleApiCall(googleSub, async () => {
     const authClient = await getAuthenticatedClient(googleSub);
     const calendar = google.calendar({ version: 'v3', auth: authClient });
 
     const params = {
-      calendarId: 'primary',
+      calendarId,
       timeMin: timeMin || new Date().toISOString(),
       maxResults,
       singleEvents: true,
@@ -1521,13 +1542,15 @@ async function listCalendarEvents(googleSub, { timeMin, timeMax, maxResults = 10
   });
 }
 
-async function updateCalendarEvent(googleSub, eventId, updates) {
+async function updateCalendarEvent(googleSub, eventId, updates, options = {}) {
+  const { calendarId = 'primary' } = options;
+
   return await handleGoogleApiCall(googleSub, async () => {
     const authClient = await getAuthenticatedClient(googleSub);
     const calendar = google.calendar({ version: 'v3', auth: authClient });
 
     const existing = await calendar.events.get({
-      calendarId: 'primary',
+      calendarId,
       eventId: eventId
     });
 
@@ -1551,7 +1574,7 @@ async function updateCalendarEvent(googleSub, eventId, updates) {
     }
 
     const result = await calendar.events.update({
-      calendarId: 'primary',
+      calendarId,
       eventId: eventId,
       requestBody: updatedEvent,
       sendUpdates: updatedEvent.attendees ? 'all' : 'none'
@@ -1561,13 +1584,15 @@ async function updateCalendarEvent(googleSub, eventId, updates) {
   });
 }
 
-async function deleteCalendarEvent(googleSub, eventId) {
+async function deleteCalendarEvent(googleSub, eventId, options = {}) {
+  const { calendarId = 'primary' } = options;
+
   return await handleGoogleApiCall(googleSub, async () => {
     const authClient = await getAuthenticatedClient(googleSub);
     const calendar = google.calendar({ version: 'v3', auth: authClient });
 
     await calendar.events.delete({
-      calendarId: 'primary',
+      calendarId,
       eventId: eventId
     });
 
@@ -1575,13 +1600,13 @@ async function deleteCalendarEvent(googleSub, eventId) {
   });
 }
 
-async function checkConflicts(googleSub, { start, end, excludeEventId }) {
+async function checkConflicts(googleSub, { calendarId = 'primary', start, end, excludeEventId }) {
   return await handleGoogleApiCall(googleSub, async () => {
     const authClient = await getAuthenticatedClient(googleSub);
     const calendar = google.calendar({ version: 'v3', auth: authClient });
 
     const result = await calendar.events.list({
-      calendarId: 'primary',
+      calendarId,
       timeMin: start,
       timeMax: end,
       singleEvents: true,
@@ -1613,6 +1638,23 @@ async function checkConflicts(googleSub, { start, end, excludeEventId }) {
     }
 
     return conflicts;
+  });
+}
+
+async function listCalendars(googleSub) {
+  return await handleGoogleApiCall(googleSub, async () => {
+    const authClient = await getAuthenticatedClient(googleSub);
+    const calendar = google.calendar({ version: 'v3', auth: authClient });
+
+    const result = await calendar.calendarList.list();
+    const items = result.data.items || [];
+
+    return items.map(item => ({
+      id: item.id,
+      displayName: item.summary,
+      isPrimary: item.primary === true,
+      accessRole: item.accessRole
+    }));
   });
 }
 
@@ -1706,7 +1748,8 @@ const traced = wrapModuleFunctions('services.googleApiService', {
   listCalendarEvents,
   updateCalendarEvent,
   deleteCalendarEvent,
-  checkConflicts
+  checkConflicts,
+  listCalendars
 });
 
 const {
@@ -1737,7 +1780,8 @@ const {
   listCalendarEvents: tracedListCalendarEvents,
   updateCalendarEvent: tracedUpdateCalendarEvent,
   deleteCalendarEvent: tracedDeleteCalendarEvent,
-  checkConflicts: tracedCheckConflicts
+  checkConflicts: tracedCheckConflicts,
+  listCalendars: tracedListCalendars
 } = traced;
 
 export {
@@ -1768,5 +1812,6 @@ export {
   tracedListCalendarEvents as listCalendarEvents,
   tracedUpdateCalendarEvent as updateCalendarEvent,
   tracedDeleteCalendarEvent as deleteCalendarEvent,
-  tracedCheckConflicts as checkConflicts
+  tracedCheckConflicts as checkConflicts,
+  tracedListCalendars as listCalendars
 };

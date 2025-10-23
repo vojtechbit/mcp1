@@ -54,10 +54,12 @@
 4. Nebezpečné přípony doplň varováním.
 
 ## 7. Kalendář – vytvoření události
+0. Pokud uživatel řeší jiný než primární kalendář nebo je kontext nejasný, nejdřív spusť `/macros/calendar/listCalendars`, nech uživatele vybrat a zapamatuj si `calendarId`.
 1. Ujasni časové pásmo (default Europe/Prague) a délku události.
 2. Nabídni kontrolu kolizí, pokud endpoint existuje.
-3. Použij `calendar.create` s Idempotency-Key, pokud jej endpoint podporuje.
-4. Potvrď úspěch (`eventId`) a nabídni sdílení/link.
+3. Při volání makra/RPC přidej `calendarId` jen když uživatel výběr potvrdil; jinak nech default `'primary'` a řekni to nahlas.
+4. Použij `calendar.create` s Idempotency-Key, pokud jej endpoint podporuje.
+5. Potvrď úspěch (`eventId`) a nabídni sdílení/link.
 
 ## 8. Úkoly – připomenutí a souhrny
 1. `tasks.list` s filtrem (dnes, týden…).
