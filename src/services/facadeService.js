@@ -118,7 +118,8 @@ async function inboxOverview(googleSub, params) {
     const fromHeader = msg.from || '';
     const fromEmail = extractEmail(fromHeader);
     const fromName = extractSenderName(fromHeader);
-    
+    const readState = buildReadStateFromLabels(msg.labelIds);
+
     return {
       messageId: msg.id,
       senderName: fromName || null,
@@ -126,7 +127,8 @@ async function inboxOverview(googleSub, params) {
       subject: msg.subject || '(no subject)',
       receivedAt: msg.date || null,
       inboxCategory: classifyEmailCategory(msg),
-      snippet: msg.snippet || ''
+      snippet: msg.snippet || '',
+      readState
     };
   });
   
@@ -164,10 +166,11 @@ async function inboxSnippets(googleSub, params) {
     const attachmentPromises = batch.map(async (item) => {
       try {
         const message = await gmailService.readEmail(googleSub, item.messageId, { format: 'full' });
-        
+
         const enrichedItem = {
           ...item,
-          attachmentUrls: []
+          attachmentUrls: [],
+          readState: buildReadStateFromLabels(message.labelIds)
         };
         
         if (message.payload?.parts) {
@@ -1227,6 +1230,7 @@ function enrichEmailWithAttachments(message, messageId) {
     receivedAt: message.internalDate ? new Date(parseInt(message.internalDate)).toISOString() : null,
     inboxCategory: categorizeEmail(message),
     label: message.labelIds?.[0] || null,
+    readState: buildReadStateFromLabels(message.labelIds),
     headers: {},
     body: message.snippet || message.body || null,
     truncated: Boolean(message.truncated),
@@ -1258,6 +1262,17 @@ function enrichEmailWithAttachments(message, messageId) {
 function generateMapsUrl(locationText) {
   const encoded = encodeURIComponent(locationText);
   return `https://www.google.com/maps/search/?api=1&query=${encoded}`;
+}
+
+function buildReadStateFromLabels(labelIds = []) {
+  const labels = Array.isArray(labelIds) ? labelIds : [];
+  const normalized = labels.map(label => label.toUpperCase());
+  const isUnread = normalized.includes('UNREAD');
+
+  return {
+    isUnread,
+    isRead: !isUnread
+  };
 }
 
 function buildGmailLinks(threadId, messageId) {

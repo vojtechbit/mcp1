@@ -345,6 +345,17 @@ function buildContentMetadata(payload) {
  * @returns {string} Category: primary, work, promotions, social, updates, forums,
  *                   sent, draft, archived, trash, spam, other
  */
+function buildReadState(labelIds = []) {
+  const labels = Array.isArray(labelIds) ? labelIds : [];
+  const normalized = labels.map(label => label.toUpperCase());
+  const isUnread = normalized.includes('UNREAD');
+
+  return {
+    isUnread,
+    isRead: !isUnread
+  };
+}
+
 function classifyEmailCategory(message) {
   if (!message || !message.labelIds) {
     return 'other';
@@ -532,6 +543,7 @@ async function readEmail(googleSub, messageId, options = {}) {
         sizeEstimate: sizeEstimate,
         headers: metadataResult.data.payload.headers,
         labelIds: metadataResult.data.labelIds || [],
+        readState: buildReadState(metadataResult.data.labelIds),
         format: 'snippet',
         threadId: metadataResult.data.threadId,
         links: generateGmailLinks(metadataResult.data.threadId, messageId)
@@ -569,6 +581,7 @@ async function readEmail(googleSub, messageId, options = {}) {
         subject: subjectHeader,
         date: pragueIso,
         snippet: snippet,
+        readState: buildReadState(metadataResult.data.labelIds),
         links: generateGmailLinks(metadataResult.data.threadId, messageId)
       };
     }
@@ -595,6 +608,7 @@ async function readEmail(googleSub, messageId, options = {}) {
           maxAllowedSize: EMAIL_SIZE_LIMITS.MAX_SIZE_BYTES,
           truncatedBodyLength: EMAIL_SIZE_LIMITS.MAX_BODY_LENGTH
         },
+        readState: buildReadState(metadataResult.data.labelIds),
         links: generateGmailLinks(metadataResult.data.threadId, messageId)
       };
 
@@ -619,6 +633,7 @@ async function readEmail(googleSub, messageId, options = {}) {
     const response = {
       ...result.data,
       truncated: false,
+      readState: buildReadState(result.data.labelIds),
       links: generateGmailLinks(result.data.threadId, messageId)
     };
 
