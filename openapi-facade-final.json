@@ -464,7 +464,7 @@
                   "scope",
                   "date"
                 ],
-                "description": "Returns ALL events in specified scope by default (up to 50 max). When user asks 'what's my schedule today?', returns complete daily schedule, not subset. Status computed relative to current time. Use includePast=false (default) to hide finished events.",
+                "description": "Returns ALL events in specified scope by default (up to 50 max). When user asks 'what's my schedule today?', returns complete daily schedule, not subset. Status computed relative to current time. Use includePast=false (default) to hide finished events. Defaults to primary calendar unless calendarId provided.",
                 "properties": {
                   "scope": {
                     "type": "string",
@@ -492,6 +492,11 @@
                     ],
                     "default": "minimal",
                     "description": "How much detail to keep for past events when includePast=true. 'minimal' (default) trims map/attendees to reduce noise; 'full' keeps complete event context."
+                  },
+                  "calendarId": {
+                    "type": "string",
+                    "default": "primary",
+                    "description": "Optional calendar identifier. Defaults to 'primary' when omitted. Use only when the user specifies a different calendar or when multiple calendars exist."
                   }
                 }
               },
@@ -517,6 +522,14 @@
                   "value": {
                     "scope": "weekly",
                     "date": "2025-10-19"
+                  }
+                },
+                "teamCalendar": {
+                  "summary": "Schedule for shared team calendar (non-primary)",
+                  "value": {
+                    "scope": "weekly",
+                    "date": "2025-10-19",
+                    "calendarId": "team@example.com"
                   }
                 }
               }
@@ -632,7 +645,7 @@
                   "title",
                   "when"
                 ],
-                "description": "Create calendar event with attendees, location, notes, optional contact enrichment, conference links, reminders. Sends calendar invites to all attendees. Max 20 attendees, max 5 reminders. Times in ISO 8601 format (Europe/Prague).",
+                "description": "Create calendar event with attendees, location, notes, optional contact enrichment, conference links, reminders. Sends calendar invites to all attendees. Max 20 attendees, max 5 reminders. Times in ISO 8601 format (Europe/Prague). Defaults to primary calendar unless calendarId is provided.",
                 "properties": {
                   "title": {
                     "type": "string",
@@ -702,6 +715,11 @@
                         ]
                       }
                     ]
+                  },
+                  "calendarId": {
+                    "type": "string",
+                    "default": "primary",
+                    "description": "Optional calendar identifier for the event. Defaults to 'primary'. Only include when the user specifies a different calendar or when multiple calendars are in play."
                   },
                   "attendees": {
                     "type": "array",
@@ -837,6 +855,25 @@
                     ],
                     "enrichFromContacts": "ask"
                   }
+                },
+                "teamCalendar": {
+                  "summary": "Create event in shared team calendar",
+                  "value": {
+                    "title": "Team Retro",
+                    "when": {
+                      "fixed": {
+                        "start": "2025-10-25T16:00:00",
+                        "end": "2025-10-25T17:30:00"
+                      }
+                    },
+                    "attendees": [
+                      {
+                        "email": "team@example.com",
+                        "name": "Team Room"
+                      }
+                    ],
+                    "calendarId": "team@example.com"
+                  }
                 }
               }
             }
@@ -955,7 +992,7 @@
       "post": {
         "operationId": "macroCalendarReminderDrafts",
         "summary": "Generate reminder email drafts for upcoming events",
-        "description": "Create Gmail draft reminders for event attendees. Scopes: today (all day's events) or nextHours (next N hours). Returns draft list with generated emails ready to send. Email templates customizable.",
+        "description": "Create Gmail draft reminders for event attendees. Scopes: today (all day's events) or nextHours (next N hours). Returns draft list with generated emails ready to send. Email templates customizable. Defaults to primary calendar unless calendarId provided.",
         "requestBody": {
           "required": false,
           "content": {
@@ -992,6 +1029,11 @@
                     "type": "boolean",
                     "default": true,
                     "description": "Create drafts or preview only"
+                  },
+                  "calendarId": {
+                    "type": "string",
+                    "default": "primary",
+                    "description": "Optional calendar identifier to scan. Defaults to 'primary'. Supply only when targeting a specific non-primary calendar."
                   }
                 },
                 "oneOf": [
@@ -1059,6 +1101,13 @@
                     "window": "today",
                     "template": "Hi {recipientName},\n\nDon't forget about {title}!\nWhen: {start}\nWhere: {location}\n\nLooking forward to seeing you!"
                   }
+                },
+                "sharedCalendar": {
+                  "summary": "Reminders for shared team calendar",
+                  "value": {
+                    "window": "today",
+                    "calendarId": "team@example.com"
+                  }
                 }
               }
             }
@@ -1108,6 +1157,82 @@
                       "type": "boolean",
                       "description": "Always false. All matching events included (no pagination)"
                     }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/macros/calendar/listCalendars": {
+      "post": {
+        "operationId": "macroCalendarListCalendars",
+        "summary": "List available calendars",
+        "description": "Returns calendars available to the signed-in user. Use to discover non-primary calendar IDs before supplying calendarId to other macros or RPC calls.",
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "description": "No parameters required."
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successfully listed calendars",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "required": [
+                      "id",
+                      "displayName",
+                      "isPrimary",
+                      "accessRole"
+                    ],
+                    "properties": {
+                      "id": {
+                        "type": "string",
+                        "description": "Calendar identifier (use as calendarId in other requests)."
+                      },
+                      "displayName": {
+                        "type": "string",
+                        "description": "Calendar name as shown to the user."
+                      },
+                      "isPrimary": {
+                        "type": "boolean",
+                        "description": "True if this is the user's primary calendar."
+                      },
+                      "accessRole": {
+                        "type": "string",
+                        "description": "Access role for the signed-in user (owner, writer, reader, etc.)."
+                      }
+                    }
+                  }
+                },
+                "examples": {
+                  "default": {
+                    "summary": "Primary and shared calendars",
+                    "value": [
+                      {
+                        "id": "primary",
+                        "displayName": "Osobní",
+                        "isPrimary": true,
+                        "accessRole": "owner"
+                      },
+                      {
+                        "id": "team@example.com",
+                        "displayName": "Team events",
+                        "isPrimary": false,
+                        "accessRole": "writer"
+                      }
+                    ]
                   }
                 }
               }
@@ -1884,7 +2009,7 @@
       "post": {
         "operationId": "calendarRpc",
         "summary": "Advanced calendar operations",
-        "description": "Low-level calendar RPC. Operations: list, get, create, update, delete, checkConflicts. Use macros for schedule/plan, RPC for advanced CRUD. Always include eventId for update/delete.",
+        "description": "Low-level calendar RPC. Operations: list, get, create, update, delete, checkConflicts. Use macros for schedule/plan, RPC for advanced CRUD. Always include eventId for update/delete. Defaults to primary calendar when calendarId is omitted.",
         "requestBody": {
           "required": true,
           "content": {
@@ -1909,8 +2034,12 @@
                   },
                   "params": {
                     "type": "object",
-                    "description": "FIXED: Operation parameters. CRITICAL for update: eventId (required) + updates object with start/end as objects containing {dateTime, timeZone}.",
+                    "description": "FIXED: Operation parameters. CRITICAL for update: eventId (required) + updates object with start/end as objects containing {dateTime, timeZone}. Optional calendarId defaults to 'primary'.",
                     "properties": {
+                      "calendarId": {
+                        "type": "string",
+                        "description": "Optional calendar identifier. Defaults to 'primary'. Use only when targeting non-primary calendars."
+                      },
                       "eventId": {
                         "type": "string",
                         "description": "Event ID (REQUIRED for: get, update, delete, checkConflicts). Get from list or previous response."
@@ -1992,6 +2121,17 @@
                   "value": {
                     "op": "list",
                     "params": {
+                      "timeMin": "2025-10-20T00:00:00Z",
+                      "timeMax": "2025-10-27T23:59:59Z"
+                    }
+                  }
+                },
+                "listSharedCalendar": {
+                  "summary": "List events from shared calendar",
+                  "value": {
+                    "op": "list",
+                    "params": {
+                      "calendarId": "team@example.com",
                       "timeMin": "2025-10-20T00:00:00Z",
                       "timeMax": "2025-10-27T23:59:59Z"
                     }

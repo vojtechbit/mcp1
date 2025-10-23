@@ -22,7 +22,7 @@ const tasksSvc = rpcTestOverrides.tasksService || tasksService;
 
 async function mailRpc(req, res) {
   try {
-    const { op, params } = req.body;
+    const { op, params = {} } = req.body;
     
     if (!op) {
       return res.status(400).json({
@@ -280,17 +280,34 @@ async function calendarRpc(req, res) {
     let result;
     
     switch (op) {
-      case 'list':
-        result = await calendarService.listCalendarEvents(req.user.googleSub, params);
+      case 'list': {
+        const { calendarId = 'primary', ...rest } = params;
+        result = await calendarService.listCalendarEvents(req.user.googleSub, {
+          calendarId,
+          ...rest
+        });
         break;
-        
-      case 'get':
-        result = await calendarService.getCalendarEvent(req.user.googleSub, params.eventId);
+      }
+
+      case 'get': {
+        const { calendarId = 'primary', eventId } = params;
+        result = await calendarService.getCalendarEvent(
+          req.user.googleSub,
+          eventId,
+          { calendarId }
+        );
         break;
-        
-      case 'create':
-        result = await calendarService.createCalendarEvent(req.user.googleSub, params);
+      }
+
+      case 'create': {
+        const { calendarId = 'primary', ...eventData } = params;
+        result = await calendarService.createCalendarEvent(
+          req.user.googleSub,
+          eventData,
+          { calendarId }
+        );
         break;
+      }
         
       case 'update':
         // FIXED: Validate calendar update structure
@@ -350,17 +367,24 @@ async function calendarRpc(req, res) {
           }
         }
         
+        const { calendarId = 'primary' } = params;
+
         result = await calendarService.updateCalendarEvent(
           req.user.googleSub,
           params.eventId,
-          params.updates
+          params.updates,
+          { calendarId }
         );
         break;
-        
+
       case 'delete':
-        result = await calendarService.deleteCalendarEvent(req.user.googleSub, params.eventId);
+        result = await calendarService.deleteCalendarEvent(
+          req.user.googleSub,
+          params.eventId,
+          { calendarId: params.calendarId || 'primary' }
+        );
         break;
-        
+
       case 'checkConflicts':
         if (!params.start || !params.end) {
           return res.status(400).json({
@@ -370,6 +394,7 @@ async function calendarRpc(req, res) {
           });
         }
         result = await calendarService.checkConflicts(req.user.googleSub, {
+          calendarId: params.calendarId || 'primary',
           start: params.start,
           end: params.end,
           excludeEventId: params.excludeEventId
