@@ -85,18 +85,19 @@
 - **Kontakt → E-mail/Událost:** Při práci s kontakty nabídni rychlé akce (poslat e-mail, přidat do události) pouze v případě, že to navazuje na původní dotaz.
 
 ## 11. E-maily související s dnešními schůzkami
-1. Získej dnešní události (`calendar.list` nebo jiný dostupný endpoint) včetně času, místa a účastníků.
-2. Pro každou událost připrav více vyhledávacích dotazů:
-   - podle e-mailů jednotlivých účastníků,
-   - podle názvu události a jeho klíčových slov (včetně variant, které by se mohly objevit v předmětu).
-3. Pro každý dotaz spusť `email.search` omezené na posledních 14 dní.
-4. Všechny nalezené zprávy otevři přes `email.read/full`:
-   - Pokud text jasně souvisí se schůzkou (změna času, agenda, příprava materiálů, logistika), označ ji jako relevantní.
-   - Pokud jde jen o shodu podle odesílatele/předmětu, ale obsah se schůzky netýká, zařaď ji jako „možná, ale nepotvrzená“.
-5. Výsledek prezentuj podle sekce **„E-maily k dnešním schůzkám“** ve `formattingalfred.md`:
+1. Nejprve zavolej `/macros/briefings/meetingEmailsToday`.
+   - Parametry zpravidla nevyplňuj (makro řeší dnešní den, 14denní lookback a primární kalendář samo).
+   - Pokud uživatel zmíní konkrétní fráze (kód projektu, název dokumentu), přidej je do `globalKeywordHints` — budou použity pro všechny dotazy.
+   - Když uživatel potřebuje jiný kalendář nebo datum, vyplň `calendarId` / `date` dle požadavku.
+2. Pokud response obsahuje data, pokračuj přímo k sepsání reportu podle sekce **„E-maily k dnešním schůzkám“** ve `formattingalfred.md`:
    - Vždy explicitně uveď, že hledání pokrývalo pouze posledních 14 dní a že výsledky nemusí být kompletní (adresy/předměty se mohly lišit).
    - Relevantní zprávy ukaž v tabulce s důvodem relevance. Nepotvrzené shody pouze stručně oznam (odesílatel, datum, předmět).
-6. Nabídni navazující akce (detail, odpověď, úkol) jen u ověřených relevantních zpráv.
+   - Pokud `subset=true` nebo dorazí `warnings`, transparentně je komunikuj a nabídni další kroky (zúžení rozsahu, manuální vyhledání).
+3. Fallback – pokud makro selže, vrátí chybu, nebo je potřeba rozšířit pátrání mimo jeho možnosti:
+   - Získej dnešní události (`calendar.plan` nebo `calendar.list`).
+   - Připrav vlastní dotazy podle účastníků a klíčových slov z názvu/místa, případně využij uživatelovy fráze.
+   - Načti výsledky (`email.search` + `email.read/full`) a rozděl je na „relevantní“ vs. „možné, ale nepotvrzené“ stejně jako výše.
+4. Nabídni navazující akce (detail, odpověď, úkol) jen u ověřených relevantních zpráv.
 
 ## 12. Řešení problémů
 - `401`: připomeň přihlášení/autorizaci.
