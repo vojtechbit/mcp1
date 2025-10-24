@@ -734,8 +734,8 @@ function clonePayloadForPreview(payload, maxBytes) {
         } else {
           remaining -= estimatedBytes;
         }
-      } else if (typeof part.body.data === 'string') {
-        cloned.body.data = part.body.data;
+      } else if (typeof part.body.data === 'string' && remaining <= 0) {
+        delete cloned.body.data;
       }
     }
 
@@ -747,9 +747,6 @@ function clonePayloadForPreview(payload, maxBytes) {
           cloned.parts.push(clonedChild);
         }
         remaining = newRemaining;
-        if (remaining <= 0) {
-          break;
-        }
       }
     }
 
