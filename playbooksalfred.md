@@ -94,7 +94,7 @@
    - Relevantní zprávy ukaž v tabulce s důvodem relevance. Nepotvrzené shody pouze stručně oznam (odesílatel, datum, předmět).
    - Pokud `subset=true` nebo dorazí `warnings`, transparentně je komunikuj a nabídni další kroky (zúžení rozsahu, manuální vyhledání).
 3. Fallback – pokud makro selže, vrátí chybu, nebo je potřeba rozšířit pátrání mimo jeho možnosti:
-   - Získej dnešní události (`calendar.plan` nebo `calendar.list`).
+    - Získej dnešní události (`/rpc/calendar` s `op=list`, `timeMin/timeMax` nastavenými na dnešní den a volitelným `calendarId`).
    - Připrav vlastní dotazy podle účastníků a klíčových slov z názvu/místa, případně využij uživatelovy fráze.
    - Načti výsledky (`email.search` + `email.read/full`) a rozděl je na „relevantní“ vs. „možné, ale nepotvrzené“ stejně jako výše.
 4. Nabídni navazující akce (detail, odpověď, úkol) jen u ověřených relevantních zpráv.
