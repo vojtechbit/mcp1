@@ -1,6 +1,49 @@
 import crypto from 'crypto';
 import { getDatabase } from '../config/database.js';
 import { wrapModuleFunctions } from '../utils/advancedDebugging.js';
+import { summarizeSecret } from '../utils/redact.js';
+
+const primarySecret = process.env.PROXY_TOKEN_SECRET || process.env.ENCRYPTION_KEY;
+
+if (!primarySecret) {
+  console.error('❌ PROXY_TOKEN_SECRET (or ENCRYPTION_KEY fallback) must be configured');
+  process.exit(1);
+}
+
+const additionalSecrets = (process.env.PROXY_TOKEN_ADDITIONAL_SECRETS || '')
+  .split(',')
+  .map(secret => secret.trim())
+  .filter(Boolean);
+
+function secretToBuffer(secret, label) {
+  if (/^[0-9a-fA-F]+$/.test(secret) && secret.length % 2 === 0) {
+    return Buffer.from(secret, 'hex');
+  }
+
+  if (secret.length < 16) {
+    console.warn(`⚠️  Proxy token secret "${label}" is short; consider using a 32-byte hex string.`);
+  }
+
+  return Buffer.from(secret, 'utf8');
+}
+
+const proxyTokenSecrets = [primarySecret, ...additionalSecrets].map((secret, index) => ({
+  id: index === 0 ? 'primary' : `fallback_${index}`,
+  buffer: secretToBuffer(secret, index === 0 ? 'primary' : `fallback_${index}`)
+}));
+
+const HASH_ALGORITHM = 'sha512';
+
+function hashProxyToken(token, secretBuffer) {
+  return crypto.createHmac(HASH_ALGORITHM, secretBuffer).update(token).digest('hex');
+}
+
+function buildHashCandidates(token) {
+  return proxyTokenSecrets.map(secret => ({
+    hash: hashProxyToken(token, secret.buffer),
+    secretId: secret.id
+  }));
+}
 
 /**
  * Generate random authorization code for ChatGPT OAuth flow
@@ -39,7 +82,7 @@ async function saveAuthCode({ authCode, googleSub, state, chatgptRedirectUri }) 
 
     await oauthFlows.insertOne(authFlow);
 
-    console.log('✅ Auth code saved:', authCode.substring(0, 8) + '...');
+    console.log('✅ Auth code saved:', summarizeSecret(authCode));
     return authCode;
   } catch (error) {
     console.error('❌ [PROXY_TOKEN_ERROR] Failed to save auth code');
@@ -63,19 +106,19 @@ async function validateAndConsumeAuthCode(authCode) {
     const authFlow = await oauthFlows.findOne({ auth_code: authCode });
 
     if (!authFlow) {
-      console.log('⚠️  Auth code not found:', authCode.substring(0, 8) + '...');
+      console.log('⚠️  Auth code not found:', summarizeSecret(authCode));
       return null;
     }
 
     // Check if already used
     if (authFlow.used) {
-      console.log('⚠️  Auth code already used:', authCode.substring(0, 8) + '...');
+      console.log('⚠️  Auth code already used:', summarizeSecret(authCode));
       return null;
     }
 
     // Check if expired
     if (new Date() > authFlow.expires_at) {
-      console.log('⚠️  Auth code expired:', authCode.substring(0, 8) + '...');
+      console.log('⚠️  Auth code expired:', summarizeSecret(authCode));
       return null;
     }
 
@@ -90,7 +133,7 @@ async function validateAndConsumeAuthCode(authCode) {
       }
     );
 
-    console.log('✅ Auth code validated and consumed:', authCode.substring(0, 8) + '...');
+    console.log('✅ Auth code validated and consumed:', summarizeSecret(authCode));
     return authFlow.google_sub;
   } catch (error) {
     console.error('❌ [PROXY_TOKEN_ERROR] Failed to validate auth code');
@@ -111,12 +154,16 @@ async function saveProxyToken({ proxyToken, googleSub, expiresIn = 2592000 }) {
     const db = await getDatabase();
     const proxyTokens = db.collection('proxy_tokens');
 
+    const [primaryHash] = buildHashCandidates(proxyToken);
+
     const tokenDoc = {
-      proxy_token: proxyToken,
+      proxy_token_hash: primaryHash.hash,
+      proxy_token_prefix: proxyToken.slice(0, 6),
       google_sub: googleSub,
       created_at: new Date(),
       expires_at: new Date(Date.now() + expiresIn * 1000), // expiresIn is in seconds
-      last_used: new Date()
+      last_used: new Date(),
+      hash_secret_id: primaryHash.secretId
     };
 
     await proxyTokens.insertOne(tokenDoc);
@@ -142,27 +189,75 @@ async function findUserByProxyToken(proxyToken) {
     const db = await getDatabase();
     const proxyTokens = db.collection('proxy_tokens');
 
-    const tokenDoc = await proxyTokens.findOne({ proxy_token: proxyToken });
+    const candidates = buildHashCandidates(proxyToken);
+    const tokenDoc = await proxyTokens.findOne({
+      proxy_token_hash: { $in: candidates.map(candidate => candidate.hash) }
+    });
 
-    if (!tokenDoc) {
+    let matchedDoc = tokenDoc;
+    let matchedCandidate = tokenDoc
+      ? candidates.find(candidate => candidate.hash === tokenDoc.proxy_token_hash)
+      : null;
+
+    if (!matchedDoc) {
+      matchedDoc = await proxyTokens.findOne({ proxy_token: proxyToken });
+
+      if (matchedDoc) {
+        const [primaryCandidate] = candidates;
+        await proxyTokens.updateOne(
+          { _id: matchedDoc._id },
+          {
+            $set: {
+              proxy_token_hash: primaryCandidate.hash,
+              proxy_token_prefix: proxyToken.slice(0, 6),
+              hash_secret_id: primaryCandidate.secretId,
+              last_used: new Date()
+            },
+            $unset: { proxy_token: '' }
+          }
+        );
+
+        matchedDoc = {
+          ...matchedDoc,
+          proxy_token_hash: primaryCandidate.hash,
+          proxy_token_prefix: proxyToken.slice(0, 6),
+          hash_secret_id: primaryCandidate.secretId,
+          last_used: new Date()
+        };
+        matchedCandidate = primaryCandidate;
+      }
+    }
+
+    if (!matchedDoc) {
       console.log('⚠️  Proxy token not found');
       return null;
     }
 
     // Check if expired
-    if (new Date() > tokenDoc.expires_at) {
+    if (new Date() > matchedDoc.expires_at) {
       console.log('⚠️  Proxy token expired');
       return null;
     }
 
-    // Update last_used timestamp
+    // Update last_used timestamp and rotate hash metadata if needed
+    const updateDoc = {
+      last_used: new Date(),
+      hash_secret_id: matchedCandidate?.secretId || matchedDoc.hash_secret_id || 'unknown'
+    };
+
+    const [primaryCandidate] = candidates;
+    if (matchedCandidate && matchedCandidate.secretId !== primaryCandidate.secretId) {
+      updateDoc.proxy_token_hash = primaryCandidate.hash;
+      updateDoc.hash_secret_id = primaryCandidate.secretId;
+    }
+
     await proxyTokens.updateOne(
-      { proxy_token: proxyToken },
-      { $set: { last_used: new Date() } }
+      { _id: matchedDoc._id },
+      { $set: updateDoc }
     );
 
-    console.log('✅ Proxy token validated for user:', tokenDoc.google_sub);
-    return tokenDoc.google_sub;
+    console.log('✅ Proxy token validated for user:', matchedDoc.google_sub);
+    return matchedDoc.google_sub;
   } catch (error) {
     console.error('❌ [PROXY_TOKEN_ERROR] Failed to find user by proxy token');
     console.error('Details:', {

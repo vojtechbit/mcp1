@@ -60,14 +60,16 @@ async function saveUser(userData) {
       refresh_token_auth_tag: encryptedRefresh.authTag,
       token_expiry: expiryDate,
       updated_at: new Date(),
-      last_used: new Date()
+      last_used: new Date(),
+      refresh_token_revoked: false
     };
 
       return await users.updateOne(
         { google_sub: googleSub },
-        { 
+        {
           $set: userDoc,
-          $setOnInsert: { created_at: new Date() }
+          $setOnInsert: { created_at: new Date() },
+          $unset: { refresh_error: '' }
         },
         { upsert: true }
       );
@@ -104,10 +106,10 @@ async function getUserByGoogleSub(googleSub) {
 
     try {
       const accessToken = decryptToken(
-      user.encrypted_access_token,
-      user.access_token_iv,
-      user.access_token_auth_tag
-    );
+        user.encrypted_access_token,
+        user.access_token_iv,
+        user.access_token_auth_tag
+      );
 
       const refreshToken = decryptToken(
         user.encrypted_refresh_token,
@@ -122,7 +124,8 @@ async function getUserByGoogleSub(googleSub) {
         refreshToken,
         tokenExpiry: user.token_expiry,
         createdAt: user.created_at,
-        lastUsed: user.last_used
+        lastUsed: user.last_used,
+        refreshTokenRevoked: user.refresh_token_revoked || false
       };
     } catch (decryptError) {
       console.error('❌ Token decryption failed:', decryptError.message);
@@ -156,7 +159,8 @@ async function updateTokens(googleSub, tokens) {
         access_token_auth_tag: encryptedAccess.authTag,
         token_expiry: tokens.expiryDate,
         updated_at: new Date(),
-        last_used: new Date()
+        last_used: new Date(),
+        refresh_token_revoked: false
       };
 
       if (tokens.refreshToken) {
@@ -168,7 +172,10 @@ async function updateTokens(googleSub, tokens) {
 
       return await users.updateOne(
         { google_sub: googleSub },
-        { $set: updateDoc }
+        {
+          $set: updateDoc,
+          $unset: { refresh_error: '' }
+        }
       );
     }, 'updateTokens');
 

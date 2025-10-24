@@ -8,10 +8,157 @@ import { wrapModuleFunctions } from '../utils/advancedDebugging.js';
  */
 
 let refreshInterval = null;
+const REFRESH_CONCURRENCY = Math.max(1, parseInt(process.env.TOKEN_REFRESH_CONCURRENCY || '3', 10));
+const STARTUP_REFRESH_THRESHOLD_MS = parseInt(process.env.STARTUP_REFRESH_THRESHOLD_MS || '') || (60 * 60 * 1000);
+const BACKGROUND_REFRESH_THRESHOLD_MS = parseInt(process.env.BACKGROUND_REFRESH_THRESHOLD_MS || '') || (2 * 60 * 60 * 1000);
+
+function determineExpiryDate(newTokens) {
+  if (newTokens.expiry_date) {
+    return new Date(newTokens.expiry_date);
+  }
+
+  if (newTokens.expires_in) {
+    return new Date(Date.now() + newTokens.expires_in * 1000);
+  }
+
+  return new Date(Date.now() + 3600 * 1000);
+}
+
+async function delay(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+async function clearRefreshFailure(googleSub) {
+  try {
+    const db = await getDatabase();
+    await db.collection('users').updateOne(
+      { google_sub: googleSub },
+      {
+        $set: { refresh_token_revoked: false },
+        $unset: { refresh_error: '' }
+      }
+    );
+  } catch (error) {
+    console.warn('⚠️  Failed to clear refresh failure metadata:', error.message);
+  }
+}
+
+async function markRefreshFailure(googleSub, errorInfo, refreshTokenRevoked = false) {
+  try {
+    const db = await getDatabase();
+    const updateDoc = {
+      refresh_error: {
+        ...errorInfo,
+        at: new Date()
+      }
+    };
+
+    if (refreshTokenRevoked) {
+      updateDoc.refresh_token_revoked = true;
+    }
+
+    await db.collection('users').updateOne(
+      { google_sub: googleSub },
+      { $set: updateDoc }
+    );
+  } catch (error) {
+    console.warn('⚠️  Failed to persist refresh failure metadata:', error.message);
+  }
+}
+
+async function refreshSingleUser(rawUserDoc, options = {}) {
+  const { reason } = options;
+  const googleSub = rawUserDoc.google_sub;
+  const email = rawUserDoc.email;
+
+  if (rawUserDoc.refresh_token_revoked) {
+    console.warn(`⏭️  Skipping ${email} (refresh token marked revoked)`);
+    return { status: 'skipped', reason: 'refresh_token_revoked' };
+  }
+
+  const userData = await getUserByGoogleSub(googleSub);
+
+  if (!userData || !userData.refreshToken) {
+    console.warn(`⏭️  Skipping ${email} (no refresh token available)`);
+    return { status: 'skipped', reason: 'missing_refresh_token' };
+  }
+
+  await delay(Math.floor(Math.random() * 200));
+
+  try {
+    console.log(`🔄 Refreshing token for ${email}${reason ? ` (${reason})` : ''}...`);
+    const newTokens = await refreshAccessToken(userData.refreshToken);
+    const expiryDate = determineExpiryDate(newTokens);
+
+    await updateTokens(googleSub, {
+      accessToken: newTokens.access_token,
+      refreshToken: newTokens.refresh_token || userData.refreshToken,
+      expiryDate
+    });
+
+    await clearRefreshFailure(googleSub);
+    console.log(`✅ Refreshed token for ${email}`);
+    return { status: 'success' };
+  } catch (error) {
+    const status = error.response?.status;
+    const errorCode = error.response?.data?.error || error.code || 'unknown_error';
+    const isInvalidGrant = errorCode === 'invalid_grant';
+
+    console.error(`❌ Failed to refresh token for ${email}`, {
+      status,
+      errorCode,
+      message: error.message
+    });
+
+    await markRefreshFailure(
+      googleSub,
+      {
+        status,
+        errorCode,
+        message: error.message
+      },
+      isInvalidGrant
+    );
+
+    return { status: 'failed', errorCode };
+  }
+}
+
+async function runWithConcurrency(items, handler, concurrency, options = {}) {
+  const results = [];
+  const executing = new Set();
+  let index = 0;
+
+  async function enqueue() {
+    while (index < items.length) {
+      const item = items[index++];
+      const promise = handler(item, options)
+        .then(result => {
+          results.push(result);
+        })
+        .catch(error => {
+          console.error('❌ Unexpected error during refresh task:', error.message);
+          results.push({ status: 'failed', errorCode: 'unexpected_error' });
+        })
+        .finally(() => {
+          executing.delete(promise);
+        });
+
+      executing.add(promise);
+
+      if (executing.size >= concurrency) {
+        await Promise.race(executing);
+      }
+    }
+  }
+
+  await enqueue();
+  await Promise.allSettled(Array.from(executing));
+  return results;
+}
 
 /**
  * Refresh tokens for ALL users on server startup
- * Perfect for Render free tier cold starts
  */
 async function refreshAllTokensOnStartup() {
   try {
@@ -25,51 +172,42 @@ async function refreshAllTokensOnStartup() {
       return;
     }
 
-    console.log(`🔄 Cold start detected - refreshing tokens for ${allUsers.length} users...`);
+    const now = Date.now();
+    const threshold = new Date(now + STARTUP_REFRESH_THRESHOLD_MS);
 
-    let successCount = 0;
-    let failCount = 0;
-
-    for (const user of allUsers) {
-      try {
-        const userData = await getUserByGoogleSub(user.google_sub);
-        
-        if (!userData || !userData.refreshToken) {
-          failCount++;
-          continue;
-        }
-
-        const newTokens = await refreshAccessToken(userData.refreshToken);
-        
-        // Google OAuth2 returns expiry_date as Unix timestamp in milliseconds
-        // and expires_in in seconds
-        let expiryDate;
-        if (newTokens.expiry_date) {
-          // expiry_date is already a Unix timestamp in milliseconds
-          expiryDate = new Date(newTokens.expiry_date);
-        } else if (newTokens.expires_in) {
-          // expires_in is in seconds, convert to milliseconds
-          expiryDate = new Date(Date.now() + (newTokens.expires_in * 1000));
-        } else {
-          // Default: 1 hour from now
-          expiryDate = new Date(Date.now() + 3600 * 1000);
-        }
-
-        await updateTokens(user.google_sub, {
-          accessToken: newTokens.access_token,
-          refreshToken: newTokens.refresh_token || userData.refreshToken,
-          expiryDate
-        });
-
-        successCount++;
-
-      } catch (error) {
-        console.error(`❌ Failed refresh for ${user.email}:`, error.message);
-        failCount++;
+    const candidates = allUsers.filter(user => {
+      if (!user.token_expiry) {
+        return true;
       }
+
+      const expiryTime = new Date(user.token_expiry).getTime();
+      if (Number.isNaN(expiryTime)) {
+        return true;
+      }
+
+      return expiryTime <= threshold.getTime();
+    });
+
+    if (candidates.length === 0) {
+      console.log('⚪ All tokens valid beyond startup threshold');
+      return;
     }
 
-    console.log(`✅ Startup refresh: ${successCount} success, ${failCount} failed`);
+    console.log(`🔄 Startup refresh: ${candidates.length}/${allUsers.length} users need refresh`);
+
+    const results = await runWithConcurrency(candidates, refreshSingleUser, REFRESH_CONCURRENCY, {
+      reason: 'startup'
+    });
+
+    const summary = results.reduce(
+      (acc, result) => {
+        acc[result.status] = (acc[result.status] || 0) + 1;
+        return acc;
+      },
+      { success: 0, failed: 0, skipped: 0 }
+    );
+
+    console.log(`✅ Startup refresh complete: ${summary.success} success, ${summary.failed} failed, ${summary.skipped} skipped`);
 
   } catch (error) {
     console.error('❌ Startup token refresh failed:', error.message);
@@ -95,68 +233,38 @@ async function refreshAllActiveTokens() {
       return;
     }
 
-    console.log(`🔄 Refreshing tokens for ${activeUsers.length} active users...`);
+    const now = new Date();
 
-    let successCount = 0;
-    let failCount = 0;
-
-    for (const user of activeUsers) {
-      try {
-        const now = new Date();
-        const expiry = new Date(user.token_expiry);
-        const timeUntilExpiry = expiry.getTime() - now.getTime();
-        const hoursUntilExpiry = timeUntilExpiry / (1000 * 60 * 60);
-
-        // Skip if token is still valid for >2 hours
-        if (hoursUntilExpiry > 2) {
-          console.log(`⏭️  Skipping ${user.email} (expires in ${hoursUntilExpiry.toFixed(1)}h)`);
-          continue;
-        }
-
-        console.log(`🔄 Refreshing token for ${user.email} (expires in ${hoursUntilExpiry.toFixed(1)}h)...`);
-
-        // Get full user data with decrypted tokens
-        const userData = await getUserByGoogleSub(user.google_sub);
-        
-        if (!userData || !userData.refreshToken) {
-          console.log(`⚠️  No refresh token for ${user.email}`);
-          failCount++;
-          continue;
-        }
-
-        // Refresh the token
-        const newTokens = await refreshAccessToken(userData.refreshToken);
-        
-        // Google OAuth2 returns expiry_date as Unix timestamp in milliseconds
-        // and expires_in in seconds
-        let expiryDate;
-        if (newTokens.expiry_date) {
-          // expiry_date is already a Unix timestamp in milliseconds
-          expiryDate = new Date(newTokens.expiry_date);
-        } else if (newTokens.expires_in) {
-          // expires_in is in seconds, convert to milliseconds
-          expiryDate = new Date(Date.now() + (newTokens.expires_in * 1000));
-        } else {
-          // Default: 1 hour from now
-          expiryDate = new Date(Date.now() + 3600 * 1000);
-        }
-
-        await updateTokens(user.google_sub, {
-          accessToken: newTokens.access_token,
-          refreshToken: newTokens.refresh_token || userData.refreshToken,
-          expiryDate
-        });
-
-        console.log(`✅ Refreshed token for ${user.email}`);
-        successCount++;
-
-      } catch (error) {
-        console.error(`❌ Failed to refresh token for ${user.email}:`, error.message);
-        failCount++;
+    const candidates = activeUsers.filter(user => {
+      if (!user.token_expiry) {
+        return true;
       }
+
+      const expiry = new Date(user.token_expiry);
+      const timeUntilExpiry = expiry.getTime() - now.getTime();
+      return timeUntilExpiry <= BACKGROUND_REFRESH_THRESHOLD_MS;
+    });
+
+    if (candidates.length === 0) {
+      console.log('⚪ All active tokens healthy');
+      return;
     }
 
-    console.log(`✅ Background refresh complete: ${successCount} success, ${failCount} failed`);
+    console.log(`🔄 Refreshing tokens for ${candidates.length} active users...`);
+
+    const results = await runWithConcurrency(candidates, refreshSingleUser, REFRESH_CONCURRENCY, {
+      reason: 'background'
+    });
+
+    const summary = results.reduce(
+      (acc, result) => {
+        acc[result.status] = (acc[result.status] || 0) + 1;
+        return acc;
+      },
+      { success: 0, failed: 0, skipped: 0 }
+    );
+
+    console.log(`✅ Background refresh complete: ${summary.success} success, ${summary.failed} failed, ${summary.skipped} skipped`);
 
   } catch (error) {
     console.error('❌ Background token refresh failed:', error.message);
@@ -166,8 +274,6 @@ async function refreshAllActiveTokens() {
 /**
  * Start background token refresh
  * Runs every 30 minutes while server is active
- * 
- * NOTE: On Render free tier, this only runs while server is awake
  */
 function startBackgroundRefresh() {
   if (refreshInterval) {
@@ -176,7 +282,6 @@ function startBackgroundRefresh() {
   }
 
   console.log('🚀 Starting background token refresh (every 30 minutes)');
-  console.log('⚠️  Note: On Render free tier, this only works while server is awake');
 
   // Run immediately on start
   setTimeout(() => refreshAllActiveTokens(), 5000); // Wait 5s for server to fully start

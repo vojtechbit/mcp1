@@ -1,15 +1,19 @@
 import express from 'express';
 import { authorize, callback, token } from '../controllers/oauthProxyController.js';
+import { sanitizeForLog } from '../utils/redact.js';
 
 const router = express.Router();
 
-// Debug middleware - log all OAuth requests
-router.use((req, res, next) => {
-  console.log(`🔵 [OAUTH_ROUTE] ${req.method} ${req.path}`);
-  console.log('Query:', req.query);
-  console.log('Body:', req.body);
-  next();
-});
+const shouldLogOauthTraffic = String(process.env.OAUTH_REQUEST_LOGGING || '').toLowerCase() === 'true';
+
+if (shouldLogOauthTraffic) {
+  router.use((req, res, next) => {
+    console.log(`🔵 [OAUTH_ROUTE] ${req.method} ${req.path}`);
+    console.log('Query:', sanitizeForLog(req.query));
+    console.log('Body:', sanitizeForLog(req.body));
+    next();
+  });
+}
 
 /**
  * OAuth Proxy Routes

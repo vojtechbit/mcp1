@@ -33,19 +33,12 @@ router.get('/token-status', verifyToken, async (req, res) => {
         googleSub: user.googleSub
       },
       token: {
-        hasAccessToken: !!user.accessToken,
-        hasRefreshToken: !!user.refreshToken,
-        accessTokenLength: user.accessToken ? user.accessToken.length : 0,
-        refreshTokenLength: user.refreshToken ? user.refreshToken.length : 0,
+        hasAccessToken: Boolean(user.accessToken),
+        hasRefreshToken: Boolean(user.refreshToken),
         expiry: user.tokenExpiry,
         expiryDate: expiry.toISOString(),
         currentTime: now.toISOString(),
-        timeUntilExpiry: {
-          milliseconds: timeUntilExpiry,
-          seconds: Math.floor(timeUntilExpiry / 1000),
-          minutes: Math.floor(timeUntilExpiry / 1000 / 60),
-          hours: Math.floor(timeUntilExpiry / 1000 / 60 / 60)
-        },
+        secondsUntilExpiry: Math.floor(timeUntilExpiry / 1000),
         isExpired,
         needsRefresh: needsRefresh && !isExpired,
         status: isExpired ? '❌ EXPIRED' : needsRefresh ? '⚠️ NEEDS REFRESH' : '✅ VALID'
