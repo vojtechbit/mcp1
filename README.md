@@ -78,6 +78,22 @@ node test-oauth-proxy.js
 ✅ Audit logs (90 dní)
 ✅ Sanitizované logování OAuth flow (opt-in)
 
+## Architektura a efektivita serveru
+
+- **Konzistentní limity:** Veškeré rate-limity, batch kvóty i maximální velikosti odpovědí
+  se počítají z jediné základní hodnoty `REQUEST_BUDGET_15M`. Stačí tedy upravit jeden údaj
+  pro přenastavení celé instance na jiný tarif bez rizika, že některé části zůstanou
+  neaktuální.
+- **Paralelní obsluha:** Server používá tři oddělené limitery pro standardní, náročné a
+  OAuth dotazy, takže žádný klient nevyčerpá kapacitu ostatním. Obsluha tokenů běží v
+  paralelních refreshech s omezenou velikostí fronty (`TOKEN_REFRESH_CONCURRENCY`), aby
+  se požadavky neblokovaly čekáním na OAuth handshake.
+- **Background úlohy:** Pravidelné refreshe (každých 30 min plus hned po startu) drží
+  přístupové tokeny čerstvé, takže ani při špičce není potřeba čekat na nové přihlášení.
+- **BFF vrstva:** Facade makra optimalizovaná pro konverzaci volají nízkoúrovňové služby
+  pro Gmail, Calendar i Contacts. Tento BFF přístup nad MongoDB zmenšuje počet round-tripů
+  a umožňuje provádět kategorizaci nebo agregace dat dřív, než odpověď dorazí zpět do GPT.
+
 ### Důležité env proměnné
 
 | Klíč | Popis |
