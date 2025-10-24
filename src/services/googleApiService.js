@@ -650,14 +650,45 @@ async function readEmail(googleSub, messageId, options = {}) {
   });
 }
 
-async function searchEmails(googleSub, { query, maxResults = 10, pageToken }) {
+async function getEmailPreview(googleSub, messageId, options = {}) {
+  return await handleGoogleApiCall(googleSub, async () => {
+    const { maxBytes = 4096 } = options || {};
+
+    const authClient = await getAuthenticatedClient(googleSub);
+    const gmail = google.gmail({ version: 'v1', auth: authClient });
+
+    const result = await gmail.users.messages.get({
+      userId: 'me',
+      id: messageId,
+      format: 'full'
+    });
+
+    const data = result.data || {};
+    const payload = clonePayloadForPreview(data.payload, maxBytes);
+
+    return {
+      id: data.id,
+      threadId: data.threadId,
+      labelIds: data.labelIds || [],
+      snippet: data.snippet || '',
+      internalDate: data.internalDate,
+      payload
+    };
+  });
+}
+
+async function searchEmails(googleSub, { query, q, maxResults = 10, pageToken } = {}) {
   return await handleGoogleApiCall(googleSub, async () => {
     const authClient = await getAuthenticatedClient(googleSub);
     const gmail = google.gmail({ version: 'v1', auth: authClient });
 
+    const finalQuery = typeof query === 'string' && query.trim().length > 0
+      ? query.trim()
+      : (typeof q === 'string' && q.trim().length > 0 ? q.trim() : undefined);
+
     const params = {
       userId: 'me',
-      q: query,
+      q: finalQuery,
       maxResults
     };
 
@@ -666,6 +697,67 @@ async function searchEmails(googleSub, { query, maxResults = 10, pageToken }) {
     const result = await gmail.users.messages.list(params);
     return result.data;
   });
+}
+
+function clonePayloadForPreview(payload, maxBytes) {
+  if (!payload) return null;
+
+  const seen = new WeakMap();
+
+  function clonePart(part, budget) {
+    if (!part) return { cloned: null, remaining: budget };
+    if (seen.has(part)) {
+      return { cloned: seen.get(part), remaining: budget };
+    }
+
+    const cloned = {
+      partId: part.partId,
+      mimeType: part.mimeType,
+      filename: part.filename,
+      headers: part.headers
+    };
+
+    seen.set(part, cloned);
+
+    let remaining = budget;
+
+    if (part.body) {
+      cloned.body = { ...part.body };
+
+      if (typeof part.body.data === 'string' && remaining > 0) {
+        const estimatedBytes = Math.ceil((part.body.data.length * 3) / 4);
+        if (estimatedBytes > remaining) {
+          const allowedChars = Math.max(0, Math.floor((remaining * 4) / 3));
+          const truncated = part.body.data.slice(0, allowedChars - (allowedChars % 4 || 0));
+          cloned.body.data = truncated;
+          remaining = 0;
+        } else {
+          remaining -= estimatedBytes;
+        }
+      } else if (typeof part.body.data === 'string') {
+        cloned.body.data = part.body.data;
+      }
+    }
+
+    if (Array.isArray(part.parts)) {
+      cloned.parts = [];
+      for (const child of part.parts) {
+        const { cloned: clonedChild, remaining: newRemaining } = clonePart(child, remaining);
+        if (clonedChild) {
+          cloned.parts.push(clonedChild);
+        }
+        remaining = newRemaining;
+        if (remaining <= 0) {
+          break;
+        }
+      }
+    }
+
+    return { cloned, remaining };
+  }
+
+  const { cloned } = clonePart(payload, typeof maxBytes === 'number' && maxBytes > 0 ? maxBytes : Infinity);
+  return cloned;
 }
 
 async function replyToEmail(googleSub, messageId, { body }) {
@@ -1725,6 +1817,7 @@ const traced = wrapModuleFunctions('services.googleApiService', {
   getValidAccessToken,
   sendEmail,
   readEmail,
+  getEmailPreview,
   searchEmails,
   replyToEmail,
   createDraft,
@@ -1757,6 +1850,7 @@ const {
   getValidAccessToken: tracedGetValidAccessToken,
   sendEmail: tracedSendEmail,
   readEmail: tracedReadEmail,
+  getEmailPreview: tracedGetEmailPreview,
   searchEmails: tracedSearchEmails,
   replyToEmail: tracedReplyToEmail,
   createDraft: tracedCreateDraft,
@@ -1789,6 +1883,7 @@ export {
   tracedGetValidAccessToken as getValidAccessToken,
   tracedSendEmail as sendEmail,
   tracedReadEmail as readEmail,
+  tracedGetEmailPreview as getEmailPreview,
   tracedSearchEmails as searchEmails,
   tracedReplyToEmail as replyToEmail,
   tracedCreateDraft as createDraft,

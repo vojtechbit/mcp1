@@ -31,21 +31,34 @@ import {
  * Step 2: Batch fetch metadata for all messages
  * Step 3: Return enriched items with sender, subject, etc.
  */
-async function inboxOverview(googleSub, params) {
-  const { timeRange, maxItems = 50, filters = {} } = params;
-  
-  // Build Gmail search query
-  let query = '';
-  
+async function inboxOverview(googleSub, params = {}) {
+  const {
+    timeRange,
+    maxItems = 50,
+    filters = {},
+    pageToken,
+    query: rawQuery
+  } = params;
+
+  const queryParts = [];
+
+  if (typeof rawQuery === 'string' && rawQuery.trim()) {
+    queryParts.push(rawQuery.trim());
+  }
+
   if (filters.from) {
-    query += `from:${filters.from} `;
+    const sanitizedFrom = filters.from.trim();
+    if (sanitizedFrom) {
+      const needsQuotes = /\s/.test(sanitizedFrom) && !/^".*"$/.test(sanitizedFrom);
+      const value = needsQuotes ? `"${sanitizedFrom}"` : sanitizedFrom;
+      queryParts.push(`from:${value}`);
+    }
   }
-  
+
   if (filters.hasAttachment) {
-    query += 'has:attachment ';
+    queryParts.push('has:attachment');
   }
-  
-  // Handle Primary/Promotions/etc category labels
+
   if (filters.category) {
     const categoryMap = {
       'primary': 'CATEGORY_PERSONAL',
@@ -55,38 +68,47 @@ async function inboxOverview(googleSub, params) {
       'updates': 'CATEGORY_UPDATES',
       'forums': 'CATEGORY_FORUMS'
     };
-    
+
     const labelId = categoryMap[filters.category.toLowerCase()];
     if (labelId) {
-      query += `label:${labelId} `;
+      queryParts.push(`label:${labelId}`);
     }
   }
-  
-  if (filters.labelIds && filters.labelIds.length > 0) {
-    query += filters.labelIds.map(id => `label:${id}`).join(' ');
+
+  if (Array.isArray(filters.labelIds) && filters.labelIds.length > 0) {
+    filters.labelIds.forEach(id => {
+      if (id) {
+        queryParts.push(`label:${id}`);
+      }
+    });
   }
-  
-  // Add time range
+
   if (timeRange) {
     if (timeRange.relative) {
       const times = parseRelativeTime(timeRange.relative);
-      if (times) {
-        query += `after:${times.after} before:${times.before}`;
+      if (times?.after && times?.before) {
+        queryParts.push(`after:${times.after}`);
+        queryParts.push(`before:${times.before}`);
       }
     } else if (timeRange.start && timeRange.end) {
       const startSec = Math.floor(new Date(timeRange.start).getTime() / 1000);
       const endSec = Math.floor(new Date(timeRange.end).getTime() / 1000);
-      query += `after:${startSec} before:${endSec}`;
+      if (!Number.isNaN(startSec) && !Number.isNaN(endSec)) {
+        queryParts.push(`after:${startSec}`);
+        queryParts.push(`before:${endSec}`);
+      }
     }
   }
-  
-  // Step 1: Search emails - returns message IDs
+
+  const builtQuery = queryParts.join(' ').trim();
+
   const searchResults = await gmailService.searchEmails(googleSub, {
-    q: query.trim(),
-    maxResults: Math.min(maxItems, 200)
+    query: builtQuery || undefined,
+    maxResults: Math.min(maxItems, 200),
+    pageToken
   });
   
-  if (!searchResults.messages || searchResults.messages.length === 0) {
+  if (!searchResults?.messages || searchResults.messages.length === 0) {
     return {
       items: [],
       subset: false,
@@ -132,9 +154,11 @@ async function inboxOverview(googleSub, params) {
     };
   });
   
+  const hasMore = Boolean(searchResults.nextPageToken);
+
   return {
     items,
-    subset: (searchResults.resultSizeEstimate || 0) > maxItems,
+    subset: hasMore,
     nextPageToken: searchResults.nextPageToken || null
   };
 }
@@ -142,64 +166,72 @@ async function inboxOverview(googleSub, params) {
 /**
  * Inbox Snippets - overview with snippets and attachment URLs
  */
-async function inboxSnippets(googleSub, params) {
+async function inboxSnippets(googleSub, params = {}) {
   const { includeAttachments = true } = params;
-  
-  // Start with overview - already has metadata
+
   const overview = await inboxOverview(googleSub, params);
-  
-  // If overview already includes snippets, just add attachment URLs if needed
-  if (!includeAttachments) {
+
+  if (overview.items.length === 0) {
     return {
-      items: overview.items,
+      items: [],
       subset: overview.subset,
       nextPageToken: overview.nextPageToken
     };
   }
-  
-  // Fetch attachments for each message (attachments not in metadata call)
+
   const batchSize = 10;
-  const enriched = [];
-  
+  const enrichedItems = [];
+
   for (let i = 0; i < overview.items.length; i += batchSize) {
     const batch = overview.items.slice(i, i + batchSize);
-    const attachmentPromises = batch.map(async (item) => {
-      try {
-        const message = await gmailService.readEmail(googleSub, item.messageId, { format: 'full' });
 
-        const enrichedItem = {
+    const detailPromises = batch.map(async (item) => {
+      try {
+        const preview = await gmailService.getEmailPreview(googleSub, item.messageId, {
+          maxBytes: 4096
+        });
+
+        const bodySnippet = buildBodySnippetFromPayload(preview.payload, item.snippet || preview.snippet);
+
+        const enriched = {
           ...item,
-          attachmentUrls: [],
-          readState: buildReadStateFromLabels(message.labelIds)
+          snippet: bodySnippet,
+          readState: buildReadStateFromLabels(preview.labelIds),
+          attachmentUrls: []
         };
-        
-        if (message.payload?.parts) {
-          const attachments = extractAttachmentMetadata(message.payload);
-          const processed = processAttachments(attachments, (att) => 
+
+        if (includeAttachments) {
+          const attachments = extractAttachmentMetadata(preview.payload || {});
+          const processed = processAttachments(attachments, (att) =>
             generateSignedAttachmentUrl(item.messageId, att.body?.attachmentId)
           );
-          
-          enrichedItem.attachmentUrls = processed.attachments
+
+          enriched.attachmentUrls = processed.attachments
             .filter(a => !a.blocked && a.url)
             .map(a => a.url);
+
+          if (processed.securityWarnings.length > 0) {
+            enriched.attachmentSecurityWarnings = processed.securityWarnings;
+          }
         }
-        
-        return enrichedItem;
+
+        return enriched;
       } catch (error) {
-        console.error(`Failed to fetch attachments for ${item.messageId}:`, error.message);
+        console.error(`Failed to build snippet for ${item.messageId}:`, error.message);
         return {
           ...item,
+          snippet: buildFallbackSnippet(item.snippet),
           attachmentUrls: []
         };
       }
     });
-    
-    const batchResults = await Promise.all(attachmentPromises);
-    enriched.push(...batchResults);
+
+    const batchResults = await Promise.all(detailPromises);
+    enrichedItems.push(...batchResults);
   }
-  
+
   return {
-    items: enriched,
+    items: enrichedItems,
     subset: overview.subset,
     nextPageToken: overview.nextPageToken
   };
@@ -208,53 +240,64 @@ async function inboxSnippets(googleSub, params) {
 /**
  * Email Quick Read - single or batch read with attachments
  */
-async function emailQuickRead(googleSub, params) {
-  const { ids, searchQuery, format = 'minimal' } = params;
-  
+async function emailQuickRead(googleSub, params = {}) {
+  const { ids, searchQuery, format, pageToken } = params;
+
+  const resolvedFormat = format ?? 'full';
+
   // Validate format parameter
   const validFormats = ['snippet', 'minimal', 'metadata', 'full'];
-  if (format && !validFormats.includes(format)) {
-    const error = new Error(`Invalid format: ${format}. Must be one of: ${validFormats.join(', ')}`);
+  if (resolvedFormat && !validFormats.includes(resolvedFormat)) {
+    const error = new Error(`Invalid format: ${resolvedFormat}. Must be one of: ${validFormats.join(', ')}`);
     error.statusCode = 400;
     throw error;
   }
-  
+
   let messageIds = ids;
-  
+  let nextPageToken = null;
+  let subset = false;
+
   // If searchQuery provided, get IDs first
   if (!messageIds && searchQuery) {
     const searchResults = await gmailService.searchEmails(googleSub, {
-      q: searchQuery,
-      maxResults: 50
+      query: searchQuery,
+      maxResults: 50,
+      pageToken
     });
-    messageIds = searchResults.messages.map(m => m.id);
+    messageIds = searchResults?.messages?.map(m => m.id) || [];
+    nextPageToken = searchResults?.nextPageToken || null;
+    subset = Boolean(nextPageToken);
   }
-  
+
   if (!messageIds || messageIds.length === 0) {
     throw new Error('No message IDs provided or found');
   }
   
   // Decide single vs batch
   if (messageIds.length === 1) {
-    const message = await gmailService.readEmail(googleSub, messageIds[0], { format });
+    const message = await gmailService.readEmail(googleSub, messageIds[0], { format: resolvedFormat });
     const enriched = enrichEmailWithAttachments(message, messageIds[0]);
-    
+
     return {
       mode: 'single',
-      item: enriched
+      item: enriched,
+      subset,
+      nextPageToken
     };
   } else {
     const messages = await Promise.all(
-      messageIds.map(id => gmailService.readEmail(googleSub, id, { format }))
+      messageIds.map(id => gmailService.readEmail(googleSub, id, { format: resolvedFormat }))
     );
-    
-    const enriched = messages.map((msg, idx) => 
+
+    const enriched = messages.map((msg, idx) =>
       enrichEmailWithAttachments(msg, messageIds[idx])
     );
-    
+
     return {
       mode: 'batch',
-      items: enriched
+      items: enriched,
+      subset,
+      nextPageToken
     };
   }
 }
@@ -1206,6 +1249,115 @@ async function calendarReminderDrafts(googleSub, params) {
 }
 
 // ==================== HELPER FUNCTIONS ====================
+
+function decodePayloadData(data) {
+  if (!data) return '';
+
+  try {
+    return Buffer.from(data, 'base64').toString('utf-8');
+  } catch (error) {
+    console.error('Failed to decode payload data:', error.message);
+    return '';
+  }
+}
+
+function stripHtmlTags(html = '') {
+  return html
+    .replace(/<style[\s\S]*?>[\s\S]*?<\/style>/gi, ' ')
+    .replace(/<script[\s\S]*?>[\s\S]*?<\/script>/gi, ' ')
+    .replace(/<head[\s\S]*?>[\s\S]*?<\/head>/gi, ' ')
+    .replace(/<[^>]+>/g, ' ');
+}
+
+function normalizeWhitespace(text = '') {
+  return text.replace(/\s+/g, ' ').trim();
+}
+
+function extractBodyText(payload = {}, limit = Infinity) {
+  if (!payload) return '';
+
+  const queue = [payload];
+  let plainText = '';
+  let htmlText = '';
+
+  while (queue.length > 0 && (plainText.length < limit || htmlText.length < limit)) {
+    const part = queue.shift();
+
+    if (part.body?.data) {
+      const decoded = decodePayloadData(part.body.data);
+
+      if (part.mimeType?.startsWith('text/plain')) {
+        if (plainText.length < limit) {
+          const remaining = limit - plainText.length;
+          plainText += remaining >= decoded.length ? decoded : decoded.slice(0, remaining);
+        }
+      } else if (part.mimeType?.startsWith('text/html')) {
+          if (htmlText.length < limit) {
+            const remaining = limit - htmlText.length;
+            htmlText += remaining >= decoded.length ? decoded : decoded.slice(0, remaining);
+          }
+      }
+    }
+
+    if (Array.isArray(part.parts)) {
+      queue.push(...part.parts);
+    }
+  }
+
+  const normalizedPlain = normalizeWhitespace(plainText);
+  if (normalizedPlain) {
+    return normalizedPlain;
+  }
+
+  if (htmlText) {
+    const stripped = stripHtmlTags(htmlText);
+    return normalizeWhitespace(stripped);
+  }
+
+  return '';
+}
+
+function buildBodySnippetFromPayload(payload, fallbackSnippet = '') {
+  const MIN_LENGTH = 200;
+  const MAX_LENGTH = 300;
+
+  const text = extractBodyText(payload, MAX_LENGTH + 200);
+  const source = text || normalizeWhitespace(fallbackSnippet);
+
+  if (!source) {
+    return '';
+  }
+
+  if (source.length <= MAX_LENGTH) {
+    return source;
+  }
+
+  const candidate = source.slice(0, MAX_LENGTH + 1);
+
+  let cutoff = candidate.lastIndexOf('. ');
+  if (cutoff < MIN_LENGTH) {
+    cutoff = candidate.lastIndexOf(' ');
+  }
+  if (cutoff < MIN_LENGTH) {
+    cutoff = MAX_LENGTH;
+  }
+
+  const snippet = candidate.slice(0, cutoff).trim();
+  return snippet.length ? `${snippet}…` : source.slice(0, MAX_LENGTH).trim();
+}
+
+function buildFallbackSnippet(snippet = '') {
+  const normalized = normalizeWhitespace(snippet);
+  if (!normalized) {
+    return 'Náhled zprávy není k dispozici.';
+  }
+
+  if (normalized.length <= 200) {
+    return normalized;
+  }
+
+  return `${normalized.slice(0, 200)}…`;
+}
 
 function categorizeEmail(message) {
   const labels = message.labelIds || [];
