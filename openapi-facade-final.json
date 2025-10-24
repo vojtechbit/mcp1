@@ -1248,7 +1248,7 @@
       "post": {
         "operationId": "macroBriefingsMeetingEmailsToday",
         "summary": "Daily briefing: emails related to today's meetings",
-        "description": "Generates a consolidated report of today's calendar events and the Gmail threads likely related to each meeting. Automatically queries emails from the past N days using attendee addresses and significant event keywords. Use optional globalKeywordHints to inject additional phrases from the user (e.g. project codenames).",
+        "description": "Generates a briefing of today's calendar events and related Gmail threads. Searches recent mail using attendee addresses and event keywords. Use optional globalKeywordHints to add user-provided phrases (e.g. project codes).",
         "requestBody": {
           "required": false,
           "content": {
