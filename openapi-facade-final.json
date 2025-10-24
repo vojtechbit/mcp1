@@ -1244,6 +1244,302 @@
         }
       }
     },
+    "/macros/briefings/meetingEmailsToday": {
+      "post": {
+        "operationId": "macroBriefingsMeetingEmailsToday",
+        "summary": "Daily briefing: emails related to today's meetings",
+        "description": "Generates a briefing of today's calendar events and related Gmail threads. Searches recent mail using attendee addresses and event keywords. Use optional globalKeywordHints to add user-provided phrases (e.g. project codes).",
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "description": "Controls scope of the meeting-email briefing. Defaults: date=today (Europe/Prague), lookbackDays=14, calendarId='primary'.",
+                "properties": {
+                  "date": {
+                    "type": "string",
+                    "format": "date",
+                    "description": "Target day in YYYY-MM-DD (Europe/Prague). Defaults to today's date when omitted."
+                  },
+                  "lookbackDays": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 30,
+                    "default": 14,
+                    "description": "How far back to search for related emails. Default 14 days to match playbook guidance."
+                  },
+                  "calendarId": {
+                    "type": "string",
+                    "default": "primary",
+                    "description": "Optional calendar identifier. Omit to use the primary calendar automatically."
+                  },
+                  "globalKeywordHints": {
+                    "type": "array",
+                    "description": "Optional list of extra phrases to include in every search (e.g. project names provided by the user). Use sparingly; backend already derives keywords from event titles, locations, and descriptions.",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 80
+                    },
+                    "maxItems": 10
+                  }
+                }
+              },
+              "examples": {
+                "defaultToday": {
+                  "summary": "Briefing for today's events with default lookback",
+                  "value": {}
+                },
+                "specificDate": {
+                  "summary": "Briefing for a specific day",
+                  "value": {
+                    "date": "2025-03-18"
+                  }
+                },
+                "sharedCalendar": {
+                  "summary": "Use shared calendar and add keyword hints",
+                  "value": {
+                    "calendarId": "team@example.com",
+                    "globalKeywordHints": [
+                      "Project Atlas"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successfully generated meeting-email briefing",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "date": {
+                      "type": "string",
+                      "format": "date",
+                      "description": "Day for which the briefing was generated (Europe/Prague)."
+                    },
+                    "lookbackDays": {
+                      "type": "integer",
+                      "description": "Lookback window actually applied."
+                    },
+                    "calendarId": {
+                      "type": "string",
+                      "description": "Calendar used for event discovery. Defaults to 'primary' when omitted in request."
+                    },
+                    "globalKeywordHintsUsed": {
+                      "type": "array",
+                      "description": "Keyword hints that influenced queries. Empty when backend relied purely on its own heuristics.",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "events": {
+                      "type": "array",
+                      "description": "One entry per calendar event on the requested day.",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "eventId": {
+                            "type": "string",
+                            "description": "Google Calendar event ID."
+                          },
+                          "title": {
+                            "type": "string",
+                            "description": "Event summary/title."
+                          },
+                          "start": {
+                            "type": "string",
+                            "format": "date-time",
+                            "description": "Event start (ISO 8601, Europe/Prague)."
+                          },
+                          "end": {
+                            "type": "string",
+                            "format": "date-time",
+                            "description": "Event end (ISO 8601, Europe/Prague)."
+                          },
+                          "attendeesUsed": {
+                            "type": "array",
+                            "description": "Email addresses considered when building attendee-based queries.",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
+                          "keywordSources": {
+                            "type": "object",
+                            "description": "Breakdown of keywords auto-derived by backend (title, location, description) and any applied hints.",
+                            "properties": {
+                              "auto": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                },
+                                "description": "Keywords extracted from event metadata."
+                              },
+                              "hints": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                },
+                                "description": "Keyword hints that matched this event."
+                              }
+                            }
+                          },
+                          "searches": {
+                            "type": "array",
+                            "description": "Queries executed for this event (attendee, subject variants, keyword combinations).",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "type": {
+                                  "type": "string",
+                                  "description": "Search bucket identifier (e.g. 'attendee', 'titleKeyword', 'hint')."
+                                },
+                                "query": {
+                                  "type": "string",
+                                  "description": "Actual Gmail query string executed."
+                                },
+                                "matchedCount": {
+                                  "type": "integer",
+                                  "description": "How many unique threads matched this query."
+                                }
+                              }
+                            }
+                          },
+                          "relevantEmails": {
+                            "type": "array",
+                            "description": "Emails confirmed to relate to the meeting after full-text inspection.",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "threadId": {
+                                  "type": "string",
+                                  "description": "Gmail thread identifier."
+                                },
+                                "messageId": {
+                                  "type": "string",
+                                  "description": "Specific message identifier useful for follow-up actions."
+                                },
+                                "sentAt": {
+                                  "type": "string",
+                                  "format": "date-time",
+                                  "description": "Timestamp the email was sent (ISO 8601)."
+                                },
+                                "from": {
+                                  "type": "object",
+                                  "properties": {
+                                    "name": {
+                                      "type": [
+                                        "string",
+                                        "null"
+                                      ]
+                                    },
+                                    "email": {
+                                      "type": "string"
+                                    }
+                                  }
+                                },
+                                "subject": {
+                                  "type": "string"
+                                },
+                                "reason": {
+                                  "type": "string",
+                                  "description": "Why backend marked the email as relevant (e.g. attendee match, agenda keywords)."
+                                },
+                                "links": {
+                                  "type": "object",
+                                  "properties": {
+                                    "thread": {
+                                      "type": [
+                                        "string",
+                                        "null"
+                                      ]
+                                    },
+                                    "message": {
+                                      "type": [
+                                        "string",
+                                        "null"
+                                      ]
+                                    }
+                                  },
+                                  "description": "Direct Gmail links for convenience. May be null when not available."
+                                }
+                              }
+                            }
+                          },
+                          "possibleMatches": {
+                            "type": "array",
+                            "description": "Emails that matched heuristics but were not confirmed as relevant.",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "threadId": {
+                                  "type": "string"
+                                },
+                                "messageId": {
+                                  "type": "string"
+                                },
+                                "sentAt": {
+                                  "type": "string",
+                                  "format": "date-time"
+                                },
+                                "from": {
+                                  "type": "object",
+                                  "properties": {
+                                    "name": {
+                                      "type": [
+                                        "string",
+                                        "null"
+                                      ]
+                                    },
+                                    "email": {
+                                      "type": "string"
+                                    }
+                                  }
+                                },
+                                "subject": {
+                                  "type": "string"
+                                },
+                                "reason": {
+                                  "type": "string",
+                                  "description": "Why this email was surfaced despite lacking confirmation."
+                                }
+                              }
+                            }
+                          },
+                          "notes": {
+                            "type": [
+                              "string",
+                              "null"
+                            ],
+                            "description": "Optional notes about gaps (e.g. attendee had no recent emails)."
+                          }
+                        }
+                      }
+                    },
+                    "subset": {
+                      "type": "boolean",
+                      "description": "Indicates whether the briefing might be incomplete due to hitting search limits."
+                    },
+                    "warnings": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      },
+                      "description": "Non-fatal issues encountered (e.g. calendar fetch failed, Gmail query truncated)."
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/macros/contacts/safeAdd": {
       "post": {
         "operationId": "macroContactsSafeAdd",
