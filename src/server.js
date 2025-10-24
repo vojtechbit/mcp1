@@ -4,7 +4,7 @@ import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 import dotenv from 'dotenv';
 import { connectToDatabase } from './config/database.js';
-import { RL_MAX_PER_IP, RL_MAX_HEAVY_PER_IP } from './config/limits.js';
+import { RL_MAX_PER_IP, RL_MAX_HEAVY_PER_IP, RL_MAX_OAUTH_PER_IP } from './config/limits.js';
 import { refreshAllTokensOnStartup, startBackgroundRefresh } from './services/backgroundRefreshService.js';
 import authRoutes from './routes/authRoutes.js';
 import apiRoutes from './routes/apiRoutes.js';
@@ -63,6 +63,18 @@ const heavyLimiter = rateLimit({
   message: {
     error: 'Too many heavy requests',
     message: 'These operations are resource-intensive. Please try again later.'
+  },
+  standardHeaders: true,
+  legacyHeaders: false
+});
+
+// Rate limiting - OAuth handshake
+const oauthLimiter = rateLimit({
+  windowMs: 10 * 60 * 1000, // 10 minutes
+  max: RL_MAX_OAUTH_PER_IP,
+  message: {
+    error: 'too_many_oauth_requests',
+    message: 'OAuth requests are temporarily rate limited. Please try again shortly.'
   },
   standardHeaders: true,
   legacyHeaders: false
@@ -128,7 +140,7 @@ app.get('/', (req, res) => {
 });
 
 // OAuth Proxy routes (for ChatGPT Custom GPT)
-app.use('/oauth', oauthProxyRoutes);
+app.use('/oauth', oauthLimiter, oauthProxyRoutes);
 
 // Privacy Policy (required for public GPT)
 app.use('/', privacyRoutes);
@@ -160,10 +172,12 @@ async function startServer() {
     await connectToDatabase();
     console.log('✅ MongoDB connected successfully');
 
-    // Refresh all tokens on startup (perfect for cold starts)
-    // TEMPORARILY DISABLED - causing startup crashes
-    // await refreshAllTokensOnStartup();
-    console.log('⚠️  Startup token refresh: DISABLED (preventing crashes)');
+    // Refresh all tokens on startup to avoid serving expired credentials
+    try {
+      await refreshAllTokensOnStartup();
+    } catch (refreshError) {
+      console.error('⚠️  Startup token refresh encountered an error:', refreshError.message);
+    }
 
     // Start Express server
     app.listen(PORT, () => {
@@ -183,11 +197,13 @@ async function startServer() {
       console.log(`⚡ Rate limiting: ${RL_MAX_PER_IP}/15min (standard), ${RL_MAX_HEAVY_PER_IP}/15min (heavy)`);
       
       // Start background token refresh (optional)
-      if (process.env.ENABLE_BACKGROUND_REFRESH === 'true') {
+      const enableBackgroundRefresh = String(process.env.ENABLE_BACKGROUND_REFRESH || 'true').toLowerCase() !== 'false';
+
+      if (enableBackgroundRefresh) {
         console.log('🔄 Background refresh: Enabled (every 30min)');
         startBackgroundRefresh();
       } else {
-        console.log('⚪ Background refresh: Disabled (startup refresh active)');
+        console.log('⚪ Background refresh: Disabled via configuration');
       }
       
       console.log('='.repeat(60) + '\n');

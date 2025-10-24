@@ -1,8 +1,8 @@
 import { getAuthUrl, getTokensFromCode } from '../config/oauth.js';
 import { saveUser } from '../services/databaseService.js';
-import { 
-  generateAuthCode, 
-  generateProxyToken, 
+import {
+  generateAuthCode,
+  generateProxyToken,
   saveAuthCode,
   validateAndConsumeAuthCode,
   saveProxyToken
@@ -10,6 +10,7 @@ import {
 import { google } from 'googleapis';
 import dotenv from 'dotenv';
 import { wrapModuleFunctions } from '../utils/advancedDebugging.js';
+import { sanitizeForLog, summarizeSecret } from '../utils/redact.js';
 
 
 dotenv.config();
@@ -32,11 +33,12 @@ async function authorize(req, res) {
   try {
     const { client_id, redirect_uri, state, scope } = req.query;
 
-    console.log('🔐 [OAUTH_PROXY] Authorization request received');
-    console.log('Client ID:', client_id);
-    console.log('Redirect URI:', redirect_uri);
-    console.log('State:', state);
-    console.log('Scope:', scope);
+    console.log('🔐 [OAUTH_PROXY] Authorization request received', {
+      clientId: client_id,
+      redirectUri: redirect_uri,
+      scope: sanitizeForLog(scope),
+      state: summarizeSecret(String(state || ''))
+    });
 
     // Validate client_id (optional but recommended)
     if (client_id !== OAUTH_CLIENT_ID) {
@@ -81,7 +83,6 @@ async function authorize(req, res) {
     const googleAuthUrl = getAuthUrl(encodedState);
 
     console.log('✅ Redirecting to Google OAuth...');
-    console.log('Google Auth URL:', googleAuthUrl);
 
     // Redirect user to Google OAuth consent screen
     res.redirect(googleAuthUrl);
@@ -162,7 +163,7 @@ async function callback(req, res) {
       `);
     }
 
-    console.log('✅ State decoded:', stateData);
+    console.log('✅ State decoded');
 
     // Exchange Google authorization code for tokens
     console.log('🔄 Exchanging Google code for tokens...');
@@ -172,7 +173,7 @@ async function callback(req, res) {
       throw new Error('Access token or refresh token missing from Google response');
     }
 
-    console.log('✅ Google tokens received');
+    console.log('✅ Google tokens received from Google OAuth');
 
     // Get user info from Google
     const { oauth2Client } = await import('../config/oauth.js');
@@ -263,10 +264,12 @@ async function token(req, res) {
   try {
     const { grant_type, code, client_id, client_secret, redirect_uri } = req.body;
 
-    console.log('🔐 [OAUTH_PROXY] Token exchange request');
-    console.log('Grant type:', grant_type);
-    console.log('Code:', code?.substring(0, 8) + '...');
-    console.log('Client ID:', client_id);
+    console.log('🔐 [OAUTH_PROXY] Token exchange request', {
+      grantType: grant_type,
+      clientId: client_id,
+      redirectUri: redirect_uri,
+      code: summarizeSecret(String(code || ''))
+    });
 
     // Validate grant_type
     if (grant_type !== 'authorization_code') {

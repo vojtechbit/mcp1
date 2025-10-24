@@ -8,6 +8,7 @@ const REQUEST_BUDGET_15M = parseInt(process.env.REQUEST_BUDGET_15M) || 600;
 // Derive all limits at runtime
 const RL_MAX_PER_IP = REQUEST_BUDGET_15M;
 const RL_MAX_HEAVY_PER_IP = Math.ceil(REQUEST_BUDGET_15M / 4);
+const RL_MAX_OAUTH_PER_IP = Math.max(10, Math.min(60, Math.ceil(REQUEST_BUDGET_15M / 12)));
 const PAGE_SIZE_DEFAULT = Math.min(100, Math.ceil(REQUEST_BUDGET_15M / 6));
 const PAGE_SIZE_MAX = Math.min(200, Math.ceil(REQUEST_BUDGET_15M / 3));
 const BATCH_PREVIEW_MAX_IDS = Math.min(200, Math.floor(REQUEST_BUDGET_15M / 3));
@@ -30,6 +31,7 @@ console.log('📊 DERIVED LIMITS (from REQUEST_BUDGET_15M=' + REQUEST_BUDGET_15M
 console.log('='.repeat(60));
 console.log(`  RL_MAX_PER_IP:          ${RL_MAX_PER_IP}`);
 console.log(`  RL_MAX_HEAVY_PER_IP:    ${RL_MAX_HEAVY_PER_IP}`);
+console.log(`  RL_MAX_OAUTH_PER_IP:    ${RL_MAX_OAUTH_PER_IP}`);
 console.log(`  PAGE_SIZE_DEFAULT:      ${PAGE_SIZE_DEFAULT}`);
 console.log(`  PAGE_SIZE_MAX:          ${PAGE_SIZE_MAX}`);
 console.log(`  BATCH_PREVIEW_MAX_IDS:  ${BATCH_PREVIEW_MAX_IDS}`);
@@ -47,6 +49,7 @@ export {
   REQUEST_BUDGET_15M,
   RL_MAX_PER_IP,
   RL_MAX_HEAVY_PER_IP,
+  RL_MAX_OAUTH_PER_IP,
   PAGE_SIZE_DEFAULT,
   PAGE_SIZE_MAX,
   BATCH_PREVIEW_MAX_IDS,
