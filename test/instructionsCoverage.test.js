@@ -10,6 +10,9 @@ const __dirname = path.dirname(__filename);
 const instructionsPath = path.resolve(__dirname, '..', 'instructionsalfred.md');
 const instructionsContent = fs.readFileSync(instructionsPath, 'utf8');
 
+// Test-only fallback values that allow the facade router to load without
+// touching real deployment configuration. They are applied temporarily and
+// removed again after the test finishes.
 const envDefaults = {
   MONGODB_URI: 'mongodb://localhost:27017/test',
   PROXY_TOKEN_SECRET: 'test-secret',
@@ -20,13 +23,22 @@ const envDefaults = {
     '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef',
 };
 
-for (const [key, value] of Object.entries(envDefaults)) {
-  if (!process.env[key]) {
-    process.env[key] = value;
-  }
-}
+function applyEnvDefaults(defaults) {
+  const touchedKeys = [];
 
-const { default: router } = await import('../src/routes/facadeRoutes.js');
+  for (const [key, value] of Object.entries(defaults)) {
+    if (process.env[key] === undefined) {
+      touchedKeys.push(key);
+      process.env[key] = value;
+    }
+  }
+
+  return () => {
+    for (const key of touchedKeys) {
+      delete process.env[key];
+    }
+  };
+}
 
 const aliasMap = new Map([
   [
@@ -62,40 +74,48 @@ function collectMacroRoutes(currentRouter) {
   return [...macroRoutes].sort();
 }
 
-test('instructions cover every /macros endpoint in facadeRoutes.js', () => {
-  assert.ok(
-    instructionsContent.trim().length > 0,
-    'instructionsalfred.md nesmí být prázdný soubor.'
-  );
+test('instructions cover every /macros endpoint in facadeRoutes.js', async () => {
+  const restoreEnv = applyEnvDefaults(envDefaults);
 
-  const macroRoutes = collectMacroRoutes(router);
-  assert.ok(
-    macroRoutes.length > 0,
-    'V routeru musí existovat alespoň jeden endpoint začínající na /macros/.'
-  );
+  try {
+    const { default: router } = await import('../src/routes/facadeRoutes.js');
 
-  const missing = [];
-
-  for (const routePath of macroRoutes) {
-    const candidates = aliasMap.get(routePath) ?? [routePath];
-    const isDocumented = candidates.some((candidate) =>
-      instructionsContent.includes(candidate)
+    assert.ok(
+      instructionsContent.trim().length > 0,
+      'instructionsalfred.md nesmí být prázdný soubor.'
     );
 
-    if (!isDocumented) {
-      missing.push({ routePath, candidates });
-    }
-  }
+    const macroRoutes = collectMacroRoutes(router);
+    assert.ok(
+      macroRoutes.length > 0,
+      'V routeru musí existovat alespoň jeden endpoint začínající na /macros/.'
+    );
 
-  assert.strictEqual(
-    missing.length,
-    0,
-    [
-      'Následující /macros endpointy chybí v instructionsalfred.md. Doplněte dokumentaci, aby byl tutoriál aktuální:',
-      ...missing.map(
-        ({ routePath, candidates }) =>
-          ` - ${routePath} (hledáno: ${candidates.join(', ')})`
-      ),
-    ].join('\n')
-  );
+    const missing = [];
+
+    for (const routePath of macroRoutes) {
+      const candidates = aliasMap.get(routePath) ?? [routePath];
+      const isDocumented = candidates.some((candidate) =>
+        instructionsContent.includes(candidate)
+      );
+
+      if (!isDocumented) {
+        missing.push({ routePath, candidates });
+      }
+    }
+
+    assert.strictEqual(
+      missing.length,
+      0,
+      [
+        'Následující /macros endpointy chybí v instructionsalfred.md. Doplněte dokumentaci, aby byl tutoriál aktuální:',
+        ...missing.map(
+          ({ routePath, candidates }) =>
+            ` - ${routePath} (hledáno: ${candidates.join(', ')})`
+        ),
+      ].join('\n')
+    );
+  } finally {
+    restoreEnv();
+  }
 });
