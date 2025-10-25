@@ -64,6 +64,13 @@ mcp1/
 └── .env                              # OAuth credentials, MongoDB URI
 ```
 
+### Custom GPT frontend assets
+
+- `instructionsalfred.md` – **hlavní instrukce** nahrané přímo do Custom GPT. Určují chování asistenta (tone, povinné kroky, bezpečnost).
+- `playbooksalfred.md` a `formattingalfred.md` – tvoří **knowledge base** dostupnou GPT v editoru; popisují operativní postupy a formát výstupů.
+- `openapi-facade-final.json` – společně s výše uvedenými soubory definuje, co „front-end“ (Custom GPT) reálně umí. Backend může nabídnout jen to, co je zde popsané.
+- Při návrhu nových funkcí vždy sladíme serverové změny s těmito třemi soubory, jinak se asistent k novinkám nedostane.
+
 ---
 
 ## 🔄 Data Flow - Příklad "Kdo mi psal dnes?"

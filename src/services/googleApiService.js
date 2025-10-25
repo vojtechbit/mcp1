@@ -24,6 +24,10 @@ const EMAIL_SIZE_LIMITS = {
 
 const CONTENT_PREVIEW_LIMIT = 500;
 
+// ==================== LABEL DIRECTORY CACHE ====================
+const LABEL_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes is enough for interactive sessions
+const labelDirectoryCache = new Map();
+
 /**
  * Create authenticated Google API client
  */
@@ -945,28 +949,338 @@ async function markAsRead(googleSub, messageId, read = true) {
 
 // ==================== NEW: LABELS ====================
 
+const LABEL_ALIAS_TOKENS = {
+  INBOX: ['inbox', 'primary'],
+  CATEGORY_PERSONAL: ['primary', 'personal', 'work'],
+  CATEGORY_PROMOTIONS: ['promotions', 'promo', 'nabidky'],
+  CATEGORY_SOCIAL: ['social', 'socialni'],
+  CATEGORY_UPDATES: ['updates', 'aktualizace'],
+  CATEGORY_FORUMS: ['forums', 'diskuze'],
+  IMPORTANT: ['important', 'dulezite'],
+  STARRED: ['starred', 'hvezdicka'],
+  SENT: ['sent', 'odeslane'],
+  DRAFT: ['draft', 'drafts', 'koncept'],
+  TRASH: ['trash', 'kose', 'smazane'],
+  SPAM: ['spam', 'nevyzadane'],
+  CATEGORY_FINANCE: ['finance'],
+  CATEGORY_RECEIPTS: ['receipts', 'potvrzeni'],
+  CATEGORY_TRAVEL: ['travel', 'cestovani'],
+  CATEGORY_PURCHASES: ['purchases', 'nakupy']
+};
+
+function normalizeLabelCandidate(value) {
+  if (typeof value !== 'string' || value.trim().length === 0) {
+    return {
+      raw: value ?? '',
+      tokens: [],
+      ordered: '',
+      sorted: '',
+      collapsed: ''
+    };
+  }
+
+  const normalized = value
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase();
+
+  const tokens = normalized
+    .split(/[^a-z0-9]+/u)
+    .map(token => token.trim())
+    .filter(Boolean);
+
+  const ordered = tokens.join(' ');
+  const sorted = [...tokens].sort().join(' ');
+  const collapsed = tokens.join('');
+
+  return { raw: value, tokens, ordered, sorted, collapsed };
+}
+
+function computeLabelMeta(label) {
+  const baseMeta = normalizeLabelCandidate(label.name || '');
+  const idMeta = normalizeLabelCandidate(label.id || '');
+  const aliasMetas = (LABEL_ALIAS_TOKENS[label.id] || []).map(token => normalizeLabelCandidate(token));
+
+  const tokenSet = new Set([
+    ...baseMeta.tokens,
+    ...idMeta.tokens,
+    ...aliasMetas.flatMap(meta => meta.tokens)
+  ]);
+
+  const aliasLookup = new Set([
+    ...aliasMetas.map(meta => meta.ordered),
+    ...aliasMetas.map(meta => meta.sorted),
+    ...aliasMetas.map(meta => meta.collapsed)
+  ].filter(Boolean));
+
+  return {
+    baseMeta,
+    idMeta,
+    tokenSet,
+    aliasLookup
+  };
+}
+
+function getLabelMeta(label) {
+  if (!label) return null;
+  if (!label.__matchMeta) {
+    Object.defineProperty(label, '__matchMeta', {
+      value: computeLabelMeta(label),
+      enumerable: false,
+      writable: false,
+      configurable: false
+    });
+  }
+  return label.__matchMeta;
+}
+
+function computeTokenOverlap(tokens, tokenSet) {
+  if (!tokens.length || !tokenSet || tokenSet.size === 0) {
+    return 0;
+  }
+
+  let overlap = 0;
+  const seen = new Set();
+  for (const token of tokens) {
+    if (!seen.has(token) && tokenSet.has(token)) {
+      overlap++;
+      seen.add(token);
+    }
+  }
+  return overlap;
+}
+
+function matchLabelCandidates(labels, rawInput) {
+  const input = typeof rawInput === 'string' ? rawInput.trim() : '';
+  if (!input) return [];
+
+  const inputMeta = normalizeLabelCandidate(input);
+  if (inputMeta.tokens.length === 0) {
+    return [];
+  }
+
+  const matches = [];
+
+  for (const label of labels) {
+    const meta = getLabelMeta(label);
+    if (!meta) continue;
+
+    let confidence = 0;
+    let reason = 'noOverlap';
+
+    if (label.id && label.id.toLowerCase() === input.toLowerCase()) {
+      confidence = 1;
+      reason = 'idExact';
+    } else if (meta.baseMeta.ordered && meta.baseMeta.ordered === inputMeta.ordered) {
+      confidence = 0.97;
+      reason = 'orderedExact';
+    } else if (meta.baseMeta.sorted && meta.baseMeta.sorted === inputMeta.sorted) {
+      confidence = 0.94;
+      reason = 'tokenExact';
+    } else if (meta.aliasLookup.has(inputMeta.ordered) ||
+               meta.aliasLookup.has(inputMeta.sorted) ||
+               meta.aliasLookup.has(inputMeta.collapsed)) {
+      confidence = 0.95;
+      reason = 'alias';
+    } else {
+      const overlap = computeTokenOverlap(inputMeta.tokens, meta.tokenSet);
+      const inputCoverage = overlap / inputMeta.tokens.length;
+      const labelCoverage = meta.tokenSet.size ? overlap / meta.tokenSet.size : 0;
+
+      if (inputCoverage === 1 && labelCoverage >= 0.5) {
+        confidence = 0.88;
+        reason = 'inputSubset';
+      } else if (inputCoverage >= 0.66 && labelCoverage >= 0.5) {
+        confidence = 0.78;
+        reason = 'strongOverlap';
+      } else if (inputCoverage >= 0.5) {
+        confidence = 0.65;
+        reason = 'partialOverlap';
+      } else if (meta.baseMeta.ordered && meta.baseMeta.ordered.includes(inputMeta.ordered) && inputMeta.ordered) {
+        confidence = 0.62;
+        reason = 'orderedSubstring';
+      } else if (inputMeta.tokens.length === 1) {
+        const token = inputMeta.tokens[0];
+        const hasPrefix = Array.from(meta.tokenSet).some(labelToken =>
+          labelToken.startsWith(token) || token.startsWith(labelToken)
+        );
+        if (hasPrefix) {
+          confidence = 0.58;
+          reason = 'prefixOverlap';
+        }
+      }
+    }
+
+    if (confidence > 0) {
+      matches.push({
+        label,
+        confidence,
+        reason
+      });
+    }
+  }
+
+  matches.sort((a, b) => {
+    if (b.confidence !== a.confidence) {
+      return b.confidence - a.confidence;
+    }
+    return (a.label.name || '').localeCompare(b.label.name || '', 'cs', { sensitivity: 'base' });
+  });
+
+  return matches;
+}
+
+async function fetchLabelDirectory(googleSub) {
+  const authClient = await getAuthenticatedClient(googleSub);
+  const gmail = google.gmail({ version: 'v1', auth: authClient });
+
+  const result = await gmail.users.labels.list({
+    userId: 'me'
+  });
+
+  const labels = (result.data.labels || []).map(label => ({
+    id: label.id,
+    name: label.name,
+    type: label.type === 'system' ? 'system' : 'user',
+    color: label.color?.backgroundColor || null
+  }));
+
+  labels.sort((a, b) => (a.name || '').localeCompare(b.name || '', 'cs', { sensitivity: 'base' }));
+  return labels;
+}
+
+async function getLabelDirectory(googleSub, { forceRefresh = false } = {}) {
+  const cacheKey = googleSub || '__anon__';
+  const cached = labelDirectoryCache.get(cacheKey);
+  const now = Date.now();
+
+  if (!forceRefresh && cached && (now - cached.timestamp) < LABEL_CACHE_TTL_MS) {
+    return cached.labels;
+  }
+
+  const labels = await handleGoogleApiCall(googleSub, () => fetchLabelDirectory(googleSub));
+  labelDirectoryCache.set(cacheKey, { labels, timestamp: now });
+  console.log('✅ Labels listed:', labels.length, forceRefresh ? '(forced refresh)' : '');
+  return labels;
+}
+
+async function resolveLabelIdentifiers(googleSub, requestedIdentifiers, options = {}) {
+  const inputsArray = Array.isArray(requestedIdentifiers)
+    ? requestedIdentifiers
+    : [requestedIdentifiers];
+
+  const normalizedInputs = inputsArray
+    .map(value => typeof value === 'string' ? value.trim() : '')
+    .filter(value => value.length > 0);
+
+  if (normalizedInputs.length === 0) {
+    return {
+      resolved: [],
+      ambiguous: [],
+      unmatched: [],
+      requiresConfirmation: false,
+      appliedLabels: [],
+      appliedLabelIds: [],
+      requested: []
+    };
+  }
+
+  const labels = options.labels || await getLabelDirectory(googleSub, {
+    forceRefresh: options.forceRefresh === true
+  });
+
+  const resolved = [];
+  const ambiguous = [];
+  const unmatched = [];
+  const seenInputs = new Set();
+
+  for (const input of normalizedInputs) {
+    const lowerInput = input.toLowerCase();
+    if (seenInputs.has(lowerInput)) {
+      continue;
+    }
+    seenInputs.add(lowerInput);
+
+    const direct = labels.find(label => label.id?.toLowerCase() === lowerInput);
+    if (direct) {
+      resolved.push({
+        input,
+        label: direct,
+        confidence: 1,
+        reason: 'idExact'
+      });
+      continue;
+    }
+
+    const matches = matchLabelCandidates(labels, input);
+    if (matches.length === 0) {
+      unmatched.push({ input, suggestions: [] });
+      continue;
+    }
+
+    const best = matches[0];
+    const topConfidence = best.confidence;
+    const strongReason = ['idExact', 'orderedExact', 'tokenExact', 'alias'].includes(best.reason);
+    const closeMatches = matches.filter(match =>
+      match.confidence >= 0.6 && (topConfidence - match.confidence) <= 0.1
+    );
+
+    if ((strongReason || topConfidence >= 0.86) && closeMatches.length === 1) {
+      resolved.push({
+        input,
+        label: best.label,
+        confidence: best.confidence,
+        reason: best.reason
+      });
+      continue;
+    }
+
+    if (topConfidence < 0.55) {
+      unmatched.push({
+        input,
+        suggestions: matches.slice(0, 5)
+      });
+      continue;
+    }
+
+    ambiguous.push({
+      input,
+      options: matches.slice(0, 5)
+    });
+  }
+
+  return {
+    resolved,
+    ambiguous,
+    unmatched,
+    requiresConfirmation: ambiguous.length > 0 || unmatched.length > 0,
+    appliedLabels: resolved.map(entry => entry.label),
+    appliedLabelIds: resolved.map(entry => entry.label.id),
+    requested: normalizedInputs
+  };
+}
+
 /**
  * List all Gmail labels
  */
-async function listLabels(googleSub) {
-  return await handleGoogleApiCall(googleSub, async () => {
-    const authClient = await getAuthenticatedClient(googleSub);
-    const gmail = google.gmail({ version: 'v1', auth: authClient });
+async function listLabels(googleSub, options = {}) {
+  const includeMatchesFor = options.includeMatchesFor;
+  const forceRefresh = options.forceRefresh === true;
 
-    const result = await gmail.users.labels.list({
-      userId: 'me'
-    });
+  const labels = await getLabelDirectory(googleSub, { forceRefresh });
 
-    const labels = result.data.labels.map(label => ({
-      id: label.id,
-      name: label.name,
-      type: label.type === 'system' ? 'system' : 'user',
-      color: label.color?.backgroundColor || null
-    }));
-
-    console.log('✅ Labels listed:', labels.length);
+  if (typeof includeMatchesFor === 'undefined') {
     return labels;
+  }
+
+  const resolution = await resolveLabelIdentifiers(googleSub, includeMatchesFor, {
+    labels
   });
+
+  return {
+    labels,
+    resolution
+  };
 }
 
 /**
@@ -1826,6 +2140,7 @@ const traced = wrapModuleFunctions('services.googleApiService', {
   toggleStar,
   markAsRead,
   listLabels,
+  resolveLabelIdentifiers,
   modifyMessageLabels,
   modifyThreadLabels,
   getThread,
@@ -1859,6 +2174,7 @@ const {
   toggleStar: tracedToggleStar,
   markAsRead: tracedMarkAsRead,
   listLabels: tracedListLabels,
+  resolveLabelIdentifiers: tracedResolveLabelIdentifiers,
   modifyMessageLabels: tracedModifyMessageLabels,
   modifyThreadLabels: tracedModifyThreadLabels,
   getThread: tracedGetThread,
@@ -1892,6 +2208,7 @@ export {
   tracedToggleStar as toggleStar,
   tracedMarkAsRead as markAsRead,
   tracedListLabels as listLabels,
+  tracedResolveLabelIdentifiers as resolveLabelIdentifiers,
   tracedModifyMessageLabels as modifyMessageLabels,
   tracedModifyThreadLabels as modifyThreadLabels,
   tracedGetThread as getThread,

@@ -41,6 +41,8 @@ async function inboxOverview(googleSub, params = {}) {
   } = params;
 
   const queryParts = [];
+  let labelResolution = null;
+  let requestedLabelCount = 0;
 
   if (typeof rawQuery === 'string' && rawQuery.trim()) {
     queryParts.push(rawQuery.trim());
@@ -75,12 +77,40 @@ async function inboxOverview(googleSub, params = {}) {
     }
   }
 
-  if (Array.isArray(filters.labelIds) && filters.labelIds.length > 0) {
-    filters.labelIds.forEach(id => {
-      if (id) {
-        queryParts.push(`label:${id}`);
+  if (filters.labelIds) {
+    const requestedIdentifiers = Array.isArray(filters.labelIds)
+      ? filters.labelIds
+      : [filters.labelIds];
+
+    const cleanedIdentifiers = requestedIdentifiers
+      .map(value => typeof value === 'string' ? value.trim() : '')
+      .filter(Boolean);
+
+    if (cleanedIdentifiers.length > 0) {
+      requestedLabelCount = cleanedIdentifiers.length;
+      labelResolution = await gmailService.resolveLabelIdentifiers(googleSub, cleanedIdentifiers);
+
+      const appliedIds = labelResolution.appliedLabelIds || [];
+      appliedIds.forEach(id => {
+        if (id) {
+          queryParts.push(`label:${id}`);
+        }
+      });
+
+      if (appliedIds.length === 0 && labelResolution.requiresConfirmation) {
+        return {
+          items: [],
+          subset: false,
+          nextPageToken: null,
+          labelResolution: {
+            ...labelResolution,
+            requestedCount: requestedLabelCount,
+            queryAppliedLabelIds: [],
+            querySkipped: true
+          }
+        };
       }
-    });
+    }
   }
 
   if (timeRange) {
@@ -156,11 +186,21 @@ async function inboxOverview(googleSub, params = {}) {
   
   const hasMore = Boolean(searchResults.nextPageToken);
 
-  return {
+  const response = {
     items,
     subset: hasMore,
     nextPageToken: searchResults.nextPageToken || null
   };
+
+  if (labelResolution) {
+    response.labelResolution = {
+      ...labelResolution,
+      requestedCount: requestedLabelCount,
+      queryAppliedLabelIds: labelResolution.appliedLabelIds || []
+    };
+  }
+
+  return response;
 }
 
 /**
@@ -172,11 +212,17 @@ async function inboxSnippets(googleSub, params = {}) {
   const overview = await inboxOverview(googleSub, params);
 
   if (overview.items.length === 0) {
-    return {
+    const emptyResponse = {
       items: [],
       subset: overview.subset,
       nextPageToken: overview.nextPageToken
     };
+
+    if (overview.labelResolution) {
+      emptyResponse.labelResolution = overview.labelResolution;
+    }
+
+    return emptyResponse;
   }
 
   const batchSize = 10;
@@ -230,11 +276,17 @@ async function inboxSnippets(googleSub, params = {}) {
     enrichedItems.push(...batchResults);
   }
 
-  return {
+  const response = {
     items: enrichedItems,
     subset: overview.subset,
     nextPageToken: overview.nextPageToken
   };
+
+  if (overview.labelResolution) {
+    response.labelResolution = overview.labelResolution;
+  }
+
+  return response;
 }
 
 /**
