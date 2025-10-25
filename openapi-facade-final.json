@@ -561,6 +561,226 @@
         }
       }
     },
+    "/macros/inbox/unanswered": {
+      "post": {
+        "operationId": "macroInboxUnanswered",
+        "summary": "Find conversations awaiting your reply",
+        "description": "Use this macro when you need a structured view of inbox threads where someone else replied last and you may owe a follow-up — for example confirming showings, responding to offers, or checking on open service requests. By default it scans today's Primary inbox, surfaces unread (never opened) and read (seen but still awaiting action) buckets, and includes guidance for working with the recommended 'nevyřízeno' follow-up label plus the internal 'meta_seen' tracker so conversations are not shown twice.",
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "description": "Adjust includeUnread/includeRead to control which buckets appear. Default strictNoReply=true limits the report to threads without any reply from you; set false if the user wants to review conversations they have replied to before but where the other side has the latest word. Unless overridden the macro scans today's Primary inbox only (primaryOnly=true, implicit timeRange=today).",
+                "properties": {
+                  "includeUnread": {
+                    "type": "boolean",
+                    "default": true,
+                    "description": "If true (default) include unread conversations (latest message unread)."
+                  },
+                  "includeRead": {
+                    "type": "boolean",
+                    "default": true,
+                    "description": "If true (default) include conversations you already opened but never answered."
+                  },
+                  "maxItems": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 100,
+                    "default": 20,
+                    "description": "Maximum threads to return per bucket (unread/read). Increase if user wants a longer watchlist."
+                  },
+                  "timeRange": {
+                    "type": "object",
+                    "description": "Optional Gmail time filter. Use relative keywords for quick ranges (today, last7d, etc.).",
+                    "properties": {
+                      "relative": {
+                        "type": "string",
+                        "enum": [
+                          "lastHour",
+                          "last3h",
+                          "last24h",
+                          "today",
+                          "yesterday",
+                          "thisWeek",
+                          "last7d"
+                        ],
+                        "description": "Relative window. Example: {relative:'last24h'} to focus on the last day."
+                      },
+                      "start": {
+                        "type": "string",
+                        "format": "date-time",
+                        "description": "Explicit ISO8601 start boundary. Converted to Gmail 'after:' unix timestamp."
+                      },
+                      "end": {
+                        "type": "string",
+                        "format": "date-time",
+                        "description": "Explicit ISO8601 end boundary. Converted to Gmail 'before:' unix timestamp."
+                      }
+                    }
+                  },
+                  "strictNoReply": {
+                    "type": "boolean",
+                    "default": true,
+                    "description": "true (default)=only threads where you NEVER replied. false=include threads where you replied in the past but the latest message still awaits your answer."
+                  },
+                  "primaryOnly": {
+                    "type": "boolean",
+                    "default": true,
+                    "description": "true (default)=limit to category:Primary. Set false to include all inbox categories."
+                  },
+                  "unreadPageToken": {
+                    "type": "string",
+                    "description": "Pagination token for unread bucket. Pass the previous response's unread.nextPageToken to continue scanning newer results."
+                  },
+                  "readPageToken": {
+                    "type": "string",
+                    "description": "Pagination token for read bucket."
+                  },
+                  "labelName": {
+                    "type": "string",
+                    "default": "nevyřízeno",
+                    "description": "Preferred label name GPT should suggest for follow-ups. Defaults to 'nevyřízeno'."
+                  },
+                  "labelColor": {
+                    "type": "string",
+                    "description": "Optional hex color (e.g. '#d93025') to suggest when creating the follow-up label."
+                  },
+                  "query": {
+                    "type": "string",
+                    "description": "Extra Gmail search terms (e.g., 'from:makler@firma.cz')."
+                  }
+                }
+              },
+              "examples": {
+                "defaultWatch": {
+                  "summary": "Default follow-up watchlist",
+                  "value": {
+                    "strictNoReply": true
+                  }
+                },
+                "includeReadOnly": {
+                  "summary": "Only show read-but-unanswered threads from last 7 days",
+                  "value": {
+                    "includeUnread": false,
+                    "includeRead": true,
+                    "timeRange": {
+                      "relative": "last7d"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successfully identified conversations awaiting reply",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "summary": {
+                      "type": "object",
+                      "description": "Top-level counters and diagnostics for the current run.",
+                      "properties": {
+                        "totalAwaiting": { "type": "integer" },
+                        "unreadCount": { "type": "integer" },
+                        "readCount": { "type": "integer" },
+                        "strictMode": { "type": "boolean" },
+                        "timeRangeApplied": { "type": "boolean", "description": "true when any time filter (including the default 'today') was applied." },
+                        "timeRangeSource": { "type": ["string", "null"], "description": "'default_today' when the macro auto-limited to today; otherwise null or custom hint." },
+                        "timeWindow": {
+                          "type": ["object", "null"],
+                          "description": "Resolved time window expressed in Europe/Prague timezone.",
+                          "properties": {
+                            "start": { "type": ["string", "null"], "format": "date-time" },
+                            "end": { "type": ["string", "null"], "format": "date-time" },
+                            "timezone": { "type": "string" }
+                          }
+                        },
+                        "primaryOnly": { "type": "boolean", "description": "true when only category:Primary was scanned." },
+                        "scannedMessages": { "type": "integer", "description": "Raw Gmail messages inspected to build the list." },
+                        "overflowCount": { "type": "integer", "description": "Threads skipped because maxItems limit was reached." },
+                        "strictFilteredCount": { "type": "integer", "description": "Threads skipped due to strictNoReply=true (already replied before)." },
+                        "labelAlreadyApplied": { "type": "integer", "description": "How many returned threads already have the suggested label." },
+                        "missingLabel": { "type": "boolean", "description": "true if the suggested label does not yet exist in Gmail." },
+                        "trackingLabelAlreadyApplied": { "type": "integer", "description": "How many returned threads already have the internal tracking label." },
+                        "trackingLabelMissing": { "type": "boolean", "description": "true if the internal meta_seen label does not exist in Gmail." },
+                        "trackingLabelSkipped": { "type": "integer", "description": "Threads skipped because meta_seen was already applied." }
+                      }
+                    },
+                    "unread": {
+                      "$ref": "#/components/schemas/UnansweredBucket"
+                    },
+                    "read": {
+                      "$ref": "#/components/schemas/UnansweredBucket"
+                    },
+                    "labelRecommendation": {
+                      "type": "object",
+                      "description": "Suggested label metadata to help GPT offer follow-up tagging (user-facing 'nevyřízeno').",
+                      "properties": {
+                        "suggestedName": { "type": "string" },
+                        "suggestedColor": { "type": "string" },
+                        "textColor": { "type": "string" },
+                        "existingLabel": {
+                          "type": ["object", "null"],
+                          "properties": {
+                            "id": { "type": "string" },
+                            "name": { "type": "string" },
+                            "color": { "type": ["string", "null"] }
+                          }
+                        },
+                        "canCreate": { "type": "boolean" },
+                        "createRequest": {
+                          "type": ["object", "null"],
+                          "description": "Pre-filled RPC payload GPT can send to create the label via /rpc/mail (op=labels, create)."
+                        },
+                        "applyRequestTemplate": {
+                          "type": ["object", "null"],
+                          "description": "Template RPC payload for applying the label (messageId must be filled before calling /rpc/mail)."
+                        }
+                      }
+                    }
+                    ,
+                    "trackingLabel": {
+                      "type": "object",
+                      "description": "Internal tracking label ('meta_seen') used so the macro does not return the same thread twice.",
+                      "properties": {
+                        "suggestedName": { "type": "string" },
+                        "suggestedColor": { "type": "string" },
+                        "textColor": { "type": "string" },
+                        "existingLabel": {
+                          "type": ["object", "null"],
+                          "properties": {
+                            "id": { "type": "string" },
+                            "name": { "type": "string" },
+                            "color": { "type": ["string", "null"] }
+                          }
+                        },
+                        "canCreate": { "type": "boolean" },
+                        "createRequest": {
+                          "type": ["object", "null"],
+                          "description": "Pre-filled RPC payload GPT can send to create the meta_seen label via /rpc/mail (op=labels, create)."
+                        },
+                        "applyRequestTemplate": {
+                          "type": ["object", "null"],
+                          "description": "Template RPC payload for applying the tracking label. Normally used together with labelRecommendation when tagging messages."
+                        },
+                        "role": { "type": ["string", "null"], "description": "Constant 'watchlist_tracking'." },
+                        "skipReason": { "type": ["string", "null"], "description": "Diagnostic key for skippedReasons (e.g., 'trackingLabelPresent')." }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/macros/email/quickRead": {
       "post": {
         "operationId": "macroEmailQuickRead",
@@ -2190,7 +2410,32 @@
                     },
                     "data": {
                       "type": "object",
-                      "description": "Response data (varies by operation)"
+                      "description": "Response data (varies by operation). Reply/send flows return the Gmail payload and may include followUpLabelReminder so the assistant can offer removing the 'nevyřízeno' label after replying.",
+                      "properties": {
+                        "followUpLabelReminder": {
+                          "type": ["object", "null"],
+                          "description": "Present when the replied-to message still has the 'nevyřízeno' label. Use the provided modify payload(s) to remove it after confirming with the user; the meta_seen tracker stays in place.",
+                          "properties": {
+                            "labelId": { "type": "string" },
+                            "labelName": { "type": "string" },
+                            "threadId": { "type": ["string", "null"] },
+                            "messages": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "messageId": { "type": "string" },
+                                  "removeRequest": {
+                                    "type": "object",
+                                    "description": "Pre-filled /rpc/mail payload (op=labels, modify) to remove 'nevyřízeno' from the message."
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        }
+                      },
+                      "additionalProperties": true
                     }
                   }
                 }
@@ -3757,6 +4002,105 @@
                 "description": "Count of other inline attachments (e.g., buttons, logos)"
               }
             }
+          }
+        }
+      },
+      "UnansweredBucket": {
+        "type": "object",
+        "description": "Bucket of threads waiting for the user's reply. Separate instances returned for unread vs. read conversations.",
+        "properties": {
+          "items": {
+            "type": "array",
+            "description": "Conversation cards awaiting reply (respecting maxItems).",
+            "items": {
+              "type": "object",
+              "properties": {
+                "threadId": { "type": "string" },
+                "messageId": { "type": "string" },
+                "subject": { "type": "string" },
+                "sender": {
+                  "type": "object",
+                  "properties": {
+                    "name": { "type": ["string", "null"] },
+                    "email": { "type": ["string", "null"] }
+                  }
+                },
+                "receivedAt": {
+                  "type": ["string", "null"],
+                  "description": "Europe/Prague ISO timestamp of the latest incoming message."
+                },
+                "receivedInternal": {
+                  "type": ["integer", "null"],
+                  "description": "Gmail internalDate (ms epoch) for the latest incoming message."
+                },
+                "snippet": { "type": "string" },
+                "gmailLinks": {
+                  "type": ["object", "null"],
+                  "properties": {
+                    "thread": { "type": "string" },
+                    "message": { "type": ["string", "null"] }
+                  }
+                },
+                "messageCount": { "type": "integer" },
+                "readState": {
+                  "type": "object",
+                  "properties": {
+                    "isUnread": { "type": "boolean" },
+                    "isRead": { "type": "boolean" }
+                  }
+                },
+                "hasUserReply": { "type": "boolean" },
+                "lastUserReplyAt": { "type": ["string", "null"] },
+                "lastUserReplyInternal": { "type": ["integer", "null"] },
+                "waitingMinutes": { "type": ["integer", "null"] },
+                "waitingHoursApprox": { "type": ["number", "null"] },
+                "sinceLastUserReplyMinutes": { "type": ["integer", "null"] },
+                "participants": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "email": { "type": ["string", "null"] },
+                      "name": { "type": ["string", "null"] }
+                    }
+                  }
+                },
+                "label": {
+                  "type": ["object", "null"],
+                  "properties": {
+                    "suggestedId": { "type": "string" },
+                    "suggestedName": { "type": "string" },
+                    "alreadyApplied": { "type": "boolean" }
+                  }
+                },
+                "labelApplied": { "type": "boolean" },
+                "strictFiltered": {
+                  "type": "boolean",
+                  "description": "true when the item would be hidden in strict mode because you already replied earlier."
+                }
+              }
+            }
+          },
+          "subset": {
+            "type": "boolean",
+            "description": "true when additional matching threads exist beyond this response."
+          },
+          "nextPageToken": {
+            "type": ["string", "null"],
+            "description": "Token for fetching the next page of this bucket via unreadPageToken/readPageToken."
+          },
+          "scanned": {
+            "type": "integer",
+            "description": "Number of Gmail messages inspected while building this bucket."
+          },
+          "overflowCount": {
+            "type": "integer",
+            "description": "Threads omitted because maxItems limit was reached."
+          },
+          "skippedReasons": {
+            "type": "object",
+            "description": "Diagnostic map of skip reasons (e.g., lastMessageFromUser, userReplyPresent).",
+            "additionalProperties": { "type": "integer" }
           }
         }
       },

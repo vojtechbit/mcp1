@@ -43,6 +43,18 @@
 - Další volání (`search`, makra inboxu, `modifyLabels`) už posílají jen ověřená `labelIds`. Do query přidávám `label:<id>`; uživatelské UI informuji, který štítek se použil a odkud se vzal (včetně zmínky o fuzzy shodě/aliasu).
 - Pokud jsem při filtrování nenašel jistou shodu, ale mám kandidáty, jasně řeknu, že je potřeba potvrzení, a nabídnu pokračování.
 
+### Sledování vláken čekajících na odpověď
+- `/macros/inbox/unanswered` spouštěj, když uživatel výslovně chce dohledat konverzace, kde poslední zpráva přišla od druhé strany a on by mohl zapomenout odpovědět (např. potvrzení schůzky, reakce na nabídku, otevřená domluva). Neodvozuj použití jen z obecného klíčového slova – nejprve potvrď, že právě tohle potřebuje.
+- Výchozí parametry drž konzervativní (`strictNoReply:true`, obě sekce zapnuté). Pokud uživatel nespecifikuje čas ani kategorii, backend projde **jen dnešní** vlákna z Primárního inboxu (`summary.timeWindow`, `summary.primaryOnly`). To ve shrnutí vždy připomeň a nabídni rozšíření času nebo kategorií (`primaryOnly:false`).
+- Výstup vždy zahrň obě sekce (Unread/Read) a popiš je srozumitelně. Jakmile response obsahuje `subset:true` nebo `summary.overflowCount>0`, řekni, že jde o dílčí výpis, a nabídni pokračování pomocí `unreadPageToken` / `readPageToken`.
+- Diagnostiku (`summary.strictFilteredCount`, `summary.labelAlreadyApplied`, `summary.missingLabel`, `summary.trackingLabelSkipped`, `skippedReasons`) interpretuj nahlas: vysvětli, proč některá vlákna byla přeskočena (např. `trackingLabelPresent` = už má meta štítek `meta_seen`), a navrhni řešení (vypnout strict mód, rozšířit čas, přepnout `primaryOnly`).
+- `labelRecommendation` používej jako návrh pro štítek „nevyřízeno“:
+  - Pokud `existingLabel` existuje, připrav konkrétní `op:"labels"` + `params.modify` až poté, co uživatel vybere vlákna k označení a potvrdí akci.
+  - Pokud `canCreate:true`, nabídni založení štítku (připomeň navrženou barvu), ale `createRequest` odešli pouze po explicitním souhlasu.
+- Jakmile přidáváš `nevyřízeno`, backend automaticky přidá i servisní `meta_seen`, aby se vlákno příště neobjevilo. Upozorni uživatele, že `meta_seen` se nechává na místě – odstraňuje se pouze `nevyřízeno`.
+- Pokud odpověď vrátí `trackingLabel.canCreate:true`, nejprve po souhlasu vytvoř `meta_seen` a teprve pak pokračuj v označování.
+- Nikdy štítek neaplikuj ani nevytvářej automaticky. Vždy zopakuj, které vlákno bude označeno a že jde o dobrovolnou akci.
+
 ### Rozřazení důležitosti e-mailů
 - Kategorizaci důležitosti stavím na kombinaci mailboxu (`Primary`, `Work` mají vyšší váhu) a obsahu (`snippet` nebo `bodyPreview`).
 - Vysokou prioritu přiděluji tématům s přímým dopadem na práci či osobní život (klienti, vedení, změny událostí, závazky, fakturace), i kdyby přišla mimo primární inbox.
@@ -53,6 +65,9 @@
 ### Gmail kategorie — API vs. UI
 - API vrací původní kategorii (Primary, Updates atd.); Gmail UI může zobrazit jinou kvůli personalizaci.
 - Pokud se kategorie liší, vysvětli rozdíl. Nejde o bug.
+
+### Připomínka po odpovědi
+- Mutace (`reply`, `replyToThread`, `send` s `draftId`) mohou vrátit `followUpLabelReminder`. Vždy po potvrzení akce připomeň, že původní zpráva měla štítek `nevyřízeno`, nabídni připravený `modify` request na jeho odebrání a vysvětli, že `meta_seen` zůstává kvůli sledování.
 
 ## 4. Kalendář, kontakty, úkoly
 - Kalendář: list → detail → create/update/delete. Před vytvořením nabízím kontrolu kolizí, pokud je dostupná.

@@ -32,6 +32,7 @@ router.use(normalizeRpcRequest);
 // Inbox Macros
 router.post('/macros/inbox/overview', facadeController.macroInboxOverview);
 router.post('/macros/inbox/snippets', facadeController.macroInboxSnippets);
+router.post('/macros/inbox/unanswered', facadeController.macroInboxUnanswered);
 
 // Email Macros
 router.post('/macros/email/quickRead', facadeController.macroEmailQuickRead);

@@ -6,6 +6,11 @@ import { isBlocked } from '../utils/attachmentSecurity.js';
 import { getPragueOffsetHours } from '../utils/helpers.js';
 import { debugStep, wrapModuleFunctions } from '../utils/advancedDebugging.js';
 import dotenv from 'dotenv';
+import {
+  FOLLOW_UP_LABEL_NAME,
+  TRACKING_LABEL_NAME,
+  TRACKING_LABEL_DEFAULTS
+} from '../config/followUpLabels.js';
 // pdf-parse má problém s importem - načteme až když je potřeba
 import XLSX from 'xlsx-js-style';
 
@@ -28,6 +33,9 @@ const DAY_IN_MS = 24 * 60 * 60 * 1000;
 // ==================== LABEL DIRECTORY CACHE ====================
 const LABEL_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes is enough for interactive sessions
 const labelDirectoryCache = new Map();
+
+const USER_ADDRESS_CACHE_TTL_MS = 5 * 60 * 1000;
+const userAddressCache = new Map();
 
 /**
  * Create authenticated Google API client
@@ -1267,6 +1275,15 @@ async function replyToEmail(googleSub, messageId, { body }) {
     const originalSubject = headers.find(h => h.name === 'Subject')?.value;
     const originalMessageId = headers.find(h => h.name === 'Message-ID')?.value;
 
+    const { followUpLabel } = await getWatchlistLabelContext(googleSub);
+    let followUpLabelReminder = null;
+    if (followUpLabel && Array.isArray(original.data.labelIds) && original.data.labelIds.includes(followUpLabel.id)) {
+      followUpLabelReminder = buildFollowUpLabelReminderPayload(followUpLabel, {
+        messageIds: [messageId],
+        threadId: original.data.threadId
+      });
+    }
+
     const replySubject = originalSubject?.replace(/^Re: /, '') || '';
     const encodedSubject = `=?UTF-8?B?${Buffer.from(`Re: ${replySubject}`, 'utf8').toString('base64')}?=`;
 
@@ -1297,7 +1314,10 @@ async function replyToEmail(googleSub, messageId, { body }) {
       }
     });
 
-    return result.data;
+    return {
+      ...result.data,
+      followUpLabelReminder
+    };
   });
 }
 
@@ -1373,13 +1393,50 @@ async function sendDraft(googleSub, draftId) {
     const authClient = await getAuthenticatedClient(googleSub);
     const gmail = google.gmail({ version: 'v1', auth: authClient });
 
+    let followUpLabelReminder = null;
+
+    try {
+      const { followUpLabel } = await getWatchlistLabelContext(googleSub);
+      if (followUpLabel) {
+        const draft = await gmail.users.drafts.get({
+          userId: 'me',
+          id: draftId,
+          format: 'metadata',
+          metadataHeaders: ['Message-ID']
+        });
+
+        const threadId = draft.data?.message?.threadId || null;
+        if (threadId) {
+          const thread = await gmail.users.threads.get({
+            userId: 'me',
+            id: threadId,
+            format: 'metadata'
+          });
+
+          const messageIds = (thread.data?.messages || [])
+            .filter(msg => Array.isArray(msg.labelIds) && msg.labelIds.includes(followUpLabel.id))
+            .map(msg => msg.id);
+
+          followUpLabelReminder = buildFollowUpLabelReminderPayload(followUpLabel, {
+            messageIds,
+            threadId
+          });
+        }
+      }
+    } catch (reminderError) {
+      console.warn('⚠️ Unable to build follow-up label reminder for draft send:', reminderError.message);
+    }
+
     const result = await gmail.users.drafts.send({
       userId: 'me',
       id: draftId
     });
 
     console.log('✅ Draft sent:', draftId);
-    return result.data;
+    return {
+      ...result.data,
+      followUpLabelReminder
+    };
   });
 }
 
@@ -1769,6 +1826,147 @@ async function listLabels(googleSub, options = {}) {
   };
 }
 
+function findLabelByExactName(labels = [], targetName) {
+  if (!targetName) {
+    return null;
+  }
+
+  return labels.find(label =>
+    typeof label?.name === 'string'
+      && label.name.localeCompare(targetName, 'cs', { sensitivity: 'base' }) === 0
+  ) || null;
+}
+
+async function getWatchlistLabelContext(googleSub, { forceRefresh = false } = {}) {
+  const labels = await getLabelDirectory(googleSub, { forceRefresh });
+  const followUpLabel = findLabelByExactName(labels, FOLLOW_UP_LABEL_NAME);
+  const trackingLabel = findLabelByExactName(labels, TRACKING_LABEL_NAME);
+
+  return {
+    labels,
+    followUpLabel,
+    trackingLabel
+  };
+}
+
+function buildFollowUpLabelReminderPayload(label, { messageIds = [], threadId } = {}) {
+  if (!label) {
+    return null;
+  }
+
+  const uniqueMessageIds = Array.from(new Set(
+    (Array.isArray(messageIds) ? messageIds : [])
+      .filter(value => typeof value === 'string' && value.length > 0)
+  ));
+
+  if (uniqueMessageIds.length === 0) {
+    return null;
+  }
+
+  return {
+    labelId: label.id,
+    labelName: label.name,
+    threadId: threadId || null,
+    messages: uniqueMessageIds.map(id => ({
+      messageId: id,
+      removeRequest: {
+        op: 'labels',
+        params: {
+          modify: {
+            messageId: id,
+            add: [],
+            remove: [label.id]
+          }
+        }
+      }
+    }))
+  };
+}
+
+async function ensureTrackingLabelIncluded(googleSub, addIds = []) {
+  const normalizedAdd = Array.isArray(addIds)
+    ? addIds.filter(id => typeof id === 'string' && id.length > 0)
+    : [];
+
+  if (normalizedAdd.length === 0) {
+    return normalizedAdd;
+  }
+
+  const addSet = new Set(normalizedAdd);
+  const { followUpLabel, trackingLabel } = await getWatchlistLabelContext(googleSub);
+
+  if (!followUpLabel || !addSet.has(followUpLabel.id)) {
+    return Array.from(addSet);
+  }
+
+  let trackingLabelId = trackingLabel?.id || null;
+
+  if (!trackingLabelId) {
+    try {
+      const created = await createLabel(googleSub, {
+        name: TRACKING_LABEL_NAME,
+        color: TRACKING_LABEL_DEFAULTS.color,
+        labelListVisibility: 'labelShow',
+        messageListVisibility: 'show'
+      });
+      trackingLabelId = created?.id || null;
+    } catch (createError) {
+      console.warn('⚠️ Unable to auto-create tracking label meta_seen:', createError.message);
+      const refreshed = await getWatchlistLabelContext(googleSub, { forceRefresh: true });
+      trackingLabelId = refreshed.trackingLabel?.id || null;
+    }
+  }
+
+  if (trackingLabelId) {
+    addSet.add(trackingLabelId);
+  }
+
+  return Array.from(addSet);
+}
+
+async function createLabel(googleSub, options = {}) {
+  const { name, color, labelListVisibility, messageListVisibility } = options;
+
+  if (typeof name !== 'string' || name.trim().length === 0) {
+    const error = new Error('Label name is required');
+    error.statusCode = 400;
+    throw error;
+  }
+
+  return await handleGoogleApiCall(googleSub, async () => {
+    const authClient = await getAuthenticatedClient(googleSub);
+    const gmail = google.gmail({ version: 'v1', auth: authClient });
+
+    const requestBody = {
+      name: name.trim(),
+      labelListVisibility: labelListVisibility || 'labelShow',
+      messageListVisibility: messageListVisibility || 'show'
+    };
+
+    if (color && typeof color === 'object') {
+      requestBody.color = {
+        backgroundColor: color.backgroundColor || '#d93025',
+        textColor: color.textColor || '#ffffff'
+      };
+    }
+
+    const result = await gmail.users.labels.create({
+      userId: 'me',
+      requestBody
+    });
+
+    const created = result.data || {};
+    return {
+      id: created.id,
+      name: created.name,
+      color: created.color?.backgroundColor || null,
+      textColor: created.color?.textColor || null,
+      messageListVisibility: created.messageListVisibility,
+      labelListVisibility: created.labelListVisibility
+    };
+  });
+}
+
 /**
  * Modify labels on a message
  */
@@ -1777,11 +1975,13 @@ async function modifyMessageLabels(googleSub, messageId, { add = [], remove = []
     const authClient = await getAuthenticatedClient(googleSub);
     const gmail = google.gmail({ version: 'v1', auth: authClient });
 
+    const finalAdd = await ensureTrackingLabelIncluded(googleSub, add);
+
     await gmail.users.messages.modify({
       userId: 'me',
       id: messageId,
       requestBody: {
-        addLabelIds: add,
+        addLabelIds: finalAdd,
         removeLabelIds: remove
       }
     });
@@ -1799,11 +1999,13 @@ async function modifyThreadLabels(googleSub, threadId, { add = [], remove = [] }
     const authClient = await getAuthenticatedClient(googleSub);
     const gmail = google.gmail({ version: 'v1', auth: authClient });
 
+    const finalAdd = await ensureTrackingLabelIncluded(googleSub, add);
+
     await gmail.users.threads.modify({
       userId: 'me',
       id: threadId,
       requestBody: {
-        addLabelIds: add,
+        addLabelIds: finalAdd,
         removeLabelIds: remove
       }
     });
@@ -1811,6 +2013,53 @@ async function modifyThreadLabels(googleSub, threadId, { add = [], remove = [] }
     console.log(`✅ Labels modified on thread ${threadId}`);
     return { success: true };
   });
+}
+
+async function fetchUserAddressDirectory(googleSub) {
+  const authClient = await getAuthenticatedClient(googleSub);
+  const gmail = google.gmail({ version: 'v1', auth: authClient });
+
+  const [profileResult, sendAsResult] = await Promise.allSettled([
+    gmail.users.getProfile({ userId: 'me' }),
+    gmail.users.settings.sendAs.list({ userId: 'me' })
+  ]);
+
+  const addresses = new Set();
+
+  if (profileResult.status === 'fulfilled') {
+    const profileEmail = profileResult.value?.data?.emailAddress;
+    if (profileEmail) {
+      addresses.add(profileEmail);
+    }
+  }
+
+  if (sendAsResult.status === 'fulfilled') {
+    const sendAsEntries = sendAsResult.value?.data?.sendAs || [];
+    for (const entry of sendAsEntries) {
+      if (entry?.sendAsEmail) {
+        addresses.add(entry.sendAsEmail);
+      }
+    }
+  } else if (sendAsResult.reason) {
+    console.warn('⚠️ Failed to list send-as addresses:', sendAsResult.reason.message || sendAsResult.reason);
+  }
+
+  return Array.from(addresses);
+}
+
+async function getUserAddresses(googleSub, { forceRefresh = false } = {}) {
+  const cacheKey = googleSub || '__anon__';
+  const cached = userAddressCache.get(cacheKey);
+  const now = Date.now();
+
+  if (!forceRefresh && cached && (now - cached.timestamp) < USER_ADDRESS_CACHE_TTL_MS) {
+    return cached.addresses;
+  }
+
+  const addresses = await handleGoogleApiCall(googleSub, () => fetchUserAddressDirectory(googleSub));
+
+  userAddressCache.set(cacheKey, { addresses, timestamp: now });
+  return addresses;
 }
 
 // ==================== NEW: THREADS ====================
@@ -1831,58 +2080,87 @@ async function getThread(googleSub, threadId) {
     });
 
     const messages = result.data.messages || [];
-    const lastMessage = messages[messages.length - 1];
-    const lastHeaders = lastMessage?.payload?.headers || [];
-    
-    // Extract participants
-    const participantsSet = new Set();
-    for (const msg of messages) {
-      const fromHeader = msg.payload?.headers?.find(h => h.name.toLowerCase() === 'from')?.value;
-      if (fromHeader) {
-        const emailMatch = fromHeader.match(/<(.+)>/) || fromHeader.match(/([^\s]+@[^\s]+)/);
-        if (emailMatch) {
-          participantsSet.add(emailMatch[1] || emailMatch[0]);
-        }
+
+    const normalizedMessages = messages.map(msg => {
+      const headers = msg.payload?.headers || [];
+      const fromHeader = headers.find(h => h.name.toLowerCase() === 'from')?.value || '';
+      const subjectHeader = headers.find(h => h.name.toLowerCase() === 'subject')?.value || '';
+
+      let fromEmail = fromHeader;
+      let fromName = '';
+      const emailMatch = fromHeader.match(/<(.+)>/);
+      if (emailMatch) {
+        fromEmail = emailMatch[1];
+        fromName = fromHeader.replace(/<.+>/, '').trim().replace(/^["']|["']$/g, '');
       }
-    }
 
-    const lastFrom = lastHeaders.find(h => h.name.toLowerCase() === 'from')?.value || '';
-    const lastSubject = lastHeaders.find(h => h.name.toLowerCase() === 'subject')?.value || '';
-    
-    let lastFromEmail = lastFrom;
-    let lastFromName = '';
-    const emailMatch = lastFrom.match(/<(.+)>/);
-    if (emailMatch) {
-      lastFromEmail = emailMatch[1];
-      lastFromName = lastFrom.replace(/<.+>/, '').trim().replace(/^["']|["']$/g, '');
-    }
+      const internalDateMs = msg.internalDate ? parseInt(msg.internalDate) : null;
+      const internalIso = internalDateMs ? new Date(internalDateMs).toISOString() : null;
 
-    const isUnread = messages.some(msg => msg.labelIds?.includes('UNREAD'));
+      return {
+        id: msg.id,
+        threadId: msg.threadId,
+        labelIds: msg.labelIds || [],
+        snippet: msg.snippet || '',
+        subject: subjectHeader,
+        from: {
+          name: fromName || null,
+          email: fromEmail || null,
+          raw: fromHeader || null
+        },
+        internalDate: internalDateMs,
+        receivedAt: internalIso
+      };
+    });
+
+    const lastMessage = normalizedMessages[normalizedMessages.length - 1] || null;
+
+    const participantsMap = new Map();
+    normalizedMessages.forEach(msg => {
+      const email = msg.from?.email;
+      if (!email) {
+        return;
+      }
+
+      const existing = participantsMap.get(email);
+      const candidateName = msg.from?.name || null;
+
+      if (!existing) {
+        participantsMap.set(email, {
+          email,
+          name: candidateName
+        });
+      } else if (!existing.name && candidateName) {
+        participantsMap.set(email, {
+          email,
+          name: candidateName
+        });
+      }
+    });
+
+    const isUnread = normalizedMessages.some(msg => (msg.labelIds || []).includes('UNREAD'));
     const allLabelIds = new Set();
-    messages.forEach(msg => {
+    normalizedMessages.forEach(msg => {
       (msg.labelIds || []).forEach(id => allLabelIds.add(id));
     });
 
     return {
       threadId: threadId,
-      count: messages.length,
+      count: normalizedMessages.length,
       unread: isUnread,
-      participants: Array.from(participantsSet).map(email => ({
-        email,
-        name: null
-      })),
-      messageIds: messages.map(m => m.id),
+      participants: Array.from(participantsMap.values()),
+      messageIds: normalizedMessages.map(m => m.id),
       labelIds: Array.from(allLabelIds),
-      last: {
-        id: lastMessage.id,
-        from: {
-          name: lastFromName || null,
-          email: lastFromEmail
-        },
-        subject: lastSubject,
-        date: new Date(parseInt(lastMessage.internalDate)).toISOString(),
-        snippet: lastMessage.snippet
-      }
+      messages: normalizedMessages,
+      last: lastMessage
+        ? {
+            id: lastMessage.id,
+            from: lastMessage.from,
+            subject: lastMessage.subject,
+            date: lastMessage.receivedAt,
+            snippet: lastMessage.snippet
+          }
+        : null
     };
   });
 }
@@ -1928,7 +2206,17 @@ async function replyToThread(googleSub, threadId, { body }) {
     const messages = thread.data.messages || [];
     const lastMessage = messages[messages.length - 1];
     const headers = lastMessage?.payload?.headers || [];
-    
+
+    const { followUpLabel } = await getWatchlistLabelContext(googleSub);
+    const followUpLabelReminder = followUpLabel
+      ? buildFollowUpLabelReminderPayload(followUpLabel, {
+          messageIds: messages
+            .filter(msg => Array.isArray(msg.labelIds) && msg.labelIds.includes(followUpLabel.id))
+            .map(msg => msg.id),
+          threadId
+        })
+      : null;
+
     const originalFrom = headers.find(h => h.name === 'From')?.value;
     const originalSubject = headers.find(h => h.name === 'Subject')?.value;
     const originalMessageId = headers.find(h => h.name === 'Message-ID')?.value;
@@ -1964,7 +2252,10 @@ async function replyToThread(googleSub, threadId, { body }) {
     });
 
     console.log('✅ Reply sent to thread:', threadId);
-    return result.data;
+    return {
+      ...result.data,
+      followUpLabelReminder
+    };
   });
 }
 
@@ -2627,9 +2918,11 @@ const traced = wrapModuleFunctions('services.googleApiService', {
   toggleStar,
   markAsRead,
   listLabels,
+  createLabel,
   resolveLabelIdentifiers,
   modifyMessageLabels,
   modifyThreadLabels,
+  getUserAddresses,
   getThread,
   setThreadRead,
   replyToThread,
@@ -2662,9 +2955,11 @@ const {
   toggleStar: tracedToggleStar,
   markAsRead: tracedMarkAsRead,
   listLabels: tracedListLabels,
+  createLabel: tracedCreateLabel,
   resolveLabelIdentifiers: tracedResolveLabelIdentifiers,
   modifyMessageLabels: tracedModifyMessageLabels,
   modifyThreadLabels: tracedModifyThreadLabels,
+  getUserAddresses: tracedGetUserAddresses,
   getThread: tracedGetThread,
   setThreadRead: tracedSetThreadRead,
   replyToThread: tracedReplyToThread,
@@ -2697,9 +2992,11 @@ export {
   tracedToggleStar as toggleStar,
   tracedMarkAsRead as markAsRead,
   tracedListLabels as listLabels,
+  tracedCreateLabel as createLabel,
   tracedResolveLabelIdentifiers as resolveLabelIdentifiers,
   tracedModifyMessageLabels as modifyMessageLabels,
   tracedModifyThreadLabels as modifyThreadLabels,
+  tracedGetUserAddresses as getUserAddresses,
   tracedGetThread as getThread,
   tracedSetThreadRead as setThreadRead,
   tracedReplyToThread as replyToThread,

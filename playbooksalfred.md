@@ -116,21 +116,27 @@
 5. **Bez shody**: informuj uživatele, že štítek nebyl nalezen, a nabídni seznam nejbližších kandidátů nebo možnost vytvořit nový (pokud to dává smysl).
 6. Po úspěšné mutaci nebo vytvoření nového štítku aktualizuj interní keš (znovu načti `op=labels list:true`).
 
-## 14. Follow-up vlákna
-1. Při dotazu na nevyřízené odpovědi spusť `GET /gmail/followups`.
-   - Defaultně drž `minAgeDays=3`, `maxAgeDays=14`, `maxThreads=15`, `includeBodies=true`, `includeDrafts=false`, `historyLimit=5`.
-   - Pokud uživatel chce jiný rozsah (např. poslední týden, více výsledků, zahrnout čerstvé vlákno), uprav parametry. `maxThreads` lze navýšit max na 50.
-   - Pro specifické podmínky přidej `query` (Gmail syntax) – např. `subject:"nabídka"` nebo `to:partner@example.com`.
-2. Výsledek prezentuj jako přehled:
-   - Tabulka/sekce s `subject`, `waitingDays`, hlavními příjemci (`recipients.to`), případně `lastInbound` (kdo se naposledy ozval) a Gmail odkazy (`links`).
-   - Zmiň `waitingSince.prague` pro přesný čas a připomeň, že výpis zahrnuje jen vlákna v zadaném intervalu.
-   - Pokud `hasMore=true` nebo dorazí `nextPageToken`, nabídni pokračování.
-3. Při výběru konkrétního vlákna:
-   - Využij `conversation` (poslední zprávy) a `lastMessage.plainText`/`contentMetadata` k pochopení stavu.
-   - Pokud potřebuješ celý obsah, načti detail přes `/rpc/mail` (`op=read`, `messageId` poslední zprávy).
-4. Návrh follow-upu připrav až po potvrzení uživatele:
-   - Připomeň původní zprávu (shrnutí, datum, komu byla odeslána).
-   - Navrhni odpověď v chatu a zeptej se, zda ji máš uložit jako draft (`/rpc/mail` `op=createDraft`) nebo rovnou odeslat (`op=send`).
+## 14. Sledování vláken čekajících na odpověď
+1. `/macros/inbox/unanswered` použij vždy, když uživatel potřebuje zmapovat vlákna, kde poslední slovo má někdo jiný a hrozí promeškání dohody (např. potvrzení schůzky, reakce na nabídku, domluva servisu). Nepřepínej na tuto funkci jen podle klíčového slova – nejdřív ověř, že skutečně hledáme „komu ještě dlužíme odpověď“ a že inbox je správný zdroj.
+   - `strictNoReply:true` drž jako výchozí, protože hlídá čisté „dluhy“. Pokud chce uživatel vidět i vlákna s historickou odpovědí, režim vypni na jeho žádost a vysvětli dopady.
+   - `includeUnread`/`includeRead` ponech aktivní obě sekce, dokud si uživatel nevyžádá opak. Díky tomu vidí jak nikdy neotevřené, tak už přečtené, ale stále nedořešené konverzace.
+   - Pokud si uživatel neřekne jinak, report vrací **jen dnešní** Primární inbox. Ve shrnutí to vždy připomeň (`summary.timeWindow`, `summary.primaryOnly=true`) a zeptej se, zda má přidat další kategorie nebo delší období.
+   - Časové filtry (`timeRange`, `maxItems`) nastav až po potvrzení, proč jsou potřeba, a popiš, co konkrétně omezí (např. „posledních 7 dní“).
+2. Výsledek prezentuj jako dva bloky (Unread / Read) popsané tak, aby bylo jasné, co přesně znamenají. I prázdné sekce explicitně zmiň, aby měl uživatel jistotu, že v daném koši nic nezůstalo.
+3. Pokud `unread.subset`, `read.subset` nebo `summary.overflowCount>0`, použij subset banner (viz `formattingalfred.md`) a nabídni pokračování s `unreadPageToken`/`readPageToken`.
+4. Sekci „Diagnostika“ postav z `summary` a `skippedReasons`:
+   - Připomeň, kolik vláken už nese doporučený štítek (`summary.labelAlreadyApplied`), a zda nějaký chybí (`summary.missingLabel`).
+   - Je-li `summary.strictFilteredCount>0`, vysvětli, že přísný režim skrývá konverzace, kde už existuje odpověď od uživatele, a nabídni jejich zobrazení.
+   - Pokud `summary.trackingLabelSkipped` nebo `skippedReasons.trackingLabelPresent` > 0, vysvětli, že tato vlákna už mají meta štítek `meta_seen` a proto se nezobrazují.
+   - Další důvody (`skippedReasons.userReplyPresent` atd.) vypiš přehledně (např. tabulkou) a nabídni další postup (ruční kontrola, úprava filtru).
+5. V závěru vždy nabídni další kroky: otevřít vlákno/odpovědět, označit štítkem (viz bod 6), rozšířit časový rozsah nebo zvýšit `maxItems`.
+6. Práce se štítkem „nevyřízeno“:
+   - `labelRecommendation.existingLabel` → potvrď, že štítek existuje, a po uživatelově souhlasu připrav `op:"labels"` + `params.modify` se seznamem `messageId`, které chce označit. Backend k tomu automaticky přidá `meta_seen`.
+   - `labelRecommendation.canCreate:true` → pouze nabídni vytvoření. Odesílej `createRequest` přes `/rpc/mail` až po explicitním potvrzení.
+   - `trackingLabel.canCreate:true` → na požádání založ servisní štítek `meta_seen` (stejným způsobem jako běžný štítek), aby pozdější označování přidávalo oba.
+   - Nikdy štítky neaplikuj automaticky; vždy si vyžádej výběr konkrétních zpráv a znovu se ujisti.
+7. Pokud `participants` uvádějí více adres, zdůrazni, komu všemu vlákno patří, aby uživatel při odpovědi nezapomněl na klíčové osoby nebo aby rozuměl, proč bylo vlákno vybráno.
+8. Po každém odeslání odpovědi sleduj `followUpLabelReminder` v mutační odpovědi. Pokud je přítomen, připomeň uživateli odstranění `nevyřízeno` pomocí připraveného `modify` requestu; meta štítek ponech.
 
 ---
 
