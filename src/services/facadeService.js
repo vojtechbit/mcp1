@@ -64,6 +64,8 @@ async function inboxOverview(googleSub, params = {}) {
     query: rawQuery
   } = params;
 
+  const gmail = resolveGmailService();
+
   const queryParts = [];
   let labelResolution = null;
   let requestedLabelCount = 0;
@@ -112,7 +114,7 @@ async function inboxOverview(googleSub, params = {}) {
 
     if (cleanedIdentifiers.length > 0) {
       requestedLabelCount = cleanedIdentifiers.length;
-      labelResolution = await gmailService.resolveLabelIdentifiers(googleSub, cleanedIdentifiers);
+      labelResolution = await gmail.resolveLabelIdentifiers(googleSub, cleanedIdentifiers);
 
       const appliedIds = labelResolution.appliedLabelIds || [];
       appliedIds.forEach(id => {
@@ -156,7 +158,7 @@ async function inboxOverview(googleSub, params = {}) {
 
   const builtQuery = queryParts.join(' ').trim();
 
-  const searchResults = await gmailService.searchEmails(googleSub, {
+  const searchResults = await gmail.searchEmails(googleSub, {
     query: builtQuery || undefined,
     maxResults: Math.min(maxItems, 200),
     pageToken
@@ -178,7 +180,7 @@ async function inboxOverview(googleSub, params = {}) {
   for (let i = 0; i < messageIds.length; i += batchSize) {
     const batch = messageIds.slice(i, i + batchSize);
     const metadataPromises = batch.map(id =>
-      gmailService.readEmail(googleSub, id, { format: 'metadata' })
+      gmail.readEmail(googleSub, id, { format: 'metadata' })
         .catch(err => {
           console.error(`Failed to fetch metadata for ${id}:`, err.message);
           return null;
@@ -233,6 +235,7 @@ async function inboxOverview(googleSub, params = {}) {
 async function inboxSnippets(googleSub, params = {}) {
   const { includeAttachments = true } = params;
 
+  const gmail = resolveGmailService();
   const overview = await inboxOverview(googleSub, params);
 
   if (overview.items.length === 0) {
@@ -257,7 +260,7 @@ async function inboxSnippets(googleSub, params = {}) {
 
     const detailPromises = batch.map(async (item) => {
       try {
-        const preview = await gmailService.getEmailPreview(googleSub, item.messageId, {
+        const preview = await gmail.getEmailPreview(googleSub, item.messageId, {
           maxBytes: 4096
         });
 
@@ -287,6 +290,10 @@ async function inboxSnippets(googleSub, params = {}) {
 
         return enriched;
       } catch (error) {
+        if (error?.statusCode === 451) {
+          throw error;
+        }
+
         console.error(`Failed to build snippet for ${item.messageId}:`, error.message);
         return {
           ...item,
