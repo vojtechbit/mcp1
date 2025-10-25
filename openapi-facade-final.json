@@ -841,10 +841,11 @@
                     "enum": [
                       "snippet",
                       "minimal",
+                      "metadata",
                       "full"
                     ],
                     "default": "minimal",
-                    "description": "Body format: 'snippet'=300 chars, 'minimal'=5KB (recommended), 'full'=complete."
+                    "description": "Body format: 'snippet'=300 chars, 'minimal'=5KB (recommended), 'metadata'=headers + metadata only, 'full'=complete."
                   }
                 },
                 "oneOf": [
