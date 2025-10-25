@@ -47,6 +47,37 @@ function resolveGmailService() {
   return gmailService;
 }
 
+function resolveCalendarService() {
+  const mocks = globalThis?.__facadeMocks;
+
+  if (process.env.NODE_ENV === 'test' && mocks?.calendarService) {
+    return { ...calendarService, ...mocks.calendarService };
+  }
+
+  return calendarService;
+}
+
+function resolveContactsService() {
+  const mocks = globalThis?.__facadeMocks;
+
+  if (process.env.NODE_ENV === 'test' && mocks?.contactsService) {
+    return { ...contactsService, ...mocks.contactsService };
+  }
+
+  return contactsService;
+}
+
+function resolveCreatePendingConfirmation() {
+  if (process.env.NODE_ENV === 'test') {
+    const mockFn = globalThis?.__facadeMocks?.confirmationStore?.createPendingConfirmation;
+    if (typeof mockFn === 'function') {
+      return mockFn;
+    }
+  }
+
+  return createPendingConfirmation;
+}
+
 // ==================== INBOX MACROS ====================
 
 /**
@@ -706,6 +737,10 @@ async function calendarSchedule(googleSub, params) {
     calendarId = 'primary'
   } = params;
 
+  const calendarApi = resolveCalendarService();
+  const contactsApi = resolveContactsService();
+  const createPendingConfirmationFn = resolveCreatePendingConfirmation();
+
   // Validate attendees parameter
   if (attendees && attendees.length > 20) {
     const error = new Error('Too many attendees. Maximum 20 allowed.');
@@ -743,7 +778,7 @@ async function calendarSchedule(googleSub, params) {
     const conflictResults = await Promise.all(
       when.proposals.map(async (proposal) => {
         try {
-          const conflicts = await calendarService.checkConflicts(googleSub, {
+          const conflicts = await calendarApi.checkConflicts(googleSub, {
             calendarId,
             start: proposal.start,
             end: proposal.end
@@ -801,7 +836,7 @@ async function calendarSchedule(googleSub, params) {
 
     try {
       // Search for contact in Google Contacts
-      const contactsResult = await contactsService.searchContacts(
+      const contactsResult = await contactsApi.searchContacts(
         googleSub,
         primaryAttendee.email
       );
@@ -818,7 +853,7 @@ async function calendarSchedule(googleSub, params) {
           // Create pending confirmation
           const suggestedFieldsSnapshot = { ...enrichmentSuggestions };
 
-          const confirmation = await createPendingConfirmation(
+          const confirmation = await createPendingConfirmationFn(
             googleSub,
             'enrichment',
             {
@@ -932,7 +967,7 @@ async function calendarSchedule(googleSub, params) {
   }
 
   // Create event in calendar
-  const event = await calendarService.createCalendarEvent(googleSub, eventData, {
+  const event = await calendarApi.createCalendarEvent(googleSub, eventData, {
     calendarId,
     conferenceDataVersion: conference === 'meet' ? 1 : 0
   });
@@ -2588,4 +2623,11 @@ export {
   tracedTasksOverview as tasksOverview,
   tracedCalendarReminderDrafts as calendarReminderDrafts,
   tracedCalendarListCalendars as calendarListCalendars,
+};
+
+export const __facadeTestUtils = {
+  resolveGmailService,
+  resolveCalendarService,
+  resolveContactsService,
+  resolveCreatePendingConfirmation,
 };
