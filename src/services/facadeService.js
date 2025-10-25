@@ -37,6 +37,13 @@ export const EMAIL_QUICK_READ_FORMATS = Object.freeze([
   'full'
 ]);
 
+/**
+ * Selects the Gmail service implementation for the current runtime.
+ *
+ * In production we always use the real service, but tests can provide
+ * deterministic responses by attaching overrides to
+ * `globalThis.__facadeMocks.gmailService`.
+ */
 function resolveGmailService() {
   const mocks = globalThis?.__facadeMocks;
 
@@ -45,6 +52,38 @@ function resolveGmailService() {
   }
 
   return gmailService;
+}
+
+/**
+ * Returns the unanswered-thread collector that should be used.
+ *
+ * Unit tests can inject a deterministic implementation via
+ * `globalThis.__facadeMocks.collectUnansweredThreads`.
+ */
+function resolveCollectUnansweredThreads() {
+  const mocks = globalThis?.__facadeMocks;
+
+  if (process.env.NODE_ENV === 'test' && typeof mocks?.collectUnansweredThreads === 'function') {
+    return mocks.collectUnansweredThreads;
+  }
+
+  return collectUnansweredThreads;
+}
+
+/**
+ * Returns the database service wrapper for the current environment.
+ *
+ * Tests can stub individual methods (for example `getUserByGoogleSub`)
+ * by providing `globalThis.__facadeMocks.databaseService`.
+ */
+function resolveDatabaseService() {
+  const mocks = globalThis?.__facadeMocks;
+
+  if (process.env.NODE_ENV === 'test' && mocks?.databaseService) {
+    return Object.assign({ getUserByGoogleSub }, mocks.databaseService);
+  }
+
+  return { getUserByGoogleSub };
 }
 
 // ==================== INBOX MACROS ====================
@@ -428,10 +467,13 @@ async function inboxUserUnansweredRequests(googleSub, params = {}) {
 
   const baseQuery = baseQueryParts.join(' ').trim();
 
+  const gmail = resolveGmailService();
+  const database = resolveDatabaseService();
+
   const [labels, userRecord, userAddressesRaw] = await Promise.all([
-    gmailService.listLabels(googleSub),
-    getUserByGoogleSub(googleSub).catch(() => null),
-    gmailService.getUserAddresses(googleSub).catch(() => [])
+    gmail.listLabels(googleSub),
+    database.getUserByGoogleSub(googleSub).catch(() => null),
+    gmail.getUserAddresses(googleSub).catch(() => [])
   ]);
 
   const trackingLabelRecommendation = buildLabelRecommendation(
@@ -440,7 +482,7 @@ async function inboxUserUnansweredRequests(googleSub, params = {}) {
     TRACKING_LABEL_DEFAULTS.color
   );
 
-  const labelRecommendation = buildLabelRecommendation(
+  const baseLabelRecommendation = buildLabelRecommendation(
     labels,
     normalizedLabelName,
     labelColor || UNREPLIED_LABEL_DEFAULTS.color,
@@ -450,6 +492,11 @@ async function inboxUserUnansweredRequests(googleSub, params = {}) {
         : []
     }
   );
+
+  const labelRecommendation = {
+    ...baseLabelRecommendation,
+    missingLabel: !baseLabelRecommendation.existingLabel
+  };
 
   const labelMatch = labelRecommendation.existingLabel
     ? labels.find(label => label.id === labelRecommendation.existingLabel.id)
@@ -476,12 +523,15 @@ async function inboxUserUnansweredRequests(googleSub, params = {}) {
     trackingLabelMatch
   };
 
+  // Resolve at call time so unit tests can swap in deterministic collectors.
+  const collectThreads = resolveCollectUnansweredThreads();
+
   const unreadResult = includeUnreadFinal
-    ? await collectUnansweredThreads({ ...searchOptions, querySuffix: 'is:unread', pageToken: unreadPageToken })
+    ? await collectThreads({ ...searchOptions, querySuffix: 'is:unread', pageToken: unreadPageToken })
     : createEmptyUnansweredBucket();
 
   const readResult = includeReadFinal
-    ? await collectUnansweredThreads({ ...searchOptions, querySuffix: '-is:unread', pageToken: readPageToken })
+    ? await collectThreads({ ...searchOptions, querySuffix: '-is:unread', pageToken: readPageToken })
     : createEmptyUnansweredBucket();
 
   const labelAppliedCount = unreadResult.items.filter(item => item.labelApplied).length

@@ -769,6 +769,10 @@
                         "applyRequestTemplate": {
                           "type": ["object", "null"],
                           "description": "Template RPC payload for applying the label (messageId must be filled before calling /rpc/mail)."
+                        },
+                        "missingLabel": {
+                          "type": "boolean",
+                          "description": "true if the suggested label does not yet exist in Gmail."
                         }
                       }
                     }
