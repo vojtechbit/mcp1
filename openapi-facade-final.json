@@ -1784,7 +1784,7 @@
       "post": {
         "operationId": "macroContactsSafeAdd",
         "summary": "Bulk add contacts with safety checks",
-        "description": "Bulk import 1-50 contacts with duplicate detection plus confirmation. Strategies: ask (confirm), skip, merge, create. For deep cleanup use /rpc/contacts (op:\"dedupe\") then POST /contacts/actions/bulkDelete. Field 'realestate' stores organization.",
+        "description": "Bulk import 1-50 contacts with duplicate detection plus confirmation. Strategies: ask (confirm), skip, merge, keepBoth. For deep cleanup use /rpc/contacts (op:\"dedupe\") then POST /contacts/actions/bulkDelete. Field 'realestate' stores organization.",
         "requestBody": {
           "required": true,
           "content": {
@@ -1794,7 +1794,7 @@
                 "required": [
                   "entries"
                 ],
-                "description": "Bulk add 1-50 contacts with duplicate detection. Each entry needs name plus optional email/phone/realestate/notes. dedupeStrategy handles duplicates: ask (default confirmation), skip (ignore), merge (update existing), create (always insert). Use /contacts/actions/bulkDelete to remove extras.",
+                "description": "Bulk add 1-50 contacts with duplicate detection. Each entry needs name plus optional email/phone/realestate/notes. dedupeStrategy handles duplicates: ask (default confirmation), skip (ignore), merge (update existing), keepBoth (always insert). Use /contacts/actions/bulkDelete to remove extras.",
                 "properties": {
                   "entries": {
                     "type": "array",
@@ -1839,12 +1839,12 @@
                     "type": "string",
                     "enum": [
                       "ask",
+                      "keepBoth",
                       "skip",
-                      "merge",
-                      "create"
+                      "merge"
                     ],
                     "default": "ask",
-                    "description": "Duplicate handling mode. 'ask' (default) returns a confirmToken for duplicates, 'skip' ignores them, 'merge' updates the best match, 'create' always inserts. Prefer 'ask' for safety; 'merge' suits bulk imports."
+                    "description": "Duplicate handling mode. 'ask' (default) returns a confirmToken for duplicates, 'keepBoth' always inserts the new contact, 'skip' ignores duplicates, 'merge' updates the best match. Prefer 'ask' for safety; 'merge' suits bulk imports."
                   }
                 }
               },
@@ -1893,6 +1893,18 @@
                       }
                     ],
                     "dedupeStrategy": "skip"
+                  }
+                },
+                "bulkImportKeepBoth": {
+                  "summary": "Always add new entries even if duplicates exist",
+                  "value": {
+                    "entries": [
+                      {
+                        "name": "Legacy Lead",
+                        "email": "legacy@example.com"
+                      }
+                    ],
+                    "dedupeStrategy": "keepBoth"
                   }
                 }
               }
@@ -1967,7 +1979,7 @@
                     },
                     "confirmToken": {
                       "type": "string",
-                      "description": "Present ONLY if strategy='ask' and duplicates found. User must call /api/macros/confirm with this token and action (create/skip/merge) to proceed."
+                      "description": "Present ONLY if strategy='ask' and duplicates found. User must call /api/macros/confirm with this token and action (keepBoth/skip/merge) to proceed."
                     },
                     "warnings": {
                       "type": "array",

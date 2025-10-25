@@ -679,7 +679,14 @@ async function updateContact(accessToken, contactData) {
   try {
     const sheets = await getSheetsClient(accessToken);
     const spreadsheetId = await getOrCreateContactsSheet(accessToken);
-    const { name, email, notes, realEstate, phone } = contactData;
+    const {
+      name,
+      email,
+      notes,
+      realEstate,
+      phone,
+      rowIndex: explicitRowIndex
+    } = contactData;
 
     const response = await sheets.spreadsheets.values.get({
       spreadsheetId,
@@ -687,13 +694,17 @@ async function updateContact(accessToken, contactData) {
     });
 
     const rows = response.data.values || [];
-    let rowIndex = -1;
+    let rowIndex = typeof explicitRowIndex === 'number' ? explicitRowIndex : -1;
 
-    for (let i = 0; i < rows.length; i++) {
-      if ((rows[i][0] || '').toLowerCase() === name.toLowerCase() &&
-          (rows[i][1] || '').toLowerCase() === email.toLowerCase()) {
-        rowIndex = i + 2;
-        break;
+    if (rowIndex === -1) {
+      for (let i = 0; i < rows.length; i++) {
+        if (
+          (rows[i][0] || '').toLowerCase() === (name || '').toLowerCase() &&
+          (rows[i][1] || '').toLowerCase() === (email || '').toLowerCase()
+        ) {
+          rowIndex = i + 2;
+          break;
+        }
       }
     }
 

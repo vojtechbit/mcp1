@@ -606,13 +606,16 @@ async function calendarSchedule(googleSub, params) {
     // Use first available proposal
     timeSlot = availableProposals[0];
   } else {
-    throw new Error('Invalid when: must provide fixed or proposals', { statusCode: 400 });
+    const invalidWhenError = new Error('Invalid when: must provide fixed or proposals');
+    invalidWhenError.statusCode = 400;
+    throw invalidWhenError;
   }
 
   // ========== STEP 1: Check for enrichment opportunities ==========
   
   let enrichmentSuggestions = null;
   let confirmToken = null;
+  let pendingSuggestedFields = null;
 
   if (enrichFromContacts !== 'off' && attendees.length > 0) {
     // Get first attendee (primary contact to enrich from)
@@ -635,6 +638,8 @@ async function calendarSchedule(googleSub, params) {
 
         if (enrichFromContacts === 'ask') {
           // Create pending confirmation
+          const suggestedFieldsSnapshot = { ...enrichmentSuggestions };
+
           const confirmation = await createPendingConfirmation(
             googleSub,
             'enrichment',
@@ -652,11 +657,12 @@ async function calendarSchedule(googleSub, params) {
                 calendarId
               },
               contactId: contact.resourceName,
-              suggestedFields: enrichmentSuggestions
+              suggestedFields: suggestedFieldsSnapshot
             }
           );
 
           confirmToken = confirmation.confirmToken;
+          pendingSuggestedFields = suggestedFieldsSnapshot;
           enrichmentSuggestions = null; // Don't use yet, wait for confirmation
         }
         // If enrichFromContacts='auto', enrichmentSuggestions will be used below
@@ -679,7 +685,9 @@ async function calendarSchedule(googleSub, params) {
       confirmToken,
       warnings: [
         `Found contact for ${attendees[0].email}`,
-        'Suggested enrichment: ' + Object.keys(enrichmentSuggestions).join(', '),
+        pendingSuggestedFields
+          ? 'Suggested enrichment: ' + Object.keys(pendingSuggestedFields).join(', ')
+          : 'Suggested enrichment data is ready',
         'Call /api/macros/confirm with confirmToken to proceed'
       ]
     };
@@ -871,11 +879,11 @@ async function completeCalendarScheduleEnrichment(
  * 1. Get all existing contacts from Google Contacts Sheet
  * 2. For each new entry, check for duplicates by email/name/phone
  * 3. If duplicates found AND dedupeStrategy='ask' → return confirmToken for user decision
- * 4. Otherwise → add according to strategy (create/skip/merge)
+ * 4. Otherwise → add according to strategy (keepBoth/skip/merge)
  * 
  * dedupeStrategy options:
  * - 'ask' (default): Return duplicates for user confirmation
- * - 'create': Always add (may create duplicates)
+ * - 'keepBoth': Always add (may create duplicates)
  * - 'skip': Skip entries with duplicates
  * - 'merge': Auto-merge into existing contacts (>70% match)
  */
@@ -887,6 +895,8 @@ async function contactsSafeAdd(googleSub, params) {
     error.statusCode = 400;
     throw error;
   }
+
+  const normalizedStrategy = normalizeDedupeStrategy(dedupeStrategy);
 
   // ========== STEP 1: Get all existing contacts from Sheet ==========
   
@@ -956,7 +966,7 @@ async function contactsSafeAdd(googleSub, params) {
 
   // ========== STEP 4: Handle dedupeStrategy ==========
 
-  if (hasAnyDuplicates && dedupeStrategy === 'ask') {
+  if (hasAnyDuplicates && normalizedStrategy === 'ask') {
     // Return pending confirmation for user to decide
     const confirmation = await createPendingConfirmation(
       googleSub,
@@ -982,7 +992,7 @@ async function contactsSafeAdd(googleSub, params) {
       confirmToken: confirmation.confirmToken,
       warnings: [
         `Found potential duplicates for ${duplicateFindings.filter(f => f.candidates.length > 0).length}/${entries.length} contact(s)`,
-        `Call /api/macros/confirm with confirmToken and action: 'create' (add all), 'skip' (skip duplicates), or 'merge' (merge)`
+        "Call /api/macros/confirm with confirmToken and action: 'keepBoth' (add all), 'skip' (skip duplicates), or 'merge' (merge)"
       ]
     };
   }
@@ -993,7 +1003,7 @@ async function contactsSafeAdd(googleSub, params) {
     googleSub,
     entries,
     duplicateFindings,
-    dedupeStrategy
+    normalizedStrategy
   );
 }
 
@@ -1003,7 +1013,7 @@ async function contactsSafeAdd(googleSub, params) {
 async function completeContactsDeduplication(
   googleSub,
   confirmToken,
-  action // 'create', 'skip', or 'merge'
+  action // 'keepBoth', 'skip', or 'merge'
 ) {
   const confirmation = await getPendingConfirmation(confirmToken);
 
@@ -1023,7 +1033,7 @@ async function completeContactsDeduplication(
     googleSub,
     entriesToAdd,
     duplicateFindings,
-    action
+    normalizeDedupeStrategy(action)
   );
 
   await completePendingConfirmation(confirmToken);
@@ -1180,11 +1190,20 @@ async function calendarReminderDrafts(googleSub, params) {
     perAttendee = 'separate',
     calendarId = 'primary'
   } = params;
-  
+
   // Validate window parameter
   const validWindows = ['today', 'nextHours'];
   if (!validWindows.includes(window)) {
     const error = new Error(`Invalid window: ${window}. Must be one of: ${validWindows.join(', ')}`);
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const validPerAttendeeModes = ['separate', 'combined'];
+  if (!validPerAttendeeModes.includes(perAttendee)) {
+    const error = new Error(
+      `Invalid perAttendee mode: ${perAttendee}. Must be one of: ${validPerAttendeeModes.join(', ')}`
+    );
     error.statusCode = 400;
     throw error;
   }
@@ -1230,62 +1249,72 @@ async function calendarReminderDrafts(googleSub, params) {
   const drafts = [];
   
   for (const event of upcomingEvents) {
-    for (const attendee of event.attendees || []) {
-      const subject = `Reminder: ${event.summary}`;
-      const locationText = includeLocation && event.location ? `\nLocation: ${event.location}` : '';
-      
-      // Format times to human-readable Czech format (HH:MM-HH:MM DD.MM YYYY)
-      const timeRange = formatTimeRangeForEmail(event.start.dateTime || event.start.date, event.end.dateTime || event.end.date);
-      
-      const body = template 
-        ? template
-            .replace(/{title}/g, event.summary || '')
-            .replace(/{start}/g, event.start.dateTime || event.start.date)
-            .replace(/{end}/g, event.end.dateTime || event.end.date)
-            .replace(/{location}/g, event.location || '')
-            .replace(/{recipientName}/g, attendee.displayName || attendee.email)
-        : `Ahoj${attendee.displayName ? ' ' + attendee.displayName : ''},\n\njej potvrzujem, že s tebou počítám na akci "${event.summary}"\nČas: ${timeRange}${locationText}\n\nTěším se!`;
-      
-      let draftId = null;
-      if (createDrafts) {
-        try {
-          const draft = await gmailService.createDraft(googleSub, {
-            to: attendee.email,
-            subject,
-            body
-          });
-          
-          // ✅ VALIDACE draft ID
-          if (!draft) {
-            console.error(`❌ [DRAFT_VALIDATION] Draft object is null/undefined for ${attendee.email}`);
-            throw new Error('Gmail API returned null draft');
-          }
-          
-          if (!draft.id) {
-            console.error(`❌ [DRAFT_VALIDATION] Draft ID is missing for ${attendee.email}`);
-            console.error('Draft object keys:', Object.keys(draft));
-            console.error('Full draft:', JSON.stringify(draft, null, 2));
-            throw new Error('Draft created but missing ID field');
-          }
-          
-          if (typeof draft.id !== 'string') {
-            console.error(`⚠️ [DRAFT_VALIDATION] Draft ID type is ${typeof draft.id}, expected string: ${draft.id}`);
-            throw new Error(`Invalid draft ID type: ${typeof draft.id}`);
-          }
-          
-          // ✅ Berme DRAFT ID (ne message ID)
-          draftId = draft.id;
-          console.log(`✅ [DRAFT_SUCCESS] Draft created with ID: ${draftId} for ${attendee.email}`);
-          
-        } catch (error) {
-          console.error(`❌ [DRAFT_ERROR] Failed to create draft for ${attendee.email}:`, error.message);
-          console.error('Stack:', error.stack);
-          draftId = null;  // Ensure null on failure
-        }
-      }
-      
+    const attendeesList = (event.attendees || []).filter(a => a && a.email);
+    if (attendeesList.length === 0) {
+      continue;
+    }
+
+    const subject = `Reminder: ${event.summary}`;
+    const locationText = includeLocation && event.location ? `\nLocation: ${event.location}` : '';
+    const timeRange = formatTimeRangeForEmail(
+      event.start.dateTime || event.start.date,
+      event.end.dateTime || event.end.date
+    );
+
+    if (perAttendee === 'combined') {
+      const recipientEmails = attendeesList.map(a => a.email).join(', ');
+      const recipientLabel = attendeesList
+        .map(a => a.displayName || a.email)
+        .filter(Boolean)
+        .join(', ') || 'všichni';
+
+      const body = buildReminderBody({
+        event,
+        template,
+        locationText,
+        timeRange,
+        recipientLabel,
+        isGroup: true
+      });
+
+      const draftId = await createReminderDraft(googleSub, createDrafts, {
+        to: recipientEmails,
+        subject,
+        body,
+        logLabel: recipientEmails
+      });
+
       drafts.push({
-        draftId,  // Nyní korektní draft ID nebo null
+        draftId,
+        to: recipientEmails,
+        subject,
+        preview: body.substring(0, 200),
+        eventId: event.id
+      });
+
+      continue;
+    }
+
+    for (const attendee of attendeesList) {
+      const recipientLabel = attendee.displayName || attendee.email;
+      const body = buildReminderBody({
+        event,
+        template,
+        locationText,
+        timeRange,
+        recipientLabel,
+        isGroup: false
+      });
+
+      const draftId = await createReminderDraft(googleSub, createDrafts, {
+        to: attendee.email,
+        subject,
+        body,
+        logLabel: attendee.email
+      });
+
+      drafts.push({
+        draftId,
         to: attendee.email,
         subject,
         preview: body.substring(0, 200),
@@ -1298,6 +1327,72 @@ async function calendarReminderDrafts(googleSub, params) {
     drafts,
     subset: false
   };
+}
+
+function buildReminderBody({
+  event,
+  template,
+  recipientLabel,
+  timeRange,
+  locationText,
+  isGroup
+}) {
+  const safeSummary = event.summary || '';
+  const greetingName = recipientLabel ? ` ${recipientLabel}` : '';
+  const closing = isGroup ? 'Těšíme se!' : 'Těším se!';
+
+  if (template) {
+    return template
+      .replace(/{title}/g, safeSummary)
+      .replace(/{start}/g, event.start.dateTime || event.start.date || '')
+      .replace(/{end}/g, event.end.dateTime || event.end.date || '')
+      .replace(/{location}/g, event.location || '')
+      .replace(/{recipientName}/g, recipientLabel || (isGroup ? 'všichni' : ''));
+  }
+
+  return `Ahoj${greetingName},\n\njen připomínám, že s tebou počítám na akci "${safeSummary}"\nČas: ${timeRange}${locationText}\n\n${closing}`;
+}
+
+async function createReminderDraft(googleSub, shouldCreate, { to, subject, body, logLabel }) {
+  if (!shouldCreate) {
+    return null;
+  }
+
+  try {
+    const draft = await gmailService.createDraft(googleSub, {
+      to,
+      subject,
+      body
+    });
+
+    if (!draft) {
+      console.error(`❌ [DRAFT_VALIDATION] Draft object is null/undefined for ${logLabel}`);
+      throw new Error('Gmail API returned null draft');
+    }
+
+    if (!draft.id) {
+      console.error(`❌ [DRAFT_VALIDATION] Draft ID is missing for ${logLabel}`);
+      console.error('Draft object keys:', Object.keys(draft));
+      console.error('Full draft:', JSON.stringify(draft, null, 2));
+      throw new Error('Draft created but missing ID field');
+    }
+
+    if (typeof draft.id !== 'string') {
+      console.error(
+        `⚠️ [DRAFT_VALIDATION] Draft ID type is ${typeof draft.id}, expected string: ${draft.id}`
+      );
+      throw new Error(`Invalid draft ID type: ${typeof draft.id}`);
+    }
+
+    console.log(`✅ [DRAFT_SUCCESS] Draft created with ID: ${draft.id} for ${logLabel}`);
+    return draft.id;
+  } catch (error) {
+    console.error(`❌ [DRAFT_ERROR] Failed to create draft for ${logLabel}:`, error.message);
+    if (error && error.stack) {
+      console.error('Stack:', error.stack);
+    }
+    return null;
+  }
 }
 
 // ==================== HELPER FUNCTIONS ====================
@@ -1549,16 +1644,11 @@ function extractContactFields(contact) {
 /**
  * Perform bulk contact add/merge with specified strategy
  * Strategy:
- * - 'create': Always add new contact (may duplicate)
+ * - 'keepBoth': Always add new contact (may duplicate)
  * - 'skip': Skip entries that have duplicates
  * - 'merge': Merge into existing contact
  */
-async function performContactsBulkAdd(
-  accessToken,
-  entries,
-  duplicateFindings,
-  strategy
-) {
+async function performContactsBulkAdd(accessToken, entries, duplicateFindings, strategy) {
   const result = {
     created: [],
     merged: [],
@@ -1566,20 +1656,15 @@ async function performContactsBulkAdd(
   };
 
   for (let i = 0; i < entries.length; i++) {
-    const entry = entries[i];
-    const finding = duplicateFindings[i];
+    const rawEntry = entries[i] || {};
+    const entry = normalizeContactEntry(rawEntry);
+    const finding = duplicateFindings[i] || { candidates: [] };
+    const candidates = Array.isArray(finding.candidates) ? finding.candidates : [];
+    const hasDuplicates = candidates.length > 0;
 
-    // If no duplicates OR strategy='create' → ADD
-    if (finding.candidates.length === 0 || strategy === 'create') {
+    if (!hasDuplicates || strategy === 'keepBoth') {
       try {
-        const created = await contactsService.addContact(accessToken, {
-          name: entry.name,
-          email: entry.email,
-          phone: entry.phone,
-          realestate: entry.realestate,
-          notes: entry.notes
-        });
-
+        await contactsService.addContact(accessToken, entry);
         result.created.push({
           name: entry.name,
           email: entry.email
@@ -1592,35 +1677,48 @@ async function performContactsBulkAdd(
           reason: `Add failed: ${error.message}`
         });
       }
+      continue;
     }
-    // If duplicates exist and strategy='skip' → SKIP
-    else if (strategy === 'skip') {
+
+    if (strategy === 'skip') {
       result.skipped.push({
         email: entry.email,
         name: entry.name,
-        reason: `Skipped: ${finding.candidates.length} duplicate(s) found`,
-        existing: finding.candidates
+        reason: `Skipped: ${candidates.length} duplicate(s) found`,
+        existing: candidates
       });
+      continue;
     }
-    // If duplicates exist and strategy='merge' → MERGE
-    else if (strategy === 'merge' && finding.candidates.length > 0) {
-      const existingContact = finding.candidates[0]; // Use first match
-      
-      try {
-        // Merge: update existing contact with new data (preserve existing values)
-        const updated = await contactsService.updateContact(accessToken, {
-          rowIndex: existingContact.rowIndex,
-          name: existingContact.name, // Keep existing name
-          email: existingContact.email, // Keep existing email
-          phone: entry.phone || existingContact.phone, // Prefer new phone if provided
-          notes: entry.notes || existingContact.notes,
-          realestate: entry.realestate || existingContact.realestate
+
+    if (strategy === 'merge') {
+      const existingContact = candidates[0];
+
+      if (!existingContact) {
+        result.skipped.push({
+          email: entry.email,
+          name: entry.name,
+          reason: 'Merge requested but no duplicate candidates found'
         });
-        
+        continue;
+      }
+
+      try {
+        const { payload: mergedContact, changeSummaries } = mergeContactRecords(
+          existingContact,
+          entry
+        );
+
+        await contactsService.updateContact(accessToken, {
+          ...mergedContact,
+          rowIndex: existingContact.rowIndex
+        });
+
         result.merged.push({
           merged_into: existingContact.email,
-          from: entry.name,
-          fields_updated: Object.keys(entry).filter(k => entry[k] && !existingContact[k])
+          from: entry.email || entry.name,
+          fields_updated: changeSummaries.length > 0
+            ? changeSummaries
+            : ['No changes needed (duplicate already up to date)']
         });
       } catch (error) {
         console.error(`❌ Failed to merge contact ${entry.name}:`, error.message);
@@ -1630,10 +1728,244 @@ async function performContactsBulkAdd(
           reason: `Merge failed: ${error.message}`
         });
       }
+      continue;
     }
+
+    const unsupportedError = new Error(`Unsupported dedupe strategy: ${strategy}`);
+    console.error(unsupportedError.message);
+    throw unsupportedError;
   }
 
   return result;
+}
+
+function normalizeDedupeStrategy(strategy) {
+  const allowedStrategies = ['ask', 'keepBoth', 'skip', 'merge'];
+  const candidate =
+    strategy === undefined || strategy === null || strategy === '' ? 'ask' : strategy;
+  const normalized =
+    typeof candidate === 'string' ? candidate.trim() : String(candidate).trim();
+
+  if (!normalized) {
+    return 'ask';
+  }
+
+  if (normalized === 'create') {
+    return 'keepBoth';
+  }
+
+  if (!allowedStrategies.includes(normalized)) {
+    const error = new Error(
+      `Invalid dedupe strategy: ${strategy}. Must be one of: ${allowedStrategies.join(', ')}`
+    );
+    error.statusCode = 400;
+    throw error;
+  }
+
+  return normalized;
+}
+
+function normalizeContactEntry(entry = {}) {
+  return {
+    name: cleanValue(entry.name),
+    email: cleanValue(entry.email),
+    phone: cleanValue(entry.phone),
+    realEstate: cleanValue(entry.realEstate ?? entry.realestate),
+    notes: cleanValue(entry.notes)
+  };
+}
+
+function cleanValue(value) {
+  if (value === null || value === undefined) return '';
+  return String(value).trim();
+}
+
+function mergeContactRecords(existingContact = {}, incomingEntry = {}) {
+  const existing = {
+    name: cleanValue(existingContact.name),
+    email: cleanValue(existingContact.email),
+    phone: cleanValue(existingContact.phone),
+    realEstate: cleanValue(existingContact.realEstate ?? existingContact.realestate),
+    notes: cleanValue(existingContact.notes)
+  };
+
+  const incoming = {
+    name: cleanValue(incomingEntry.name),
+    email: cleanValue(incomingEntry.email),
+    phone: cleanValue(incomingEntry.phone),
+    realEstate: cleanValue(incomingEntry.realEstate ?? incomingEntry.realestate),
+    notes: cleanValue(incomingEntry.notes)
+  };
+
+  const summaries = [];
+
+  const nameMerge = mergeTextField(existing.name, incoming.name, {
+    separator: ' / ',
+    label: 'name'
+  });
+
+  const phoneMerge = mergePhoneField(existing.phone, incoming.phone);
+  const realEstateMerge = mergeTextField(existing.realEstate, incoming.realEstate, {
+    separator: '\n',
+    label: 'realEstate'
+  });
+
+  const notesMerge = mergeNotesField(existing.notes, incoming.notes);
+
+  let mergedNotes = notesMerge.value;
+  summaries.push(...notesMerge.changes);
+
+  const primaryEmail = existing.email || incoming.email;
+  if (!existing.email && incoming.email) {
+    summaries.push(`email: set to ${incoming.email}`);
+  } else if (
+    existing.email &&
+    incoming.email &&
+    !equalsIgnoreCase(existing.email, incoming.email)
+  ) {
+    const altEmailLine = `Další e-mail: ${incoming.email}`;
+    if (!containsCaseInsensitive(mergedNotes, incoming.email)) {
+      mergedNotes = appendParagraph(mergedNotes, altEmailLine);
+      summaries.push(`notes: added alternate email ${incoming.email}`);
+    }
+  }
+
+  const mergedContact = {
+    name: nameMerge.value,
+    email: primaryEmail,
+    phone: phoneMerge.value,
+    realEstate: realEstateMerge.value,
+    notes: mergedNotes
+  };
+
+  [nameMerge, phoneMerge, realEstateMerge].forEach(change => {
+    if (change.updated && change.description) {
+      summaries.push(change.description);
+    }
+  });
+
+  return {
+    payload: mergedContact,
+    changeSummaries: summaries
+  };
+}
+
+function mergeTextField(existing, incoming, { separator, label }) {
+  const base = cleanValue(existing);
+  const addition = cleanValue(incoming);
+
+  if (!addition) {
+    return { value: base, updated: false };
+  }
+
+  if (!base) {
+    return {
+      value: addition,
+      updated: true,
+      description: `${label}: added ${addition}`
+    };
+  }
+
+  if (equalsIgnoreCase(base, addition) || containsCaseInsensitive(base, addition)) {
+    return { value: base, updated: false };
+  }
+
+  const combined = `${base}${separator}${addition}`;
+  return {
+    value: combined,
+    updated: true,
+    description: `${label}: appended ${addition}`
+  };
+}
+
+function mergePhoneField(existing, incoming) {
+  const base = cleanValue(existing);
+  const addition = cleanValue(incoming);
+
+  if (!addition) {
+    return { value: base, updated: false };
+  }
+
+  const baseNumbers = extractPhoneVariants(base);
+  const additionNumber = normalizePhone(addition);
+
+  if (!additionNumber) {
+    return { value: base, updated: false };
+  }
+
+  if (baseNumbers.has(additionNumber)) {
+    return { value: base, updated: false };
+  }
+
+  if (!base) {
+    return {
+      value: addition,
+      updated: true,
+      description: `phone: added ${addition}`
+    };
+  }
+
+  return {
+    value: `${base}, ${addition}`,
+    updated: true,
+    description: `phone: appended ${addition}`
+  };
+}
+
+function mergeNotesField(existing, incoming) {
+  const base = cleanValue(existing);
+  const addition = cleanValue(incoming);
+  const changes = [];
+
+  if (!addition) {
+    return { value: base, changes };
+  }
+
+  if (containsCaseInsensitive(base, addition)) {
+    return { value: base, changes };
+  }
+
+  const value = appendParagraph(base, addition);
+  changes.push('notes: appended from new entry');
+  return { value, changes };
+}
+
+function appendParagraph(base, addition) {
+  if (!base) return addition;
+  if (!addition) return base;
+  return `${base}\n\n${addition}`;
+}
+
+function equalsIgnoreCase(a, b) {
+  return cleanValue(a).localeCompare(cleanValue(b), undefined, {
+    sensitivity: 'accent',
+    usage: 'search'
+  }) === 0;
+}
+
+function containsCaseInsensitive(haystack, needle) {
+  const base = cleanValue(haystack).toLowerCase();
+  const target = cleanValue(needle).toLowerCase();
+  if (!base || !target) return false;
+  return base.includes(target);
+}
+
+function normalizePhone(value) {
+  return cleanValue(value).replace(/\D/g, '');
+}
+
+function extractPhoneVariants(value) {
+  const normalized = cleanValue(value);
+  if (!normalized) {
+    return new Set();
+  }
+
+  const parts = normalized
+    .split(/[;,\n]/)
+    .map(segment => normalizePhone(segment))
+    .filter(segment => segment.length > 0);
+
+  return new Set(parts);
 }
 
 

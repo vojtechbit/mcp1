@@ -58,7 +58,7 @@ git push origin main
 > vypne i při běhu testů, kdyby bylo potřeba otestovat tichý režim.
 
 ### 4. Nastav Custom GPT
-- **Instructions:** Zkopíruj z `GPT_CONFIG.md`
+- **Instructions:** Uprav přímo v GPT editoru (soubor `GPT_CONFIG.md` jsme odstranili, aby nemátl). Využij aktuální produktové podklady nebo poslední export z GPT editoru.
 - **OAuth:** Viz `CUSTOM_GPT_SETUP.md`
 - **Privacy:** `https://mcp1-oauth-server.onrender.com/privacy-policy`
 
