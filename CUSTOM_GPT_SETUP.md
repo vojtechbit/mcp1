@@ -115,7 +115,7 @@ paths:
   /api/gmail/followups:
     get:
       operationId: listFollowupCandidates
-      summary: List sent threads awaiting replies
+      summary: List sent threads awaiting follow-up
       parameters:
         - name: minAgeDays
           in: query

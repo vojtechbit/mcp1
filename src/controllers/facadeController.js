@@ -54,12 +54,12 @@ async function macroInboxSnippets(req, res) {
   }
 }
 
-async function macroInboxUnanswered(req, res) {
+async function macroInboxUserUnanswered(req, res) {
   try {
-    const result = await facadeService.inboxUnansweredRequests(req.user.googleSub, req.body);
+    const result = await facadeService.inboxUserUnansweredRequests(req.user.googleSub, req.body);
     res.json(result);
   } catch (error) {
-    console.error('❌ Macro inbox unanswered requests failed:', error.message);
+    console.error('❌ Macro inbox user unanswered requests failed:', error.message);
 
     if (error.statusCode === 401) {
       return res.status(401).json({
@@ -78,7 +78,7 @@ async function macroInboxUnanswered(req, res) {
     }
 
     res.status(500).json({
-      error: 'Inbox unanswered requests failed',
+      error: 'Inbox user unanswered requests failed',
       message: error.message,
       code: 'SERVER_ERROR'
     });
@@ -272,7 +272,7 @@ async function macroTasksOverview(req, res) {
 const traced = wrapModuleFunctions('controllers.facadeController', {
   macroInboxOverview,
   macroInboxSnippets,
-  macroInboxUnanswered,
+  macroInboxUserUnanswered,
   macroEmailQuickRead,
   macroCalendarPlan,
   macroCalendarSchedule,
@@ -285,7 +285,7 @@ const traced = wrapModuleFunctions('controllers.facadeController', {
 const {
   macroInboxOverview: tracedMacroInboxOverview,
   macroInboxSnippets: tracedMacroInboxSnippets,
-  macroInboxUnanswered: tracedMacroInboxUnanswered,
+  macroInboxUserUnanswered: tracedMacroInboxUserUnanswered,
   macroEmailQuickRead: tracedMacroEmailQuickRead,
   macroCalendarPlan: tracedMacroCalendarPlan,
   macroCalendarSchedule: tracedMacroCalendarSchedule,
@@ -298,7 +298,7 @@ const {
 export {
   tracedMacroInboxOverview as macroInboxOverview,
   tracedMacroInboxSnippets as macroInboxSnippets,
-  tracedMacroInboxUnanswered as macroInboxUnanswered,
+  tracedMacroInboxUserUnanswered as macroInboxUserUnanswered,
   tracedMacroEmailQuickRead as macroEmailQuickRead,
   tracedMacroCalendarPlan as macroCalendarPlan,
   tracedMacroCalendarSchedule as macroCalendarSchedule,

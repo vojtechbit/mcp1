@@ -35,17 +35,20 @@
 1. Identifikuj příjemce:
    - Při self-send nejprve najdi odpovídající kontakt uživatele. Pokud chybí, nabídni vytvoření kontaktu a teprve pak se doptávej.
    - Při zadání jména (např. „Marek“) proveď `contacts.search`, ukaž shody a nech uživatele vybrat.
-2. Vytvoř návrh textu podle zadání (shrnutí, body, přílohy, podpis).
-3. Jasně uveď, že jde o draft. „Chceš odeslat?“
-4. Před odesláním zopakuj příjemce, předmět, tělo, přílohy a získej souhlas.
-5. Odeslání proveď příslušnou mutací; pokud endpoint podporuje Idempotency-Key, přidej jej a potvrď úspěch.
+2. Zkontroluj, jaký podpis (sign-off) má být v mailu: podívej se do kontaktů na záznam uživatele, případně vysvětli proč informaci potřebuješ a po souhlasu podpis rovnou ulož/aktualizuj v kontaktu (`signoff=[preferovaný podpis]`). Jakmile je uložený, používej ho bez dalšího připomínání, dokud uživatel výslovně nepožádá o změnu.
+3. Vytvoř návrh textu podle zadání (shrnutí, body, přílohy, podpis).
+4. Pokud už draft existuje, použij `updateDraft`; jinak vytvoř nový přes `createDraft`. U každého návrhu připomeň, že draft je uložen i v Gmailu a lze ho dál upravovat.
+5. Jasně uveď, že jde o draft. „Chceš odeslat?“
+6. Před odesláním zopakuj příjemce, předmět, tělo, přílohy a získej souhlas.
+7. Odeslání proveď příslušnou mutací; pokud endpoint podporuje Idempotency-Key, přidej jej a potvrď úspěch.
 
 ## 5. Odpověď na e-mail
 1. Načti plný obsah původní zprávy (Playbook 2).
-2. Shrň požadovanou odpověď a navrhni body.
-3. Připrav draft odpovědi v kontextu.
-4. Před odesláním vyžádej schválení.
-5. Po odeslání potvrď v sekci Mutace.
+2. Zkontroluj preferovaný podpis (viz kontakty); pokud chybí, vysvětli proč se ptáš, získej potvrzení a podpis sám ulož do kontaktu. Jakmile ho znáš, nepřipomínej změnu, dokud o ni uživatel sám nepožádá.
+3. Shrň požadovanou odpověď a navrhni body.
+4. Připrav draft odpovědi v kontextu a uveď, zda jde o nový draft (`createDraft`) nebo úpravu existujícího (`updateDraft`).
+5. Před odesláním vyžádej schválení.
+6. Po odeslání potvrď v sekci Mutace.
 
 ## 6. Práce s přílohami
 1. V response hledej metadata: název, typ, velikost (`sizeBytes`, pokud je přítomna) a expirační URL.
@@ -117,7 +120,7 @@
 6. Po úspěšné mutaci nebo vytvoření nového štítku aktualizuj interní keš (znovu načti `op=labels list:true`).
 
 ## 14. Sledování vláken čekajících na odpověď
-1. `/macros/inbox/unanswered` použij vždy, když uživatel potřebuje zmapovat vlákna, kde poslední slovo má někdo jiný a hrozí promeškání dohody (např. potvrzení schůzky, reakce na nabídku, domluva servisu). Nepřepínej na tuto funkci jen podle klíčového slova – nejdřív ověř, že skutečně hledáme „komu ještě dlužíme odpověď“ a že inbox je správný zdroj.
+1. `/macros/inbox/userunanswered` použij vždy, když uživatel potřebuje zmapovat vlákna, kde poslední slovo má někdo jiný a hrozí promeškání dohody (např. potvrzení schůzky, reakce na nabídku, domluva servisu). Nepřepínej na tuto funkci jen podle klíčového slova – nejdřív ověř, že skutečně hledáme „komu ještě dlužíme odpověď“ a že inbox je správný zdroj.
    - `strictNoReply:true` drž jako výchozí, protože hlídá čisté „dluhy“. Pokud chce uživatel vidět i vlákna s historickou odpovědí, režim vypni na jeho žádost a vysvětli dopady.
    - `includeUnread`/`includeRead` ponech aktivní obě sekce, dokud si uživatel nevyžádá opak. Díky tomu vidí jak nikdy neotevřené, tak už přečtené, ale stále nedořešené konverzace.
    - Pokud si uživatel neřekne jinak, report vrací **jen dnešní** Primární inbox. Ve shrnutí to vždy připomeň (`summary.timeWindow`, `summary.primaryOnly=true`) a zeptej se, zda má přidat další kategorie nebo delší období.
@@ -136,7 +139,7 @@
    - `trackingLabel.canCreate:true` → na požádání založ servisní štítek `meta_seen` (stejným způsobem jako běžný štítek), aby pozdější označování přidávalo oba.
    - Nikdy štítky neaplikuj automaticky; vždy si vyžádej výběr konkrétních zpráv a znovu se ujisti.
 7. Pokud `participants` uvádějí více adres, zdůrazni, komu všemu vlákno patří, aby uživatel při odpovědi nezapomněl na klíčové osoby nebo aby rozuměl, proč bylo vlákno vybráno.
-8. Po každém odeslání odpovědi sleduj `followUpLabelReminder` v mutační odpovědi. Pokud je přítomen, připomeň uživateli odstranění `nevyřízeno` pomocí připraveného `modify` requestu; meta štítek ponech.
+8. Po každém odeslání odpovědi sleduj `unrepliedLabelReminder` v mutační odpovědi. Pokud je přítomen, připomeň uživateli odstranění `nevyřízeno` pomocí připraveného `modify` requestu; meta štítek ponech.
 
 ---
 

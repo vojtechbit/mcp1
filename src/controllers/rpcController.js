@@ -97,11 +97,23 @@ async function mailRpc(req, res) {
           });
         }
 
-        result = await gmailSvc.createDraft(req.user.googleSub, {
+        const draftPayload = {
           to: params.to.trim(),
           subject: params.subject.trim(),
           body: params.body
-        });
+        };
+
+        if (typeof params.cc === 'string' && params.cc.trim().length > 0) {
+          draftPayload.cc = params.cc;
+        }
+        if (typeof params.bcc === 'string' && params.bcc.trim().length > 0) {
+          draftPayload.bcc = params.bcc;
+        }
+        if (typeof params.threadId === 'string' && params.threadId.trim().length > 0) {
+          draftPayload.threadId = params.threadId.trim();
+        }
+
+        result = await gmailSvc.createDraft(req.user.googleSub, draftPayload);
         break;
 
       case 'send':
@@ -170,7 +182,93 @@ async function mailRpc(req, res) {
           });
         }
         break;
-        
+
+      case 'updateDraft': {
+        if (!params || typeof params !== 'object') {
+          return res.status(400).json({
+            error: 'Invalid request format',
+            message: 'params object is required for updateDraft operation',
+            code: 'INVALID_PARAM',
+            expectedFormat: {
+              op: 'updateDraft',
+              params: {
+                draftId: 'string',
+                to: 'recipient@example.com',
+                subject: 'string',
+                body: 'string'
+              }
+            }
+          });
+        }
+
+        const { draftId, to, subject, body } = params;
+
+        const missingFields = [];
+        if (typeof draftId !== 'string' || draftId.trim() === '') missingFields.push('draftId');
+        if (typeof to !== 'string' || to.trim() === '') missingFields.push('to');
+        if (typeof subject !== 'string' || subject.trim() === '') missingFields.push('subject');
+        if (typeof body !== 'string') missingFields.push('body');
+
+        if (missingFields.length > 0) {
+          return res.status(400).json({
+            error: 'Invalid request format',
+            message: `Missing or invalid field(s) for updateDraft: ${missingFields.join(', ')}`,
+            code: 'INVALID_PARAM',
+            expectedFormat: {
+              op: 'updateDraft',
+              params: {
+                draftId: 'existing-draft-id',
+                to: 'recipient@example.com',
+                subject: 'string',
+                body: 'string'
+              }
+            }
+          });
+        }
+
+        const updatePayload = {
+          to: to.trim(),
+          subject: subject.trim(),
+          body
+        };
+
+        if (typeof params.cc === 'string' && params.cc.trim().length > 0) {
+          updatePayload.cc = params.cc;
+        }
+        if (typeof params.bcc === 'string' && params.bcc.trim().length > 0) {
+          updatePayload.bcc = params.bcc;
+        }
+        if (typeof params.threadId === 'string' && params.threadId.trim().length > 0) {
+          updatePayload.threadId = params.threadId.trim();
+        }
+
+        result = await gmailSvc.updateDraft(req.user.googleSub, draftId.trim(), updatePayload);
+        break;
+      }
+
+      case 'listDrafts': {
+        const safeParams = typeof params === 'object' && params !== null ? params : {};
+        result = await gmailSvc.listDrafts(req.user.googleSub, safeParams);
+        break;
+      }
+
+      case 'getDraft': {
+        const draftId = params?.draftId;
+        if (typeof draftId !== 'string' || draftId.trim().length === 0) {
+          return res.status(400).json({
+            error: 'Invalid request format',
+            message: 'Missing required field: draftId',
+            code: 'INVALID_PARAM',
+            expectedFormat: { op: 'getDraft', params: { draftId: 'string' } }
+          });
+        }
+
+        result = await gmailSvc.getDraft(req.user.googleSub, draftId.trim(), {
+          format: typeof params.format === 'string' ? params.format : undefined
+        });
+        break;
+      }
+
       case 'reply':
         result = await gmailSvc.replyToEmail(
           req.user.googleSub,
