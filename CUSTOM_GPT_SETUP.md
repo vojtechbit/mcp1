@@ -112,6 +112,50 @@ paths:
           schema:
             type: string
 
+  /api/gmail/followups:
+    get:
+      operationId: listFollowupCandidates
+      summary: List sent threads awaiting replies
+      parameters:
+        - name: minAgeDays
+          in: query
+          schema:
+            type: integer
+            default: 3
+        - name: maxAgeDays
+          in: query
+          schema:
+            type: integer
+            default: 14
+        - name: maxThreads
+          in: query
+          schema:
+            type: integer
+            default: 15
+        - name: includeBodies
+          in: query
+          schema:
+            type: boolean
+            default: true
+        - name: includeDrafts
+          in: query
+          schema:
+            type: boolean
+            default: false
+        - name: query
+          in: query
+          schema:
+            type: string
+        - name: historyLimit
+          in: query
+          schema:
+            type: integer
+            default: 5
+        - name: pageToken
+          in: query
+          schema:
+            type: string
+
   /api/calendar/events:
     post:
       operationId: createEvent
