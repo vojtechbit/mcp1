@@ -40,6 +40,9 @@ router.get('/gmail/snippet/:messageId', gmailController.getEmailSnippet);
 // Search emails
 router.get('/gmail/search', gmailController.searchEmails);
 
+// List follow-up candidates
+router.get('/gmail/followups', gmailController.listFollowupCandidates);
+
 // Create draft
 router.post('/gmail/draft', gmailController.createDraft);
 

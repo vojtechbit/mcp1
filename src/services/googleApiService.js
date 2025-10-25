@@ -28,6 +28,7 @@ const EMAIL_SIZE_LIMITS = {
 };
 
 const CONTENT_PREVIEW_LIMIT = 500;
+const DAY_IN_MS = 24 * 60 * 60 * 1000;
 
 // ==================== LABEL DIRECTORY CACHE ====================
 const LABEL_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes is enough for interactive sessions
@@ -236,6 +237,165 @@ function generateGmailLinks(threadId, messageId) {
     thread: threadLink,
     message: messageLink
   };
+}
+
+function getHeaderValue(headers = [], name) {
+  const lower = name.toLowerCase();
+  return headers.find(header => header.name?.toLowerCase() === lower)?.value || '';
+}
+
+function formatPragueTimestamps(internalDate) {
+  if (!internalDate) {
+    return null;
+  }
+
+  const timestamp = typeof internalDate === 'string'
+    ? parseInt(internalDate, 10)
+    : Number(internalDate);
+
+  if (!Number.isFinite(timestamp)) {
+    return null;
+  }
+
+  const utcDate = new Date(timestamp);
+  const offsetHours = getPragueOffsetHours(utcDate);
+  const pragueDate = new Date(utcDate.getTime() + offsetHours * 60 * 60 * 1000);
+  const sign = offsetHours >= 0 ? '+' : '-';
+  const offset = `${sign}${String(Math.abs(offsetHours)).padStart(2, '0')}:00`;
+
+  return {
+    epochMs: timestamp,
+    utc: utcDate.toISOString(),
+    prague: pragueDate.toISOString().replace('Z', offset),
+    offsetHours
+  };
+}
+
+function extractEmailAddress(value) {
+  if (!value) {
+    return null;
+  }
+
+  const match = value.match(/<([^>]+)>/);
+  if (match) {
+    return match[1].trim().toLowerCase();
+  }
+
+  const emailMatch = value.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i);
+  return emailMatch
+    ? emailMatch[0].trim().toLowerCase()
+    : value.trim().toLowerCase();
+}
+
+function parseAddressList(headerValue) {
+  if (!headerValue) {
+    return [];
+  }
+
+  return headerValue
+    .split(',')
+    .map(part => part.trim())
+    .filter(Boolean)
+    .map(part => {
+      const match = part.match(/<([^>]+)>/);
+      const address = match
+        ? match[1].trim()
+        : part.replace(/^["']|["']$/g, '').trim();
+
+      const nameRaw = match
+        ? part.replace(match[0], '').trim()
+        : '';
+
+      const name = nameRaw ? nameRaw.replace(/^["']|["']$/g, '') : null;
+
+      return {
+        address,
+        name,
+        raw: part,
+        normalized: address.toLowerCase()
+      };
+    });
+}
+
+function buildRecipientList(headerValue, userEmailNormalized) {
+  return parseAddressList(headerValue).map(entry => ({
+    address: entry.address,
+    name: entry.name,
+    raw: entry.raw,
+    isUser: userEmailNormalized ? entry.normalized === userEmailNormalized : false
+  }));
+}
+
+function collectParticipants(messages, userEmailNormalized) {
+  const seen = new Map();
+
+  for (const message of messages) {
+    const headers = message.payload?.headers || [];
+    const fields = ['From', 'To', 'Cc', 'Bcc'];
+
+    for (const field of fields) {
+      const entries = parseAddressList(getHeaderValue(headers, field));
+      for (const entry of entries) {
+        if (!entry.address) {
+          continue;
+        }
+
+        const key = entry.normalized;
+        if (!seen.has(key)) {
+          seen.set(key, {
+            address: entry.address,
+            name: entry.name,
+            raw: entry.raw,
+            firstSeenIn: field.toLowerCase(),
+            firstMessageId: message.id,
+            isUser: userEmailNormalized ? key === userEmailNormalized : false
+          });
+        }
+      }
+    }
+  }
+
+  return Array.from(seen.values());
+}
+
+function findLastInboundMessage(messages) {
+  for (let index = messages.length - 1; index >= 0; index--) {
+    const message = messages[index];
+    const labels = message.labelIds || [];
+
+    if (labels.includes('SENT') || labels.includes('DRAFT')) {
+      continue;
+    }
+
+    return message;
+  }
+
+  return null;
+}
+
+function hasFileAttachments(payload) {
+  if (!payload) {
+    return false;
+  }
+
+  const stack = Array.isArray(payload.parts) ? [...payload.parts] : [];
+
+  while (stack.length > 0) {
+    const part = stack.pop();
+    if (!part) {
+      continue;
+    }
+
+    if (part.body?.attachmentId && (part.filename || '').trim().length > 0) {
+      return true;
+    }
+
+    if (Array.isArray(part.parts) && part.parts.length > 0) {
+      stack.push(...part.parts);
+    }
+  }
+
+  return false;
 }
 
 function buildContentMetadata(payload) {
@@ -708,6 +868,332 @@ async function searchEmails(googleSub, { query, q, maxResults = 10, pageToken } 
 
     const result = await gmail.users.messages.list(params);
     return result.data;
+  });
+}
+
+async function listFollowupCandidates(googleSub, options = {}) {
+  const dbUser = await getUserByGoogleSub(googleSub).catch(() => null);
+  const userEmailNormalized = dbUser?.email?.toLowerCase() || null;
+
+  const {
+    minAgeDays = 3,
+    maxAgeDays = 14,
+    maxThreads = 15,
+    includeBodies = true,
+    includeDrafts = false,
+    query: additionalQuery,
+    historyLimit = 5,
+    pageToken
+  } = options || {};
+
+  const parsedMinAge = Number(minAgeDays);
+  const safeMinAge = Number.isFinite(parsedMinAge) && parsedMinAge >= 0
+    ? parsedMinAge
+    : 3;
+
+  const parsedMaxAge = Number(maxAgeDays);
+  let safeMaxAge = Number.isFinite(parsedMaxAge) && parsedMaxAge > 0
+    ? parsedMaxAge
+    : null;
+
+  if (safeMaxAge !== null && safeMaxAge < safeMinAge) {
+    const error = new Error('maxAgeDays must be greater than or equal to minAgeDays');
+    error.code = 'INVALID_FOLLOWUP_WINDOW';
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const parsedMaxThreads = Number(maxThreads);
+  const safeMaxThreads = Math.min(50, Math.max(1, Number.isFinite(parsedMaxThreads) ? Math.floor(parsedMaxThreads) : 15));
+
+  const parsedHistoryLimit = Number(historyLimit);
+  const safeHistoryLimit = Math.min(10, Math.max(1, Number.isFinite(parsedHistoryLimit) ? Math.floor(parsedHistoryLimit) : 5));
+
+  const queryParts = ['in:sent', '-label:drafts', '-label:chats', '-label:spam'];
+
+  if (safeMinAge >= 1) {
+    queryParts.push(`older_than:${Math.floor(safeMinAge)}d`);
+  }
+
+  if (safeMaxAge !== null) {
+    queryParts.push(`newer_than:${Math.ceil(safeMaxAge)}d`);
+  }
+
+  if (typeof additionalQuery === 'string' && additionalQuery.trim().length > 0) {
+    queryParts.push(additionalQuery.trim());
+  }
+
+  const searchQuery = queryParts.join(' ').replace(/\s+/g, ' ').trim();
+
+  return await handleGoogleApiCall(googleSub, async () => {
+    const authClient = await getAuthenticatedClient(googleSub);
+    const gmail = google.gmail({ version: 'v1', auth: authClient });
+
+    const threads = [];
+    const seenThreadIds = new Set();
+    const stats = {
+      scannedMessages: 0,
+      inspectedThreads: 0,
+      skipped: {}
+    };
+
+    const now = Date.now();
+    const minAgeMs = safeMinAge * DAY_IN_MS;
+    const maxAgeMs = safeMaxAge !== null ? safeMaxAge * DAY_IN_MS : null;
+
+    let nextPageToken = null;
+    const initialPageToken = typeof pageToken === 'string' && pageToken.trim().length > 0
+      ? pageToken.trim()
+      : undefined;
+    let currentPageToken = initialPageToken;
+
+    const maxResultsPerCall = Math.min(100, Math.max(20, safeMaxThreads * 4));
+
+    while (threads.length < safeMaxThreads) {
+      const listResult = await gmail.users.messages.list({
+        userId: 'me',
+        q: searchQuery,
+        labelIds: ['SENT'],
+        maxResults: maxResultsPerCall,
+        pageToken: currentPageToken
+      });
+
+      const messageRefs = listResult.data.messages || [];
+      stats.scannedMessages += messageRefs.length;
+
+      if (messageRefs.length === 0) {
+        nextPageToken = listResult.data.nextPageToken || null;
+        break;
+      }
+
+      for (const messageRef of messageRefs) {
+        if (threads.length >= safeMaxThreads) {
+          nextPageToken = listResult.data.nextPageToken || null;
+          break;
+        }
+
+        if (!messageRef.threadId) {
+          stats.skipped.missingThread = (stats.skipped.missingThread || 0) + 1;
+          continue;
+        }
+
+        if (seenThreadIds.has(messageRef.threadId)) {
+          stats.skipped.duplicateThread = (stats.skipped.duplicateThread || 0) + 1;
+          continue;
+        }
+
+        seenThreadIds.add(messageRef.threadId);
+
+        const threadResult = await gmail.users.threads.get({
+          userId: 'me',
+          id: messageRef.threadId,
+          format: includeBodies ? 'full' : 'metadata'
+        });
+
+        const threadMessages = threadResult.data.messages || [];
+
+        if (threadMessages.length === 0) {
+          stats.skipped.emptyThread = (stats.skipped.emptyThread || 0) + 1;
+          continue;
+        }
+
+        stats.inspectedThreads += 1;
+
+        const lastMessage = threadMessages[threadMessages.length - 1];
+        const lastInternalDate = parseInt(lastMessage.internalDate, 10);
+
+        if (!Number.isFinite(lastInternalDate)) {
+          stats.skipped.missingInternalDate = (stats.skipped.missingInternalDate || 0) + 1;
+          continue;
+        }
+
+        const ageMs = now - lastInternalDate;
+
+        if (ageMs < minAgeMs) {
+          stats.skipped.tooRecent = (stats.skipped.tooRecent || 0) + 1;
+          continue;
+        }
+
+        if (maxAgeMs !== null && ageMs > maxAgeMs) {
+          stats.skipped.tooOld = (stats.skipped.tooOld || 0) + 1;
+          continue;
+        }
+
+        const lastLabels = lastMessage.labelIds || [];
+
+        if (!lastLabels.includes('SENT')) {
+          const fromHeader = getHeaderValue(lastMessage.payload?.headers, 'From');
+          const fromAddress = extractEmailAddress(fromHeader);
+
+          if (!fromAddress || (userEmailNormalized && fromAddress !== userEmailNormalized)) {
+            stats.skipped.lastNotFromUser = (stats.skipped.lastNotFromUser || 0) + 1;
+            continue;
+          }
+        }
+
+        if (!includeDrafts && lastLabels.includes('DRAFT')) {
+          stats.skipped.endsWithDraft = (stats.skipped.endsWithDraft || 0) + 1;
+          continue;
+        }
+
+        const headers = lastMessage.payload?.headers || [];
+        const subject = getHeaderValue(headers, 'Subject') || threadResult.data.snippet || '';
+        const toHeader = getHeaderValue(headers, 'To');
+        const ccHeader = getHeaderValue(headers, 'Cc');
+        const bccHeader = getHeaderValue(headers, 'Bcc');
+        const fromHeader = getHeaderValue(headers, 'From');
+        const dateHeader = getHeaderValue(headers, 'Date');
+
+        const fromAddressEntry = parseAddressList(fromHeader)[0] || null;
+        const senderAddressNormalized = fromAddressEntry?.normalized || extractEmailAddress(fromHeader);
+
+        const lastInboundMessage = findLastInboundMessage(threadMessages);
+        const lastInboundTimestamps = lastInboundMessage
+          ? formatPragueTimestamps(lastInboundMessage.internalDate)
+          : null;
+        const lastInboundFrom = lastInboundMessage
+          ? getHeaderValue(lastInboundMessage.payload?.headers, 'From')
+          : null;
+
+        const timestamps = formatPragueTimestamps(lastInternalDate);
+        const waitingDays = timestamps
+          ? Number(((now - timestamps.epochMs) / DAY_IN_MS).toFixed(1))
+          : null;
+
+        const plainText = includeBodies
+          ? truncateText(
+              extractPlainText(lastMessage.payload),
+              EMAIL_SIZE_LIMITS.MAX_BODY_LENGTH
+            )
+          : undefined;
+
+        const contentMetadata = includeBodies
+          ? buildContentMetadata(lastMessage.payload)
+          : undefined;
+
+        const conversation = threadMessages
+          .slice(Math.max(0, threadMessages.length - safeHistoryLimit))
+          .map(message => {
+            const messageHeaders = message.payload?.headers || [];
+            const messageTimestamps = formatPragueTimestamps(message.internalDate);
+            const labels = message.labelIds || [];
+            const direction = labels.includes('SENT')
+              ? 'outgoing'
+              : (labels.includes('DRAFT') ? 'draft' : 'incoming');
+
+            return {
+              id: message.id,
+              direction,
+              subject: getHeaderValue(messageHeaders, 'Subject') || subject,
+              from: getHeaderValue(messageHeaders, 'From') || null,
+              to: getHeaderValue(messageHeaders, 'To') || null,
+              cc: getHeaderValue(messageHeaders, 'Cc') || null,
+              bcc: getHeaderValue(messageHeaders, 'Bcc') || null,
+              snippet: message.snippet,
+              timestamps: messageTimestamps,
+              labelIds: labels,
+              hasAttachments: hasFileAttachments(message.payload),
+              readState: buildReadState(labels)
+            };
+          });
+
+        const threadSummary = {
+          threadId: threadResult.data.id,
+          historyId: threadResult.data.historyId,
+          messageCount: threadMessages.length,
+          subject,
+          snippet: lastMessage.snippet || threadResult.data.snippet || '',
+          waitingSince: timestamps,
+          waitingDays,
+          lastMessageId: lastMessage.id,
+          recipients: {
+            to: buildRecipientList(toHeader, userEmailNormalized),
+            cc: buildRecipientList(ccHeader, userEmailNormalized),
+            bcc: buildRecipientList(bccHeader, userEmailNormalized)
+          },
+          sender: {
+            raw: fromHeader || null,
+            address: fromAddressEntry?.address || senderAddressNormalized || null,
+            name: fromAddressEntry?.name || null,
+            isUser: userEmailNormalized
+              ? (senderAddressNormalized || '') === userEmailNormalized
+              : false
+          },
+          headers: {
+            subject,
+            from: fromHeader || null,
+            to: toHeader || null,
+            cc: ccHeader || null,
+            bcc: bccHeader || null,
+            date: dateHeader || null
+          },
+          lastMessage: {
+            id: lastMessage.id,
+            snippet: lastMessage.snippet,
+            timestamps,
+            labelIds: lastLabels,
+            readState: buildReadState(lastLabels),
+            sizeEstimate: lastMessage.sizeEstimate,
+            hasAttachments: hasFileAttachments(lastMessage.payload),
+            plainText,
+            contentMetadata,
+            links: generateGmailLinks(threadResult.data.id, lastMessage.id)
+          },
+          lastInbound: lastInboundMessage
+            ? {
+                id: lastInboundMessage.id,
+                from: lastInboundFrom,
+                fromAddress: extractEmailAddress(lastInboundFrom),
+                snippet: lastInboundMessage.snippet,
+                timestamps: lastInboundTimestamps,
+                ageDays: lastInboundTimestamps
+                  ? Number(((now - lastInboundTimestamps.epochMs) / DAY_IN_MS).toFixed(1))
+                  : null
+              }
+            : null,
+          participants: collectParticipants(threadMessages, userEmailNormalized),
+          conversation,
+          links: generateGmailLinks(threadResult.data.id, lastMessage.id)
+        };
+
+        threads.push(threadSummary);
+      }
+
+      if (threads.length >= safeMaxThreads) {
+        break;
+      }
+
+      if (!listResult.data.nextPageToken) {
+        nextPageToken = null;
+        break;
+      }
+
+      currentPageToken = listResult.data.nextPageToken;
+      nextPageToken = currentPageToken;
+    }
+
+    const moreAvailable = threads.length >= safeMaxThreads || Boolean(nextPageToken);
+
+    return {
+      threads,
+      searchQuery,
+      generatedAt: new Date().toISOString(),
+      filters: {
+        minAgeDays: safeMinAge,
+        maxAgeDays: safeMaxAge,
+        maxThreads: safeMaxThreads,
+        includeBodies,
+        includeDrafts,
+        historyLimit: safeHistoryLimit,
+        additionalQuery: typeof additionalQuery === 'string' && additionalQuery.trim().length > 0
+          ? additionalQuery.trim()
+          : null,
+        pageToken: initialPageToken || null
+      },
+      stats,
+      hasMore: moreAvailable,
+      nextPageToken: nextPageToken || null
+    };
   });
 }
 
@@ -2424,6 +2910,7 @@ const traced = wrapModuleFunctions('services.googleApiService', {
   readEmail,
   getEmailPreview,
   searchEmails,
+  listFollowupCandidates,
   replyToEmail,
   createDraft,
   sendDraft,
@@ -2460,6 +2947,7 @@ const {
   readEmail: tracedReadEmail,
   getEmailPreview: tracedGetEmailPreview,
   searchEmails: tracedSearchEmails,
+  listFollowupCandidates: tracedListFollowupCandidates,
   replyToEmail: tracedReplyToEmail,
   createDraft: tracedCreateDraft,
   sendDraft: tracedSendDraft,
@@ -2496,6 +2984,7 @@ export {
   tracedReadEmail as readEmail,
   tracedGetEmailPreview as getEmailPreview,
   tracedSearchEmails as searchEmails,
+  tracedListFollowupCandidates as listFollowupCandidates,
   tracedReplyToEmail as replyToEmail,
   tracedCreateDraft as createDraft,
   tracedSendDraft as sendDraft,

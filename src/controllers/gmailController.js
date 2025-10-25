@@ -969,6 +969,78 @@ async function downloadAttachment(req, res) {
   }
 }
 
+async function listFollowupCandidates(req, res) {
+  try {
+    const {
+      minAgeDays,
+      maxAgeDays,
+      maxThreads,
+      includeBodies,
+      includeDrafts,
+      query,
+      historyLimit,
+      pageToken
+    } = req.query;
+
+    const options = {
+      includeBodies: includeBodies !== 'false',
+      includeDrafts: includeDrafts === 'true'
+    };
+
+    if (typeof minAgeDays !== 'undefined') {
+      const parsed = Number(minAgeDays);
+      if (Number.isFinite(parsed)) {
+        options.minAgeDays = parsed;
+      }
+    }
+
+    if (typeof maxAgeDays !== 'undefined') {
+      const parsed = Number(maxAgeDays);
+      if (Number.isFinite(parsed)) {
+        options.maxAgeDays = parsed;
+      }
+    }
+
+    if (typeof maxThreads !== 'undefined') {
+      const parsed = Number(maxThreads);
+      if (Number.isFinite(parsed)) {
+        options.maxThreads = parsed;
+      }
+    }
+
+    if (typeof historyLimit !== 'undefined') {
+      const parsed = Number(historyLimit);
+      if (Number.isFinite(parsed)) {
+        options.historyLimit = parsed;
+      }
+    }
+
+    if (typeof query === 'string' && query.trim().length > 0) {
+      options.query = query.trim();
+    }
+
+    if (typeof pageToken === 'string' && pageToken.trim().length > 0) {
+      options.pageToken = pageToken.trim();
+    }
+
+    const result = await gmailService.listFollowupCandidates(
+      req.user.googleSub,
+      options
+    );
+
+    res.json({
+      success: true,
+      ...result
+    });
+  } catch (error) {
+    return handleControllerError(res, error, {
+      context: 'gmail.listFollowupCandidates',
+      defaultMessage: 'Failed to build follow-up list',
+      defaultCode: 'FOLLOWUP_LIST_FAILED'
+    });
+  }
+}
+
 const traced = wrapModuleFunctions('controllers.gmailController', {
   sendEmail,
   replyToEmail,
@@ -977,6 +1049,7 @@ const traced = wrapModuleFunctions('controllers.gmailController', {
   batchRead,
   getEmailSnippet,
   searchEmails,
+  listFollowupCandidates,
   createDraft,
   deleteEmail,
   toggleStar,
@@ -1001,6 +1074,7 @@ const {
   batchRead: tracedBatchRead,
   getEmailSnippet: tracedGetEmailSnippet,
   searchEmails: tracedSearchEmails,
+  listFollowupCandidates: tracedListFollowupCandidates,
   createDraft: tracedCreateDraft,
   deleteEmail: tracedDeleteEmail,
   toggleStar: tracedToggleStar,
@@ -1025,6 +1099,7 @@ export {
   tracedBatchRead as batchRead,
   tracedGetEmailSnippet as getEmailSnippet,
   tracedSearchEmails as searchEmails,
+  tracedListFollowupCandidates as listFollowupCandidates,
   tracedCreateDraft as createDraft,
   tracedDeleteEmail as deleteEmail,
   tracedToggleStar as toggleStar,
