@@ -366,8 +366,8 @@ curl https://mcp1-oauth-server.onrender.com/health
 | Soubor | Účel |
 |--------|------|
 | `openapi-facade-final.json` | API spec - co ChatGPT vidí |
-| `GPT_CONFIG.md` | Prompt/instructions pro Custom GPT |
 | `CUSTOM_GPT_SETUP.md` | Jak nastavit Custom GPT na ChatGPT.com |
+| GPT editor | Aktuální prompt a quick actions (spravujeme mimo repo) |
 | `CHANGELOG.md` | Verze history |
 | `FIXES_APPLIED_20251020.md` | Nedávné bugfixy |
 | `.env.example` | Template pro environment variables |

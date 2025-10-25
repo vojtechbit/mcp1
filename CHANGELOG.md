@@ -7,7 +7,7 @@ All notable changes to MCP1 OAuth Server will be documented in this file.
 ### Removed
 - Deleted redundant OpenAPI schema backups to keep a single source of truth.
 - Removed legacy console `test-*.js` scripts that required hard-coded secrets.
-- Consolidated GPT operator guidance into `GPT_ACTIONS_QUICK_REFERENCE.md` and dropped `QUICK_REFERENCE.md`.
+- Dropped `GPT_CONFIG.md` a `GPT_ACTIONS_QUICK_REFERENCE.md`; aktuální instrukce spravujeme přímo v GPT editoru.
 
 ## [3.2.1] - 2025-10-18
 

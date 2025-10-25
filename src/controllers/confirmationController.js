@@ -69,7 +69,9 @@ async function confirmMacroOperation(req, res) {
         action
       );
     } else if (confirmation.type === 'deduplication') {
-      if (!['merge', 'keepBoth', 'skip'].includes(action)) {
+      const normalizedAction = action === 'create' ? 'keepBoth' : action;
+
+      if (!['merge', 'keepBoth', 'skip'].includes(normalizedAction)) {
         return res.status(400).json({
           error: 'Invalid action',
           message:
@@ -81,7 +83,7 @@ async function confirmMacroOperation(req, res) {
       result = await facadeService.completeContactsDeduplication(
         req.user.googleSub,
         confirmToken,
-        action
+        normalizedAction
       );
     } else {
       return res.status(400).json({

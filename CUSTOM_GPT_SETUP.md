@@ -43,12 +43,12 @@ Na Render.com přidej environment variables (včetně `OAUTH_CLIENT_SECRET`).
 - Scope: `gmail calendar`
 
 **Instructions:**
-- Zkopíruj z `GPT_CONFIG.md`
+- Udržujeme je přímo v GPT editoru. Soubor `GPT_CONFIG.md` jsme odstranili, takže vezmi poslední schválenou verzi z produktové dokumentace nebo exportu z GPT editoru.
 
 **Conversation Starters:**
-- Zkopíruj z `GPT_CONFIG.md`
+- Stejný postup jako výše – spravuj je v GPT editoru (soubor s quick actions jsme z repozitáře odstranili).
 
-> 📎 **Poznámka:** `GPT_ACTIONS_QUICK_REFERENCE.md` nech jako interní tahák. Slouží pro tebe při ladění a testování, ale nekopíruj ho do promptu — zabíral by místo pro skutečnou konverzaci.
+> 📎 **Poznámka:** Quick actions ani starý prompt už v repozitáři nejsou. Pokud potřebuješ tahák, vytvoř si vlastní poznámky mimo repo, aby neovlivňovaly produkční konfiguraci.
 
 **Privacy Policy:**
 - URL: `https://mcp1-oauth-server.onrender.com/privacy-policy`
