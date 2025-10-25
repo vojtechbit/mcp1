@@ -2,7 +2,9 @@
 .env
 
 # Dependencies
-node_modules/
+node_modules/*
+!node_modules/ajv/
+!node_modules/ajv/**
 
 # Logs
 *.log
