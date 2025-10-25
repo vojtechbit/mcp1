@@ -656,12 +656,44 @@ async function markAsRead(req, res) {
 
 async function listLabels(req, res) {
   try {
-    const labels = await gmailService.listLabels(req.user.googleSub);
+    const { search, q, lookup, forceRefresh } = req.query;
+    const searchQuery = typeof search !== 'undefined' ? search : (typeof lookup !== 'undefined' ? lookup : q);
 
-    res.json({
-      success: true,
-      labels
-    });
+    let responsePayload;
+
+    if (typeof searchQuery !== 'undefined') {
+      const matchesFor = Array.isArray(searchQuery) ? searchQuery : [searchQuery];
+      const result = await gmailService.listLabels(req.user.googleSub, {
+        includeMatchesFor: matchesFor,
+        forceRefresh: forceRefresh === 'true'
+      });
+
+      if (Array.isArray(result)) {
+        responsePayload = { success: true, labels: result };
+      } else {
+        responsePayload = {
+          success: true,
+          labels: result.labels,
+          resolution: result.resolution
+        };
+      }
+    } else {
+      const labels = await gmailService.listLabels(req.user.googleSub, {
+        forceRefresh: forceRefresh === 'true'
+      });
+
+      if (Array.isArray(labels)) {
+        responsePayload = { success: true, labels };
+      } else {
+        responsePayload = {
+          success: true,
+          labels: labels.labels,
+          resolution: labels.resolution
+        };
+      }
+    }
+
+    res.json(responsePayload);
   } catch (error) {
     return handleControllerError(res, error, {
       context: 'gmail.listLabels',

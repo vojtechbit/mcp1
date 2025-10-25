@@ -208,9 +208,27 @@ async function mailRpc(req, res) {
         }
         break;
 
-      case 'labels':
+      case 'labels': {
         if (params.list) {
-          result = await gmailSvc.listLabels(req.user.googleSub);
+          const includeMatchesFor = params.includeMatchesFor || params.search || params.lookup;
+          const options = {};
+          if (typeof includeMatchesFor !== 'undefined') {
+            options.includeMatchesFor = Array.isArray(includeMatchesFor)
+              ? includeMatchesFor
+              : [includeMatchesFor];
+          }
+          if (params.forceRefresh === true) {
+            options.forceRefresh = true;
+          }
+          result = await gmailSvc.listLabels(req.user.googleSub, options);
+        } else if (params.resolve) {
+          result = await gmailSvc.resolveLabelIdentifiers(
+            req.user.googleSub,
+            params.resolve,
+            {
+              forceRefresh: params.forceRefresh === true
+            }
+          );
         } else if (params.modify) {
           result = await gmailSvc.modifyMessageLabels(
             req.user.googleSub,
@@ -222,6 +240,7 @@ async function mailRpc(req, res) {
           );
         }
         break;
+      }
         
       default:
         return res.status(400).json({

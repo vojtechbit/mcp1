@@ -172,6 +172,142 @@
                     "nextPageToken": {
                       "type": "string",
                       "description": "Token for next page. Null if subset=false (all results included). If subset=true, inform user there are more emails and offer to fetch them."
+                    },
+                    "labelResolution": {
+                      "type": "object",
+                      "description": "Metadata about how label strings were resolved into Gmail label IDs when filters.labelIds was provided. Absent when no label resolution was needed.",
+                      "properties": {
+                        "requested": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          },
+                          "description": "Original label strings provided in filters.labelIds."
+                        },
+                        "appliedLabels": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": { "type": "string" },
+                              "name": { "type": "string" },
+                              "type": { "type": "string" },
+                              "color": { "type": ["string", "null"] }
+                            }
+                          },
+                          "description": "Label objects that were confidently matched (subset of full label list)."
+                        },
+                        "appliedLabelIds": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          },
+                          "description": "Gmail label IDs applied to the query after resolution."
+                        },
+                        "queryAppliedLabelIds": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          },
+                          "description": "Label IDs actually used for this specific query (identical to appliedLabelIds unless resolution was skipped)."
+                        },
+                        "requestedCount": {
+                          "type": "integer",
+                          "description": "How many label strings were requested in total."
+                        },
+                        "requiresConfirmation": {
+                          "type": "boolean",
+                          "description": "true when at least one label needs clarification (ambiguous or unmatched)."
+                        },
+                        "querySkipped": {
+                          "type": "boolean",
+                          "description": "true when no label was applied and the query was intentionally skipped to avoid returning unrelated emails."
+                        },
+                        "resolved": {
+                          "type": "array",
+                          "description": "Resolved label matches with confidence scores.",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "input": { "type": "string" },
+                              "label": {
+                                "type": "object",
+                                "properties": {
+                                  "id": { "type": "string" },
+                                  "name": { "type": "string" },
+                                  "type": { "type": "string" },
+                                  "color": { "type": ["string", "null"] }
+                                }
+                              },
+                              "confidence": { "type": "number" },
+                              "reason": { "type": "string" }
+                            },
+                            "required": ["input", "label", "confidence", "reason"]
+                          }
+                        },
+                        "ambiguous": {
+                          "type": "array",
+                          "description": "Inputs that need clarification along with candidate labels.",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "input": { "type": "string" },
+                              "options": {
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "properties": {
+                                    "label": {
+                                      "type": "object",
+                                      "properties": {
+                                        "id": { "type": "string" },
+                                        "name": { "type": "string" },
+                                        "type": { "type": "string" },
+                                        "color": { "type": ["string", "null"] }
+                                      }
+                                    },
+                                    "confidence": { "type": "number" },
+                                    "reason": { "type": "string" }
+                                  },
+                                  "required": ["label", "confidence", "reason"]
+                                }
+                              }
+                            },
+                            "required": ["input", "options"]
+                          }
+                        },
+                        "unmatched": {
+                          "type": "array",
+                          "description": "Inputs that could not be matched to any label.",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "input": { "type": "string" },
+                              "suggestions": {
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "properties": {
+                                    "label": {
+                                      "type": "object",
+                                      "properties": {
+                                        "id": { "type": "string" },
+                                        "name": { "type": "string" },
+                                        "type": { "type": "string" },
+                                        "color": { "type": ["string", "null"] }
+                                      }
+                                    },
+                                    "confidence": { "type": "number" },
+                                    "reason": { "type": "string" }
+                                  },
+                                  "required": ["label", "confidence", "reason"]
+                                }
+                              }
+                            },
+                            "required": ["input", "suggestions"]
+                          }
+                        }
+                      }
                     }
                   }
                 }
@@ -312,6 +448,110 @@
                     "subset": {
                       "type": "boolean",
                       "description": "If true, more emails exist beyond limit. Inform user there are additional emails. If false, this is COMPLETE set."
+                    },
+                    "nextPageToken": {
+                      "type": "string",
+                      "description": "Token for next page. Null when subset=false (all snippets included)."
+                    },
+                    "labelResolution": {
+                      "type": "object",
+                      "description": "Same structure as /macros/inbox/overview labelResolution. Present when label name fuzzy-matching ran.",
+                      "properties": {
+                        "requested": { "type": "array", "items": { "type": "string" } },
+                        "appliedLabels": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": { "type": "string" },
+                              "name": { "type": "string" },
+                              "type": { "type": "string" },
+                              "color": { "type": ["string", "null"] }
+                            }
+                          }
+                        },
+                        "appliedLabelIds": { "type": "array", "items": { "type": "string" } },
+                        "queryAppliedLabelIds": { "type": "array", "items": { "type": "string" } },
+                        "requestedCount": { "type": "integer" },
+                        "requiresConfirmation": { "type": "boolean" },
+                        "querySkipped": { "type": "boolean" },
+                        "resolved": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "input": { "type": "string" },
+                              "label": {
+                                "type": "object",
+                                "properties": {
+                                  "id": { "type": "string" },
+                                  "name": { "type": "string" },
+                                  "type": { "type": "string" },
+                                  "color": { "type": ["string", "null"] }
+                                }
+                              },
+                              "confidence": { "type": "number" },
+                              "reason": { "type": "string" }
+                            }
+                          }
+                        },
+                        "ambiguous": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "input": { "type": "string" },
+                              "options": {
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "properties": {
+                                    "label": {
+                                      "type": "object",
+                                      "properties": {
+                                        "id": { "type": "string" },
+                                        "name": { "type": "string" },
+                                        "type": { "type": "string" },
+                                        "color": { "type": ["string", "null"] }
+                                      }
+                                    },
+                                    "confidence": { "type": "number" },
+                                    "reason": { "type": "string" }
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        },
+                        "unmatched": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "input": { "type": "string" },
+                              "suggestions": {
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "properties": {
+                                    "label": {
+                                      "type": "object",
+                                      "properties": {
+                                        "id": { "type": "string" },
+                                        "name": { "type": "string" },
+                                        "type": { "type": "string" },
+                                        "color": { "type": ["string", "null"] }
+                                      }
+                                    },
+                                    "confidence": { "type": "number" },
+                                    "reason": { "type": "string" }
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
                     }
                   }
                 }
@@ -2159,6 +2399,50 @@
                         "properties": {
                           "list": {
                             "type": "boolean"
+                          },
+                          "includeMatchesFor": {
+                            "oneOf": [
+                              { "type": "string" },
+                              {
+                                "type": "array",
+                                "items": { "type": "string" }
+                              }
+                            ],
+                            "description": "Optional array (or single string) of label names provided by the user. When present, the server performs fuzzy matching and returns resolution metadata alongside the label list."
+                          },
+                          "search": {
+                            "oneOf": [
+                              { "type": "string" },
+                              {
+                                "type": "array",
+                                "items": { "type": "string" }
+                              }
+                            ],
+                            "description": "Alias for includeMatchesFor. Accepts a single string or array for backwards compatibility."
+                          },
+                          "lookup": {
+                            "oneOf": [
+                              { "type": "string" },
+                              {
+                                "type": "array",
+                                "items": { "type": "string" }
+                              }
+                            ],
+                            "description": "Another alias for includeMatchesFor used by some orchestrators."
+                          },
+                          "resolve": {
+                            "oneOf": [
+                              { "type": "string" },
+                              {
+                                "type": "array",
+                                "items": { "type": "string" }
+                              }
+                            ],
+                            "description": "Resolve label strings without returning the full label directory. Returns the same resolution object used by macros."
+                          },
+                          "forceRefresh": {
+                            "type": "boolean",
+                            "description": "When true, bypasses the 5-minute label cache before resolving/listing."
                           },
                           "modify": {
                             "type": "object",
