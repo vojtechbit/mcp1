@@ -1035,7 +1035,7 @@ async function listFollowupCandidates(req, res) {
   } catch (error) {
     return handleControllerError(res, error, {
       context: 'gmail.listFollowupCandidates',
-      defaultMessage: 'Failed to build follow-up list',
+      defaultMessage: 'Failed to build follow-up candidate list',
       defaultCode: 'FOLLOWUP_LIST_FAILED'
     });
   }

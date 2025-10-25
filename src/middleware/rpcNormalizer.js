@@ -29,7 +29,10 @@ function normalizeRpcRequest(req, res, next) {
       // Mail params
       search: ['query', 'maxResults'],
       send: ['to', 'subject', 'body', 'cc', 'bcc', 'draftId', 'confirmSelfSend', 'toSelf'],
-      createDraft: ['to', 'subject', 'body'],
+      createDraft: ['to', 'subject', 'body', 'cc', 'bcc', 'threadId'],
+      updateDraft: ['draftId', 'to', 'subject', 'body', 'cc', 'bcc', 'threadId'],
+      listDrafts: ['maxResults', 'pageToken'],
+      getDraft: ['draftId', 'format'],
       read: ['ids', 'searchQuery', 'format'],
       reply: ['messageId'],
       modify: ['ids', 'actions'],

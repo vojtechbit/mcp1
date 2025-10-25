@@ -7,10 +7,10 @@ import { getPragueOffsetHours } from '../utils/helpers.js';
 import { debugStep, wrapModuleFunctions } from '../utils/advancedDebugging.js';
 import dotenv from 'dotenv';
 import {
-  FOLLOW_UP_LABEL_NAME,
+  UNREPLIED_LABEL_NAME,
   TRACKING_LABEL_NAME,
   TRACKING_LABEL_DEFAULTS
-} from '../config/followUpLabels.js';
+} from '../config/unrepliedLabels.js';
 // pdf-parse má problém s importem - načteme až když je potřeba
 import XLSX from 'xlsx-js-style';
 
@@ -849,7 +849,7 @@ async function getEmailPreview(googleSub, messageId, options = {}) {
   });
 }
 
-async function searchEmails(googleSub, { query, q, maxResults = 10, pageToken } = {}) {
+async function searchEmails(googleSub, { query, q, maxResults = 10, pageToken, labelIds } = {}) {
   return await handleGoogleApiCall(googleSub, async () => {
     const authClient = await getAuthenticatedClient(googleSub);
     const gmail = google.gmail({ version: 'v1', auth: authClient });
@@ -866,9 +866,63 @@ async function searchEmails(googleSub, { query, q, maxResults = 10, pageToken } 
 
     if (pageToken) params.pageToken = pageToken;
 
+    const normalizedLabelIds = Array.isArray(labelIds)
+      ? labelIds
+      : (typeof labelIds === 'string' ? [labelIds] : []);
+
+    const finalLabelIds = normalizedLabelIds
+      .map(id => (typeof id === 'string' ? id.trim() : ''))
+      .filter(id => id.length > 0);
+
+    if (finalLabelIds.length > 0) {
+      params.labelIds = finalLabelIds;
+    }
+
     const result = await gmail.users.messages.list(params);
     return result.data;
   });
+}
+
+function buildDraftMimeMessage({ to, subject, body, cc, bcc }) {
+  const safeSubject = typeof subject === 'string' ? subject.trim() : '';
+  if (!safeSubject) {
+    throw new Error('Draft subject is required');
+  }
+
+  const safeBody = typeof body === 'string' ? body : '';
+  const encodedSubject = `=?UTF-8?B?${Buffer.from(safeSubject, 'utf8').toString('base64')}?=`;
+
+  const headers = [
+    'Content-Type: text/plain; charset="UTF-8"',
+    'MIME-Version: 1.0',
+    'Content-Transfer-Encoding: 7bit'
+  ];
+
+  const addressHeaders = [
+    { key: 'To', value: to },
+    { key: 'Cc', value: cc },
+    { key: 'Bcc', value: bcc }
+  ];
+
+  for (const { key, value } of addressHeaders) {
+    if (typeof value === 'string') {
+      const trimmed = value.trim();
+      if (trimmed.length > 0) {
+        headers.push(`${key}: ${trimmed}`);
+      }
+    }
+  }
+
+  headers.push(`Subject: ${encodedSubject}`);
+  headers.push('');
+
+  const message = headers.join('\r\n') + safeBody;
+
+  return Buffer.from(message, 'utf8')
+    .toString('base64')
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=+$/, '');
 }
 
 async function listFollowupCandidates(googleSub, options = {}) {
@@ -1275,10 +1329,10 @@ async function replyToEmail(googleSub, messageId, { body }) {
     const originalSubject = headers.find(h => h.name === 'Subject')?.value;
     const originalMessageId = headers.find(h => h.name === 'Message-ID')?.value;
 
-    const { followUpLabel } = await getWatchlistLabelContext(googleSub);
-    let followUpLabelReminder = null;
-    if (followUpLabel && Array.isArray(original.data.labelIds) && original.data.labelIds.includes(followUpLabel.id)) {
-      followUpLabelReminder = buildFollowUpLabelReminderPayload(followUpLabel, {
+    const { unrepliedLabel } = await getWatchlistLabelContext(googleSub);
+    let unrepliedLabelReminder = null;
+    if (unrepliedLabel && Array.isArray(original.data.labelIds) && original.data.labelIds.includes(unrepliedLabel.id)) {
+      unrepliedLabelReminder = buildUnrepliedLabelReminderPayload(unrepliedLabel, {
         messageIds: [messageId],
         threadId: original.data.threadId
       });
@@ -1316,40 +1370,33 @@ async function replyToEmail(googleSub, messageId, { body }) {
 
     return {
       ...result.data,
-      followUpLabelReminder
+      unrepliedLabelReminder
     };
   });
 }
 
-async function createDraft(googleSub, { to, subject, body }) {
+async function createDraft(googleSub, { to, subject, body, cc, bcc, threadId } = {}) {
   return await handleGoogleApiCall(googleSub, async () => {
     const authClient = await getAuthenticatedClient(googleSub);
     const gmail = google.gmail({ version: 'v1', auth: authClient });
 
-    const encodedSubject = `=?UTF-8?B?${Buffer.from(subject, 'utf8').toString('base64')}?=`;
+    if (typeof to !== 'string' || to.trim().length === 0) {
+      throw new Error('Draft recipient is required');
+    }
 
-    const messageParts = [
-      'Content-Type: text/plain; charset="UTF-8"',
-      'MIME-Version: 1.0',
-      'Content-Transfer-Encoding: 7bit',
-      `To: ${to}`,
-      `Subject: ${encodedSubject}`,
-      '',
-      body
-    ];
+    const encodedMessage = buildDraftMimeMessage({ to, subject, body, cc, bcc });
 
-    const message = messageParts.join('\r\n');
-    const encodedMessage = Buffer.from(message, 'utf8')
-      .toString('base64')
-      .replace(/\+/g, '-')
-      .replace(/\//g, '_')
-      .replace(/=+$/, '');
+    const requestBody = {
+      message: { raw: encodedMessage }
+    };
+
+    if (threadId && typeof threadId === 'string' && threadId.trim().length > 0) {
+      requestBody.message.threadId = threadId.trim();
+    }
 
     const result = await gmail.users.drafts.create({
       userId: 'me',
-      requestBody: {
-        message: { raw: encodedMessage }
-      }
+      requestBody
     });
 
     // ✅ VALIDACE draft response
@@ -1393,11 +1440,11 @@ async function sendDraft(googleSub, draftId) {
     const authClient = await getAuthenticatedClient(googleSub);
     const gmail = google.gmail({ version: 'v1', auth: authClient });
 
-    let followUpLabelReminder = null;
+    let unrepliedLabelReminder = null;
 
     try {
-      const { followUpLabel } = await getWatchlistLabelContext(googleSub);
-      if (followUpLabel) {
+      const { unrepliedLabel } = await getWatchlistLabelContext(googleSub);
+      if (unrepliedLabel) {
         const draft = await gmail.users.drafts.get({
           userId: 'me',
           id: draftId,
@@ -1414,17 +1461,17 @@ async function sendDraft(googleSub, draftId) {
           });
 
           const messageIds = (thread.data?.messages || [])
-            .filter(msg => Array.isArray(msg.labelIds) && msg.labelIds.includes(followUpLabel.id))
+            .filter(msg => Array.isArray(msg.labelIds) && msg.labelIds.includes(unrepliedLabel.id))
             .map(msg => msg.id);
 
-          followUpLabelReminder = buildFollowUpLabelReminderPayload(followUpLabel, {
+          unrepliedLabelReminder = buildUnrepliedLabelReminderPayload(unrepliedLabel, {
             messageIds,
             threadId
           });
         }
       }
     } catch (reminderError) {
-      console.warn('⚠️ Unable to build follow-up label reminder for draft send:', reminderError.message);
+      console.warn('⚠️ Unable to build unreplied label reminder for draft send:', reminderError.message);
     }
 
     const result = await gmail.users.drafts.send({
@@ -1435,8 +1482,92 @@ async function sendDraft(googleSub, draftId) {
     console.log('✅ Draft sent:', draftId);
     return {
       ...result.data,
-      followUpLabelReminder
+      unrepliedLabelReminder
     };
+  });
+}
+
+async function updateDraft(googleSub, draftId, { to, subject, body, cc, bcc, threadId } = {}) {
+  if (typeof draftId !== 'string' || draftId.trim().length === 0) {
+    const error = new Error('Draft ID is required');
+    error.statusCode = 400;
+    throw error;
+  }
+
+  if (typeof to !== 'string' || to.trim().length === 0) {
+    const error = new Error('Draft recipient is required');
+    error.statusCode = 400;
+    throw error;
+  }
+
+  return await handleGoogleApiCall(googleSub, async () => {
+    const authClient = await getAuthenticatedClient(googleSub);
+    const gmail = google.gmail({ version: 'v1', auth: authClient });
+
+    const encodedMessage = buildDraftMimeMessage({ to, subject, body, cc, bcc });
+
+    const requestBody = {
+      id: draftId.trim(),
+      message: {
+        raw: encodedMessage
+      }
+    };
+
+    if (threadId && typeof threadId === 'string' && threadId.trim().length > 0) {
+      requestBody.message.threadId = threadId.trim();
+    }
+
+    const result = await gmail.users.drafts.update({
+      userId: 'me',
+      id: draftId.trim(),
+      requestBody
+    });
+
+    return result.data;
+  });
+}
+
+async function listDrafts(googleSub, { maxResults = 50, pageToken } = {}) {
+  return await handleGoogleApiCall(googleSub, async () => {
+    const authClient = await getAuthenticatedClient(googleSub);
+    const gmail = google.gmail({ version: 'v1', auth: authClient });
+
+    const safeMaxResults = Math.min(100, Math.max(1, Number.isFinite(Number(maxResults)) ? Number(maxResults) : 50));
+
+    const params = {
+      userId: 'me',
+      maxResults: safeMaxResults
+    };
+
+    if (typeof pageToken === 'string' && pageToken.trim().length > 0) {
+      params.pageToken = pageToken.trim();
+    }
+
+    const result = await gmail.users.drafts.list(params);
+    return result.data;
+  });
+}
+
+async function getDraft(googleSub, draftId, { format = 'full' } = {}) {
+  if (typeof draftId !== 'string' || draftId.trim().length === 0) {
+    const error = new Error('Draft ID is required');
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const safeFormat = ['full', 'metadata', 'minimal'].includes(format) ? format : 'full';
+
+  return await handleGoogleApiCall(googleSub, async () => {
+    const authClient = await getAuthenticatedClient(googleSub);
+    const gmail = google.gmail({ version: 'v1', auth: authClient });
+
+    const result = await gmail.users.drafts.get({
+      userId: 'me',
+      id: draftId.trim(),
+      format: safeFormat
+    });
+
+    return result.data;
   });
 }
 
@@ -1839,17 +1970,17 @@ function findLabelByExactName(labels = [], targetName) {
 
 async function getWatchlistLabelContext(googleSub, { forceRefresh = false } = {}) {
   const labels = await getLabelDirectory(googleSub, { forceRefresh });
-  const followUpLabel = findLabelByExactName(labels, FOLLOW_UP_LABEL_NAME);
+  const unrepliedLabel = findLabelByExactName(labels, UNREPLIED_LABEL_NAME);
   const trackingLabel = findLabelByExactName(labels, TRACKING_LABEL_NAME);
 
   return {
     labels,
-    followUpLabel,
+    unrepliedLabel,
     trackingLabel
   };
 }
 
-function buildFollowUpLabelReminderPayload(label, { messageIds = [], threadId } = {}) {
+function buildUnrepliedLabelReminderPayload(label, { messageIds = [], threadId } = {}) {
   if (!label) {
     return null;
   }
@@ -1893,9 +2024,9 @@ async function ensureTrackingLabelIncluded(googleSub, addIds = []) {
   }
 
   const addSet = new Set(normalizedAdd);
-  const { followUpLabel, trackingLabel } = await getWatchlistLabelContext(googleSub);
+  const { unrepliedLabel, trackingLabel } = await getWatchlistLabelContext(googleSub);
 
-  if (!followUpLabel || !addSet.has(followUpLabel.id)) {
+  if (!unrepliedLabel || !addSet.has(unrepliedLabel.id)) {
     return Array.from(addSet);
   }
 
@@ -2207,11 +2338,11 @@ async function replyToThread(googleSub, threadId, { body }) {
     const lastMessage = messages[messages.length - 1];
     const headers = lastMessage?.payload?.headers || [];
 
-    const { followUpLabel } = await getWatchlistLabelContext(googleSub);
-    const followUpLabelReminder = followUpLabel
-      ? buildFollowUpLabelReminderPayload(followUpLabel, {
+    const { unrepliedLabel } = await getWatchlistLabelContext(googleSub);
+    const unrepliedLabelReminder = unrepliedLabel
+      ? buildUnrepliedLabelReminderPayload(unrepliedLabel, {
           messageIds: messages
-            .filter(msg => Array.isArray(msg.labelIds) && msg.labelIds.includes(followUpLabel.id))
+            .filter(msg => Array.isArray(msg.labelIds) && msg.labelIds.includes(unrepliedLabel.id))
             .map(msg => msg.id),
           threadId
         })
@@ -2254,7 +2385,7 @@ async function replyToThread(googleSub, threadId, { body }) {
     console.log('✅ Reply sent to thread:', threadId);
     return {
       ...result.data,
-      followUpLabelReminder
+      unrepliedLabelReminder
     };
   });
 }
@@ -2914,6 +3045,9 @@ const traced = wrapModuleFunctions('services.googleApiService', {
   replyToEmail,
   createDraft,
   sendDraft,
+  updateDraft,
+  listDrafts,
+  getDraft,
   deleteEmail,
   toggleStar,
   markAsRead,
@@ -2951,6 +3085,9 @@ const {
   replyToEmail: tracedReplyToEmail,
   createDraft: tracedCreateDraft,
   sendDraft: tracedSendDraft,
+  updateDraft: tracedUpdateDraft,
+  listDrafts: tracedListDrafts,
+  getDraft: tracedGetDraft,
   deleteEmail: tracedDeleteEmail,
   toggleStar: tracedToggleStar,
   markAsRead: tracedMarkAsRead,
@@ -2988,6 +3125,9 @@ export {
   tracedReplyToEmail as replyToEmail,
   tracedCreateDraft as createDraft,
   tracedSendDraft as sendDraft,
+  tracedUpdateDraft as updateDraft,
+  tracedListDrafts as listDrafts,
+  tracedGetDraft as getDraft,
   tracedDeleteEmail as deleteEmail,
   tracedToggleStar as toggleStar,
   tracedMarkAsRead as markAsRead,

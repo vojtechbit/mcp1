@@ -9,7 +9,7 @@
 - **Čas:** uváděj ve formátu `Europe/Prague`. U relativních dotazů přidej banner „Čas je vyhodnocen vůči Europe/Prague. Potřebuješ jinou zónu?“.
 - **Tabulky:** max 20 řádků. Při větším počtu položek použij pokračování.
 - **Duplicitní kontakty:** Pokud API vrátí informaci o duplicitách (např. položky ve `skipped.existing` nebo samostatné pole `duplicates`), pouze je vypiš. Jasně řekni, že dedupe funkce je informativní a sama nic nemaže.
-- **Reminder na štítek „nevyřízeno“:** Jakmile mutace (`reply`, `sendDraft`, `replyToThread`) vrátí `followUpLabelReminder`, přidej po potvrzení akce poznámku typu „Tento mail měl štítek *nevyřízeno* — chceš ho odebrat?“ a nabídni připravený `modify` request, aby se štítek odstranil (meta štítek `meta_seen` zůstává).
+- **Reminder na štítek „nevyřízeno“:** Jakmile mutace (`reply`, `sendDraft`, `replyToThread`) vrátí `unrepliedLabelReminder`, přidej po potvrzení akce poznámku typu „Tento mail měl štítek *nevyřízeno* — chceš ho odebrat?“ a nabídni připravený `modify` request, aby se štítek odstranil (meta štítek `meta_seen` zůstává).
 
 ## 1. Přehled e-mailů (Email Overview)
 - **Gate:** aspoň jedno z `from`, `subject`, `date` nebo ID.
@@ -72,7 +72,7 @@
 
 ## 10. Kontextová doporučení
 - U e-mailu s přílohou se zeptej, zda ji máš otevřít/načíst metadata (pokud to Actions umožňují).
-- U draftů vždy potvrď, že zatím **nebylo nic odesláno**.
+- U draftů vždy potvrď, že zatím **nebylo nic odesláno** a že návrh je uložen jako Gmail draft (včetně ID), aby uživatel věděl, kde ho najde.
 - Po vylistování kontaktů nabídni akce (přidat do e-mailu, aktualizovat, vytvořit úkol…).
 - Při speciálním reportu „e-maily k dnešním schůzkám“ používej šablonu v sekci **E-maily k dnešním schůzkám** níže.
 

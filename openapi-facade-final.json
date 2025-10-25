@@ -561,9 +561,9 @@
         }
       }
     },
-    "/macros/inbox/unanswered": {
+    "/macros/inbox/userunanswered": {
       "post": {
-        "operationId": "macroInboxUnanswered",
+        "operationId": "macroInboxUserUnanswered",
         "summary": "Find conversations awaiting your reply",
         "description": "Use this macro when you need a structured view of inbox threads where someone else replied last and you may owe a follow-up — for example confirming showings, responding to offers, or checking on open service requests. By default it scans today's Primary inbox, surfaces unread (never opened) and read (seen but still awaiting action) buckets, and includes guidance for working with the recommended 'nevyřízeno' follow-up label plus the internal 'meta_seen' tracker so conversations are not shown twice.",
         "requestBody": {
@@ -2410,9 +2410,9 @@
                     },
                     "data": {
                       "type": "object",
-                      "description": "Response data (varies by operation). Reply/send flows return the Gmail payload and may include followUpLabelReminder so the assistant can offer removing the 'nevyřízeno' label after replying.",
+                      "description": "Response data (varies by operation). Reply/send flows return the Gmail payload and may include unrepliedLabelReminder so the assistant can offer removing the 'nevyřízeno' label after replying.",
                       "properties": {
-                        "followUpLabelReminder": {
+                        "unrepliedLabelReminder": {
                           "type": ["object", "null"],
                           "description": "Present when the replied-to message still has the 'nevyřízeno' label. Use the provided modify payload(s) to remove it after confirming with the user; the meta_seen tracker stays in place.",
                           "properties": {
@@ -2479,7 +2479,7 @@
       "get": {
         "operationId": "listFollowupCandidates",
         "summary": "List sent conversations awaiting follow-up",
-        "description": "Identifies sent threads where the user's latest outbound message has not received a reply yet. Defaults to conversations between 3 and 14 days old and can include body previews for drafting follow-up emails.",
+        "description": "Identifies sent threads where the user's latest outbound message has not received a reply yet. Defaults to conversations between 3 and 14 days old and can include body previews for drafting follow-up reminders.",
         "parameters": [
           {
             "name": "minAgeDays",
@@ -2923,13 +2923,16 @@
                       "preview",
                       "read",
                       "createDraft",
+                      "updateDraft",
+                      "listDrafts",
+                      "getDraft",
                       "send",
                       "reply",
                       "modify",
                       "attachmentPreview",
                       "labels"
                     ],
-                    "description": "Operation: search, preview (metadata for ids), read (full email or by search), create drafts (trigger phrases: 'vytvořit mi draft', 'udělej mi draft'), send (direct OR by draftId), reply, modify labels, preview attachments, or manage labels list/modify."
+                    "description": "Operation: search, preview (metadata for ids), read (full email or by search), create drafts (trigger phrases: 'vytvořit mi draft', 'udělej mi draft'), update existing drafts, list or fetch drafts, send (direct OR by draftId), reply, modify labels, preview attachments, or manage labels list/modify."
                   },
                   "params": {
                     "anyOf": [
@@ -3014,6 +3017,100 @@
                             "maxLength": 20000,
                             "example": "Ahoj, tady je návrh status reportu...",
                             "description": "Plain-text body saved to the draft"
+                          },
+                          "cc": {
+                            "type": "string",
+                            "description": "Optional CC recipients (comma-separated)"
+                          },
+                          "bcc": {
+                            "type": "string",
+                            "description": "Optional BCC recipients (comma-separated)"
+                          },
+                          "threadId": {
+                            "type": "string",
+                            "description": "Attach the draft to an existing Gmail thread"
+                          }
+                        }
+                      },
+                      {
+                        "type": "object",
+                        "title": "Update Draft",
+                        "description": "Update an existing Gmail draft in place (op=updateDraft). Use when GPT rewrites a draft the user already has in Gmail.",
+                        "required": [
+                          "draftId",
+                          "to",
+                          "subject",
+                          "body"
+                        ],
+                        "properties": {
+                          "draftId": {
+                            "type": "string",
+                            "description": "Existing Gmail draft ID to update"
+                          },
+                          "to": {
+                            "type": "string",
+                            "format": "email",
+                            "description": "Updated recipient list"
+                          },
+                          "subject": {
+                            "type": "string",
+                            "description": "Updated subject"
+                          },
+                          "body": {
+                            "type": "string",
+                            "description": "Updated plain-text body"
+                          },
+                          "cc": {
+                            "type": "string",
+                            "description": "Optional CC recipients"
+                          },
+                          "bcc": {
+                            "type": "string",
+                            "description": "Optional BCC recipients"
+                          },
+                          "threadId": {
+                            "type": "string",
+                            "description": "Optional Gmail thread ID to keep the draft threaded"
+                          }
+                        }
+                      },
+                      {
+                        "type": "object",
+                        "title": "List Drafts",
+                        "description": "List Gmail drafts for the account (op=listDrafts). Useful to locate drafts before editing.",
+                        "properties": {
+                          "maxResults": {
+                            "type": "integer",
+                            "minimum": 1,
+                            "maximum": 100,
+                            "description": "Limit how many drafts to return"
+                          },
+                          "pageToken": {
+                            "type": "string",
+                            "description": "Page token from a previous listDrafts call"
+                          }
+                        }
+                      },
+                      {
+                        "type": "object",
+                        "title": "Get Draft",
+                        "description": "Fetch a specific Gmail draft (op=getDraft) to show the latest content before editing.",
+                        "required": [
+                          "draftId"
+                        ],
+                        "properties": {
+                          "draftId": {
+                            "type": "string",
+                            "description": "Draft ID to fetch"
+                          },
+                          "format": {
+                            "type": "string",
+                            "enum": [
+                              "full",
+                              "metadata",
+                              "minimal"
+                            ],
+                            "description": "Optional Gmail format hint (defaults to full)"
                           }
                         }
                       },
@@ -3033,6 +3130,16 @@
                             "type": "integer",
                             "minimum": 1,
                             "maximum": 100
+                          },
+                          "labelIds": {
+                            "oneOf": [
+                              { "type": "string" },
+                              {
+                                "type": "array",
+                                "items": { "type": "string" }
+                              }
+                            ],
+                            "description": "Optional Gmail label IDs to filter results (e.g., use with the 'nevyřízeno' label). Always fetch fresh results instead of relying on cached label membership."
                           }
                         }
                       },

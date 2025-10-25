@@ -18,11 +18,11 @@ import { REFERENCE_TIMEZONE } from '../config/limits.js';
 import { processAttachments } from '../utils/attachmentSecurity.js';
 import { generateSignedAttachmentUrl } from '../utils/signedUrlGenerator.js';
 import {
-  FOLLOW_UP_LABEL_NAME,
-  FOLLOW_UP_LABEL_DEFAULTS,
+  UNREPLIED_LABEL_NAME,
+  UNREPLIED_LABEL_DEFAULTS,
   TRACKING_LABEL_NAME,
   TRACKING_LABEL_DEFAULTS
-} from '../config/followUpLabels.js';
+} from '../config/unrepliedLabels.js';
 import {
   createPendingConfirmation,
   getPendingConfirmation,
@@ -361,7 +361,7 @@ async function emailQuickRead(googleSub, params = {}) {
   }
 }
 
-async function inboxUnansweredRequests(googleSub, params = {}) {
+async function inboxUserUnansweredRequests(googleSub, params = {}) {
   const {
     includeUnread = true,
     includeRead = true,
@@ -370,7 +370,7 @@ async function inboxUnansweredRequests(googleSub, params = {}) {
     strictNoReply = true,
     unreadPageToken,
     readPageToken,
-    labelName = FOLLOW_UP_LABEL_NAME,
+    labelName = UNREPLIED_LABEL_NAME,
     labelColor,
     query: additionalQuery,
     primaryOnly = true
@@ -382,7 +382,7 @@ async function inboxUnansweredRequests(googleSub, params = {}) {
 
   const normalizedLabelName = typeof labelName === 'string' && labelName.trim().length > 0
     ? labelName.trim()
-    : FOLLOW_UP_LABEL_NAME;
+    : UNREPLIED_LABEL_NAME;
 
   let effectiveTimeRange = timeRange;
   let usingDefaultTimeRange = false;
@@ -426,7 +426,7 @@ async function inboxUnansweredRequests(googleSub, params = {}) {
   const labelRecommendation = buildLabelRecommendation(
     labels,
     normalizedLabelName,
-    labelColor || FOLLOW_UP_LABEL_DEFAULTS.color,
+    labelColor || UNREPLIED_LABEL_DEFAULTS.color,
     {
       extraLabelIds: trackingLabelRecommendation.existingLabel
         ? [trackingLabelRecommendation.existingLabel.id]
@@ -2525,7 +2525,7 @@ const traced = wrapModuleFunctions('services.facadeService', {
   inboxOverview,
   inboxSnippets,
   emailQuickRead,
-  inboxUnansweredRequests,
+  inboxUserUnansweredRequests,
   calendarPlan,
   calendarSchedule,
   completeCalendarScheduleEnrichment,
@@ -2540,7 +2540,7 @@ const {
   inboxOverview: tracedInboxOverview,
   inboxSnippets: tracedInboxSnippets,
   emailQuickRead: tracedEmailQuickRead,
-  inboxUnansweredRequests: tracedInboxUnansweredRequests,
+  inboxUserUnansweredRequests: tracedInboxUserUnansweredRequests,
   calendarPlan: tracedCalendarPlan,
   calendarSchedule: tracedCalendarSchedule,
   completeCalendarScheduleEnrichment: tracedCompleteCalendarScheduleEnrichment,
@@ -2555,7 +2555,7 @@ export {
   tracedInboxOverview as inboxOverview,
   tracedInboxSnippets as inboxSnippets,
   tracedEmailQuickRead as emailQuickRead,
-  tracedInboxUnansweredRequests as inboxUnansweredRequests,
+  tracedInboxUserUnansweredRequests as inboxUserUnansweredRequests,
   tracedCalendarPlan as calendarPlan,
   tracedCalendarSchedule as calendarSchedule,
   tracedCompleteCalendarScheduleEnrichment as completeCalendarScheduleEnrichment,
