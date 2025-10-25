@@ -2230,6 +2230,432 @@
         }
       }
     },
+    "/gmail/followups": {
+      "get": {
+        "operationId": "listFollowupCandidates",
+        "summary": "List sent conversations awaiting follow-up",
+        "description": "Identifies sent threads where the user's latest outbound message has not received a reply yet. Defaults to conversations between 3 and 14 days old and can include body previews for drafting follow-up emails.",
+        "parameters": [
+          {
+            "name": "minAgeDays",
+            "in": "query",
+            "description": "Minimum age in whole days for the most recent outbound message in a thread. Defaults to 3 so reminders start a few days after sending.",
+            "schema": {
+              "type": "number",
+              "minimum": 0,
+              "default": 3
+            }
+          },
+          {
+            "name": "maxAgeDays",
+            "in": "query",
+            "description": "Maximum age in days for the latest outbound message. Defaults to 14. Leave blank to allow older threads. Must be ≥ minAgeDays when provided.",
+            "schema": {
+              "type": "number",
+              "minimum": 1,
+              "default": 14
+            }
+          },
+          {
+            "name": "maxThreads",
+            "in": "query",
+            "description": "Maximum number of threads to return (1-50). Defaults to 15 for a focused shortlist.",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 50,
+              "default": 15
+            }
+          },
+          {
+            "name": "includeBodies",
+            "in": "query",
+            "description": "When true (default), include truncated plain-text bodies and content metadata for the last outbound message.",
+            "schema": {
+              "type": "boolean",
+              "default": true
+            }
+          },
+          {
+            "name": "includeDrafts",
+            "in": "query",
+            "description": "Include threads that currently end with a Gmail draft. Defaults to false to focus on already sent emails.",
+            "schema": {
+              "type": "boolean",
+              "default": false
+            }
+          },
+          {
+            "name": "query",
+            "in": "query",
+            "description": "Additional Gmail query to narrow results (subject:, to:, label:, etc.).",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "historyLimit",
+            "in": "query",
+            "description": "How many recent messages to include per thread (1-10). Defaults to 5 to provide context without overwhelming the response.",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 10,
+              "default": 5
+            }
+          },
+          {
+            "name": "pageToken",
+            "in": "query",
+            "description": "Gmail page token for continuing a previous follow-up search when hasMore=true.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Follow-up candidates",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "description": "Always true when the request succeeds."
+                    },
+                    "threads": {
+                      "type": "array",
+                      "description": "Threads where the user is waiting for a reply.",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "threadId": {
+                            "type": "string",
+                            "description": "Gmail thread ID."
+                          },
+                          "historyId": {
+                            "type": "string",
+                            "description": "Latest Gmail history ID for the thread."
+                          },
+                          "messageCount": {
+                            "type": "integer",
+                            "description": "Number of messages in the thread."
+                          },
+                          "subject": {
+                            "type": "string"
+                          },
+                          "snippet": {
+                            "type": "string",
+                            "description": "Gmail snippet of the last outbound message."
+                          },
+                          "waitingSince": {
+                            "type": [
+                              "object",
+                              "null"
+                            ],
+                            "description": "Timestamps of when the user last wrote in the thread (UTC + Europe/Prague).",
+                            "properties": {
+                              "epochMs": { "type": "number" },
+                              "utc": { "type": "string", "format": "date-time" },
+                              "prague": { "type": "string", "description": "ISO string adjusted to Europe/Prague offset." },
+                              "offsetHours": { "type": "number" }
+                            }
+                          },
+                          "waitingDays": {
+                            "type": [
+                              "number",
+                              "null"
+                            ],
+                            "description": "How many days have passed since the last outbound message (one decimal)."
+                          },
+                          "lastMessageId": {
+                            "type": "string"
+                          },
+                          "recipients": {
+                            "type": "object",
+                            "properties": {
+                              "to": {
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "properties": {
+                                    "address": { "type": "string" },
+                                    "name": { "type": ["string", "null"] },
+                                    "raw": { "type": ["string", "null"] },
+                                    "isUser": { "type": "boolean" }
+                                  }
+                                }
+                              },
+                              "cc": {
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "properties": {
+                                    "address": { "type": "string" },
+                                    "name": { "type": ["string", "null"] },
+                                    "raw": { "type": ["string", "null"] },
+                                    "isUser": { "type": "boolean" }
+                                  }
+                                }
+                              },
+                              "bcc": {
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "properties": {
+                                    "address": { "type": "string" },
+                                    "name": { "type": ["string", "null"] },
+                                    "raw": { "type": ["string", "null"] },
+                                    "isUser": { "type": "boolean" }
+                                  }
+                                }
+                              }
+                            }
+                          },
+                          "sender": {
+                            "type": "object",
+                            "properties": {
+                              "raw": { "type": ["string", "null"] },
+                              "address": { "type": ["string", "null"] },
+                              "name": { "type": ["string", "null"] },
+                              "isUser": { "type": "boolean" }
+                            }
+                          },
+                          "headers": {
+                            "type": "object",
+                            "properties": {
+                              "subject": { "type": ["string", "null"] },
+                              "from": { "type": ["string", "null"] },
+                              "to": { "type": ["string", "null"] },
+                              "cc": { "type": ["string", "null"] },
+                              "bcc": { "type": ["string", "null"] },
+                              "date": { "type": ["string", "null"] }
+                            }
+                          },
+                          "lastMessage": {
+                            "type": "object",
+                            "properties": {
+                              "id": { "type": "string" },
+                              "snippet": { "type": ["string", "null"] },
+                              "timestamps": {
+                                "type": ["object", "null"],
+                                "properties": {
+                                  "epochMs": { "type": "number" },
+                                  "utc": { "type": "string", "format": "date-time" },
+                                  "prague": { "type": "string" },
+                                  "offsetHours": { "type": "number" }
+                                }
+                              },
+                              "labelIds": {
+                                "type": "array",
+                                "items": { "type": "string" }
+                              },
+                              "readState": {
+                                "type": "object",
+                                "properties": {
+                                  "isUnread": { "type": "boolean" },
+                                  "isRead": { "type": "boolean" }
+                                }
+                              },
+                              "sizeEstimate": { "type": ["integer", "null"] },
+                              "hasAttachments": { "type": "boolean" },
+                              "plainText": { "type": ["string", "null"] },
+                              "contentMetadata": {
+                                "type": ["object", "null"],
+                                "properties": {
+                                  "plainText": {
+                                    "type": "object",
+                                    "properties": {
+                                      "available": { "type": "boolean" },
+                                      "bytes": { "type": "integer" },
+                                      "preview": { "type": ["string", "null"] },
+                                      "truncated": { "type": "boolean" }
+                                    }
+                                  },
+                                  "html": {
+                                    "type": "object",
+                                    "properties": {
+                                      "available": { "type": "boolean" },
+                                      "inline": { "type": "boolean" },
+                                      "viaAttachments": { "type": "boolean" },
+                                      "bytes": { "type": "integer" },
+                                      "preview": { "type": ["string", "null"] },
+                                      "truncated": { "type": "boolean" }
+                                    }
+                                  },
+                                  "inlineImages": { "type": "integer" },
+                                  "inlineAttachments": { "type": "integer" }
+                                }
+                              },
+                              "links": {
+                                "type": ["object", "null"],
+                                "properties": {
+                                  "thread": { "type": ["string", "null"] },
+                                  "message": { "type": ["string", "null"] }
+                                }
+                              }
+                            }
+                          },
+                          "lastInbound": {
+                            "type": ["object", "null"],
+                            "properties": {
+                              "id": { "type": "string" },
+                              "from": { "type": ["string", "null"] },
+                              "fromAddress": { "type": ["string", "null"] },
+                              "snippet": { "type": ["string", "null"] },
+                              "timestamps": {
+                                "type": ["object", "null"],
+                                "properties": {
+                                  "epochMs": { "type": "number" },
+                                  "utc": { "type": "string", "format": "date-time" },
+                                  "prague": { "type": "string" },
+                                  "offsetHours": { "type": "number" }
+                                }
+                              },
+                              "ageDays": { "type": ["number", "null"] }
+                            }
+                          },
+                          "participants": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "address": { "type": "string" },
+                                "name": { "type": ["string", "null"] },
+                                "raw": { "type": ["string", "null"] },
+                                "firstSeenIn": { "type": ["string", "null"] },
+                                "firstMessageId": { "type": "string" },
+                                "isUser": { "type": "boolean" }
+                              }
+                            }
+                          },
+                          "conversation": {
+                            "type": "array",
+                            "description": "Recent messages from the thread (up to historyLimit).",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "id": { "type": "string" },
+                                "direction": {
+                                  "type": "string",
+                                  "enum": ["outgoing", "incoming", "draft"]
+                                },
+                                "subject": { "type": ["string", "null"] },
+                                "from": { "type": ["string", "null"] },
+                                "to": { "type": ["string", "null"] },
+                                "cc": { "type": ["string", "null"] },
+                                "bcc": { "type": ["string", "null"] },
+                                "snippet": { "type": ["string", "null"] },
+                                "timestamps": {
+                                  "type": ["object", "null"],
+                                  "properties": {
+                                    "epochMs": { "type": "number" },
+                                    "utc": { "type": "string", "format": "date-time" },
+                                    "prague": { "type": "string" },
+                                    "offsetHours": { "type": "number" }
+                                  }
+                                },
+                                "labelIds": {
+                                  "type": "array",
+                                  "items": { "type": "string" }
+                                },
+                                "hasAttachments": { "type": "boolean" },
+                                "readState": {
+                                  "type": "object",
+                                  "properties": {
+                                    "isUnread": { "type": "boolean" },
+                                    "isRead": { "type": "boolean" }
+                                  }
+                                }
+                              }
+                            }
+                          },
+                          "links": {
+                            "type": ["object", "null"],
+                            "properties": {
+                              "thread": { "type": ["string", "null"] },
+                              "message": { "type": ["string", "null"] }
+                            }
+                          }
+                        }
+                      }
+                    },
+                    "searchQuery": {
+                      "type": "string",
+                      "description": "Full Gmail query executed (combines range filters and any custom query)."
+                    },
+                    "generatedAt": {
+                      "type": "string",
+                      "format": "date-time",
+                      "description": "Timestamp when the follow-up list was generated."
+                    },
+                    "filters": {
+                      "type": "object",
+                      "description": "Final parameters applied by the backend.",
+                      "properties": {
+                        "minAgeDays": { "type": "number" },
+                        "maxAgeDays": { "type": ["number", "null"] },
+                        "maxThreads": { "type": "integer" },
+                        "includeBodies": { "type": "boolean" },
+                        "includeDrafts": { "type": "boolean" },
+                        "historyLimit": { "type": "integer" },
+                        "additionalQuery": { "type": ["string", "null"] },
+                        "pageToken": { "type": ["string", "null"] }
+                      }
+                    },
+                    "stats": {
+                      "type": "object",
+                      "description": "Diagnostic counters for transparency.",
+                      "properties": {
+                        "scannedMessages": { "type": "integer" },
+                        "inspectedThreads": { "type": "integer" },
+                        "skipped": {
+                          "type": "object",
+                          "additionalProperties": {
+                            "type": "integer"
+                          },
+                          "description": "Counts per skip reason (tooRecent, tooOld, missingThread, etc.)."
+                        }
+                      }
+                    },
+                    "hasMore": {
+                      "type": "boolean",
+                      "description": "true when additional threads are available via nextPageToken."
+                    },
+                    "nextPageToken": {
+                      "type": ["string", "null"],
+                      "description": "Pass to the next request to continue scanning Gmail results."
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "threads",
+                    "hasMore"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid follow-up window (e.g., maxAgeDays < minAgeDays).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": { "type": "string" },
+                    "message": { "type": "string" },
+                    "code": { "type": "string" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/rpc/mail": {
       "post": {
         "operationId": "mailRpc",

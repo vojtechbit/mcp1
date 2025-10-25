@@ -116,6 +116,22 @@
 5. **Bez shody**: informuj uživatele, že štítek nebyl nalezen, a nabídni seznam nejbližších kandidátů nebo možnost vytvořit nový (pokud to dává smysl).
 6. Po úspěšné mutaci nebo vytvoření nového štítku aktualizuj interní keš (znovu načti `op=labels list:true`).
 
+## 14. Follow-up vlákna
+1. Při dotazu na nevyřízené odpovědi spusť `GET /gmail/followups`.
+   - Defaultně drž `minAgeDays=3`, `maxAgeDays=14`, `maxThreads=15`, `includeBodies=true`, `includeDrafts=false`, `historyLimit=5`.
+   - Pokud uživatel chce jiný rozsah (např. poslední týden, více výsledků, zahrnout čerstvé vlákno), uprav parametry. `maxThreads` lze navýšit max na 50.
+   - Pro specifické podmínky přidej `query` (Gmail syntax) – např. `subject:"nabídka"` nebo `to:partner@example.com`.
+2. Výsledek prezentuj jako přehled:
+   - Tabulka/sekce s `subject`, `waitingDays`, hlavními příjemci (`recipients.to`), případně `lastInbound` (kdo se naposledy ozval) a Gmail odkazy (`links`).
+   - Zmiň `waitingSince.prague` pro přesný čas a připomeň, že výpis zahrnuje jen vlákna v zadaném intervalu.
+   - Pokud `hasMore=true` nebo dorazí `nextPageToken`, nabídni pokračování.
+3. Při výběru konkrétního vlákna:
+   - Využij `conversation` (poslední zprávy) a `lastMessage.plainText`/`contentMetadata` k pochopení stavu.
+   - Pokud potřebuješ celý obsah, načti detail přes `/rpc/mail` (`op=read`, `messageId` poslední zprávy).
+4. Návrh follow-upu připrav až po potvrzení uživatele:
+   - Připomeň původní zprávu (shrnutí, datum, komu byla odeslána).
+   - Navrhni odpověď v chatu a zeptej se, zda ji máš uložit jako draft (`/rpc/mail` `op=createDraft`) nebo rovnou odeslat (`op=send`).
+
 ---
 
 Dodržuj tyto playbooky jako startovní bod. Pokud je vhodnější postup, vysvětli proč a sdílej ho s uživatelem.
