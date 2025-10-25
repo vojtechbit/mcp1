@@ -3,7 +3,17 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import Ajv from 'ajv';
+let Ajv;
+
+try {
+  ({ default: Ajv } = await import('ajv'));
+} catch (error) {
+  if (error?.code === 'ERR_MODULE_NOT_FOUND') {
+    ({ default: Ajv } = await import('ajv/node_modules/ajv/dist/ajv.js'));
+  } else {
+    throw error;
+  }
+}
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);

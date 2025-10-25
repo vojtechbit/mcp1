@@ -68,6 +68,29 @@ git push origin main
 node test-oauth-proxy.js
 ```
 
+### Deterministické stuby pro facade makra
+
+Unit testy mohou nahrazovat části Gmail API, databáze nebo sběrače
+nezodpovězených vláken pomocí objektu `globalThis.__facadeMocks`. Facade
+vrstva si při každém volání makra vyžádá aktuální implementace přes
+pomocné funkce `resolveGmailService`, `resolveCollectUnansweredThreads`
+a `resolveDatabaseService`, takže testy mohou vracet předvídatelná data:
+
+```js
+import './helpers/cleanupFacadeMocks.js';
+
+globalThis.__facadeMocks = {
+  gmailService: { listLabels: async () => testLabels },
+  databaseService: { getUserByGoogleSub: async () => testUser },
+  collectUnansweredThreads: async () => deterministicBucket
+};
+```
+
+Soubor `test/helpers/cleanupFacadeMocks.js` se postará o automatický
+úklid po každém scénáři, takže testy nemusí ručně volat `delete
+globalThis.__facadeMocks;` a produkční běh o testovacích hookách vůbec
+neví.
+
 ## Bezpečnost
 
 ✅ AES-256-GCM encryption
