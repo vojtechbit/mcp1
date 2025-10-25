@@ -30,6 +30,23 @@ import {
   completePendingConfirmation
 } from '../utils/confirmationStore.js';
 
+export const EMAIL_QUICK_READ_FORMATS = Object.freeze([
+  'snippet',
+  'minimal',
+  'metadata',
+  'full'
+]);
+
+function resolveGmailService() {
+  const mocks = globalThis?.__facadeMocks;
+
+  if (process.env.NODE_ENV === 'test' && mocks?.gmailService) {
+    return Object.assign({}, gmailService, mocks.gmailService);
+  }
+
+  return gmailService;
+}
+
 // ==================== INBOX MACROS ====================
 
 /**
@@ -305,20 +322,20 @@ async function emailQuickRead(googleSub, params = {}) {
   const resolvedFormat = format ?? 'full';
 
   // Validate format parameter
-  const validFormats = ['snippet', 'minimal', 'metadata', 'full'];
-  if (resolvedFormat && !validFormats.includes(resolvedFormat)) {
-    const error = new Error(`Invalid format: ${resolvedFormat}. Must be one of: ${validFormats.join(', ')}`);
+  if (resolvedFormat && !EMAIL_QUICK_READ_FORMATS.includes(resolvedFormat)) {
+    const error = new Error(`Invalid format: ${resolvedFormat}. Must be one of: ${EMAIL_QUICK_READ_FORMATS.join(', ')}`);
     error.statusCode = 400;
     throw error;
   }
 
+  const gmail = resolveGmailService();
   let messageIds = ids;
   let nextPageToken = null;
   let subset = false;
 
   // If searchQuery provided, get IDs first
   if (!messageIds && searchQuery) {
-    const searchResults = await gmailService.searchEmails(googleSub, {
+    const searchResults = await gmail.searchEmails(googleSub, {
       query: searchQuery,
       maxResults: 50,
       pageToken
@@ -331,10 +348,10 @@ async function emailQuickRead(googleSub, params = {}) {
   if (!messageIds || messageIds.length === 0) {
     throw new Error('No message IDs provided or found');
   }
-  
+
   // Decide single vs batch
   if (messageIds.length === 1) {
-    const message = await gmailService.readEmail(googleSub, messageIds[0], { format: resolvedFormat });
+    const message = await gmail.readEmail(googleSub, messageIds[0], { format: resolvedFormat });
     const enriched = enrichEmailWithAttachments(message, messageIds[0]);
 
     return {
@@ -345,7 +362,7 @@ async function emailQuickRead(googleSub, params = {}) {
     };
   } else {
     const messages = await Promise.all(
-      messageIds.map(id => gmailService.readEmail(googleSub, id, { format: resolvedFormat }))
+      messageIds.map(id => gmail.readEmail(googleSub, id, { format: resolvedFormat }))
     );
 
     const enriched = messages.map((msg, idx) =>
