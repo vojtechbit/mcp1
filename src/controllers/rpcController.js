@@ -238,6 +238,8 @@ async function mailRpc(req, res) {
               remove: params.modify.remove
             }
           );
+        } else if (params.create) {
+          result = await gmailSvc.createLabel(req.user.googleSub, params.create);
         }
         break;
       }

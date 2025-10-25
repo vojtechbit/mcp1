@@ -11,11 +11,18 @@ import * as gmailService from './googleApiService.js';
 import * as calendarService from './googleApiService.js';
 import * as contactsService from './contactsService.js';
 import * as tasksService from './tasksService.js';
+import { getUserByGoogleSub } from './databaseService.js';
 import { classifyEmailCategory } from './googleApiService.js';
 import { parseRelativeTime, getPragueOffsetHours } from '../utils/helpers.js';
 import { REFERENCE_TIMEZONE } from '../config/limits.js';
 import { processAttachments } from '../utils/attachmentSecurity.js';
 import { generateSignedAttachmentUrl } from '../utils/signedUrlGenerator.js';
+import {
+  FOLLOW_UP_LABEL_NAME,
+  FOLLOW_UP_LABEL_DEFAULTS,
+  TRACKING_LABEL_NAME,
+  TRACKING_LABEL_DEFAULTS
+} from '../config/followUpLabels.js';
 import {
   createPendingConfirmation,
   getPendingConfirmation,
@@ -352,6 +359,153 @@ async function emailQuickRead(googleSub, params = {}) {
       nextPageToken
     };
   }
+}
+
+async function inboxUnansweredRequests(googleSub, params = {}) {
+  const {
+    includeUnread = true,
+    includeRead = true,
+    maxItems = 20,
+    timeRange = null,
+    strictNoReply = true,
+    unreadPageToken,
+    readPageToken,
+    labelName = FOLLOW_UP_LABEL_NAME,
+    labelColor,
+    query: additionalQuery,
+    primaryOnly = true
+  } = params;
+
+  const includeUnreadFinal = includeUnread !== false;
+  const includeReadFinal = includeRead !== false;
+  const limit = Math.max(1, Math.min(Number(maxItems) || 20, 100));
+
+  const normalizedLabelName = typeof labelName === 'string' && labelName.trim().length > 0
+    ? labelName.trim()
+    : FOLLOW_UP_LABEL_NAME;
+
+  let effectiveTimeRange = timeRange;
+  let usingDefaultTimeRange = false;
+  if (!effectiveTimeRange) {
+    effectiveTimeRange = { relative: 'today' };
+    usingDefaultTimeRange = true;
+  }
+
+  const timeFilters = buildTimeFilterClauses(effectiveTimeRange);
+  const timeWindow = describeTimeFilters(timeFilters);
+  const primaryOnlyFinal = primaryOnly !== false;
+
+  const baseQueryParts = ['in:inbox', '-from:me'];
+  if (primaryOnlyFinal) {
+    baseQueryParts.push('category:primary');
+  }
+  if (timeFilters.after) {
+    baseQueryParts.push(`after:${timeFilters.after}`);
+  }
+  if (timeFilters.before) {
+    baseQueryParts.push(`before:${timeFilters.before}`);
+  }
+  if (typeof additionalQuery === 'string' && additionalQuery.trim().length > 0) {
+    baseQueryParts.push(additionalQuery.trim());
+  }
+
+  const baseQuery = baseQueryParts.join(' ').trim();
+
+  const [labels, userRecord, userAddressesRaw] = await Promise.all([
+    gmailService.listLabels(googleSub),
+    getUserByGoogleSub(googleSub).catch(() => null),
+    gmailService.getUserAddresses(googleSub).catch(() => [])
+  ]);
+
+  const trackingLabelRecommendation = buildLabelRecommendation(
+    labels,
+    TRACKING_LABEL_NAME,
+    TRACKING_LABEL_DEFAULTS.color
+  );
+
+  const labelRecommendation = buildLabelRecommendation(
+    labels,
+    normalizedLabelName,
+    labelColor || FOLLOW_UP_LABEL_DEFAULTS.color,
+    {
+      extraLabelIds: trackingLabelRecommendation.existingLabel
+        ? [trackingLabelRecommendation.existingLabel.id]
+        : []
+    }
+  );
+
+  const labelMatch = labelRecommendation.existingLabel
+    ? labels.find(label => label.id === labelRecommendation.existingLabel.id)
+    : null;
+
+  const trackingLabelMatch = trackingLabelRecommendation.existingLabel
+    ? labels.find(label => label.id === trackingLabelRecommendation.existingLabel.id)
+    : null;
+
+  const userAddressSet = new Set(
+    (userAddressesRaw || [])
+      .concat(userRecord?.email ? [userRecord.email] : [])
+      .map(value => (typeof value === 'string' ? value.toLowerCase() : ''))
+      .filter(Boolean)
+  );
+
+  const searchOptions = {
+    googleSub,
+    baseQuery,
+    limit,
+    userAddresses: Array.from(userAddressSet),
+    strictNoReply: strictNoReply !== false,
+    labelMatch,
+    trackingLabelMatch
+  };
+
+  const unreadResult = includeUnreadFinal
+    ? await collectUnansweredThreads({ ...searchOptions, querySuffix: 'is:unread', pageToken: unreadPageToken })
+    : createEmptyUnansweredBucket();
+
+  const readResult = includeReadFinal
+    ? await collectUnansweredThreads({ ...searchOptions, querySuffix: '-is:unread', pageToken: readPageToken })
+    : createEmptyUnansweredBucket();
+
+  const labelAppliedCount = unreadResult.items.filter(item => item.labelApplied).length
+    + readResult.items.filter(item => item.labelApplied).length;
+  const trackingLabelAppliedCount = unreadResult.items.filter(item => item.trackingLabelApplied).length
+    + readResult.items.filter(item => item.trackingLabelApplied).length;
+  const skippedMetaSeen = (unreadResult.skippedReasons.trackingLabelPresent || 0)
+    + (readResult.skippedReasons.trackingLabelPresent || 0);
+
+  const summary = {
+    totalAwaiting: unreadResult.items.length + readResult.items.length,
+    unreadCount: unreadResult.items.length,
+    readCount: readResult.items.length,
+    strictMode: strictNoReply !== false,
+    timeRangeApplied: Boolean(timeFilters.after || timeFilters.before),
+    timeRangeSource: usingDefaultTimeRange ? 'default_today' : null,
+    timeWindow,
+    primaryOnly: primaryOnlyFinal,
+    scannedMessages: unreadResult.scanned + readResult.scanned,
+    overflowCount: unreadResult.overflowCount + readResult.overflowCount,
+    strictFilteredCount:
+      (unreadResult.skippedReasons.userReplyPresent || 0)
+      + (readResult.skippedReasons.userReplyPresent || 0),
+    labelAlreadyApplied: labelAppliedCount,
+    missingLabel: !labelRecommendation.existingLabel,
+    trackingLabelAlreadyApplied: trackingLabelAppliedCount,
+    trackingLabelMissing: !trackingLabelRecommendation.existingLabel,
+    trackingLabelSkipped: skippedMetaSeen
+  };
+
+  return {
+    summary,
+    unread: unreadResult,
+    read: readResult,
+    labelRecommendation,
+    trackingLabel: {
+      ...trackingLabelRecommendation,
+      role: 'watchlist_tracking',
+      skipReason: 'trackingLabelPresent'
+    }
+  };
 }
 
 // ==================== CALENDAR MACROS ====================
@@ -1579,6 +1733,380 @@ function enrichEmailWithAttachments(message, messageId) {
   return base;
 }
 
+function createEmptyUnansweredBucket() {
+  return {
+    items: [],
+    subset: false,
+    nextPageToken: null,
+    scanned: 0,
+    overflowCount: 0,
+    skippedReasons: {}
+  };
+}
+
+function buildTimeFilterClauses(timeRange) {
+  if (!timeRange) {
+    return {};
+  }
+
+  if (typeof timeRange.relative === 'string' && timeRange.relative.trim().length > 0) {
+    const parsed = parseRelativeTime(timeRange.relative.trim());
+    return parsed || {};
+  }
+
+  const result = {};
+  if (timeRange.start) {
+    const startDate = new Date(timeRange.start);
+    if (!Number.isNaN(startDate.getTime())) {
+      result.after = Math.floor(startDate.getTime() / 1000);
+    }
+  }
+  if (timeRange.end) {
+    const endDate = new Date(timeRange.end);
+    if (!Number.isNaN(endDate.getTime())) {
+      result.before = Math.floor(endDate.getTime() / 1000);
+    }
+  }
+  return result;
+}
+
+function describeTimeFilters(filters = {}) {
+  if (!filters || (!filters.after && !filters.before)) {
+    return null;
+  }
+
+  const start = filters.after ? toPragueIso(filters.after * 1000) : null;
+  const end = filters.before ? toPragueIso(filters.before * 1000) : null;
+
+  return {
+    start,
+    end,
+    timezone: REFERENCE_TIMEZONE
+  };
+}
+
+async function collectUnansweredThreads({
+  googleSub,
+  baseQuery,
+  querySuffix,
+  pageToken,
+  limit,
+  userAddresses,
+  strictNoReply,
+  labelMatch,
+  trackingLabelMatch
+}) {
+  const combinedQuery = [baseQuery, querySuffix].filter(Boolean).join(' ').trim();
+  const effectiveLimit = Math.max(1, Math.min(limit || 20, 100));
+
+  const items = [];
+  const seenThreads = new Set();
+  const skippedReasons = {};
+
+  let nextPageToken = pageToken || null;
+  let currentToken = pageToken || undefined;
+  let subset = false;
+  let scanned = 0;
+  let overflowCount = 0;
+  let iterations = 0;
+
+  const normalizedAddresses = new Set(
+    (userAddresses || []).map(email => (typeof email === 'string' ? email.toLowerCase() : '')).filter(Boolean)
+  );
+
+  while (iterations < 5 && items.length < effectiveLimit) {
+    iterations += 1;
+
+    const searchResult = await gmailService.searchEmails(googleSub, {
+      query: combinedQuery || undefined,
+      maxResults: Math.min(200, Math.max(effectiveLimit * 2, 20)),
+      pageToken: currentToken
+    });
+
+    const messages = searchResult?.messages || [];
+    scanned += messages.length;
+
+    if (messages.length === 0) {
+      nextPageToken = searchResult?.nextPageToken || null;
+      subset = false;
+      break;
+    }
+
+    for (const message of messages) {
+      if (!message.threadId) {
+        continue;
+      }
+      if (seenThreads.has(message.threadId)) {
+        continue;
+      }
+      seenThreads.add(message.threadId);
+
+      const thread = await gmailService.getThread(googleSub, message.threadId);
+      if (!thread || !Array.isArray(thread.messages) || thread.messages.length === 0) {
+        continue;
+      }
+
+      const evaluation = evaluateThreadForUnanswered(thread, {
+        normalizedAddresses,
+        strictNoReply,
+        labelMatch,
+        trackingLabelMatch
+      });
+
+      if (!evaluation.awaiting) {
+        if (evaluation.reason) {
+          skippedReasons[evaluation.reason] = (skippedReasons[evaluation.reason] || 0) + 1;
+        }
+        continue;
+      }
+
+      if (items.length < effectiveLimit) {
+        items.push(evaluation.item);
+      } else {
+        overflowCount += 1;
+      }
+    }
+
+    if (items.length >= effectiveLimit) {
+      subset = overflowCount > 0 || Boolean(searchResult.nextPageToken);
+      nextPageToken = searchResult.nextPageToken || null;
+      break;
+    }
+
+    if (!searchResult.nextPageToken) {
+      nextPageToken = null;
+      subset = overflowCount > 0;
+      break;
+    }
+
+    currentToken = searchResult.nextPageToken;
+    nextPageToken = searchResult.nextPageToken;
+    subset = true;
+  }
+
+  if (!subset) {
+    nextPageToken = null;
+  }
+
+  return {
+    items,
+    subset,
+    nextPageToken,
+    scanned,
+    overflowCount,
+    skippedReasons
+  };
+}
+
+function evaluateThreadForUnanswered(thread, { normalizedAddresses, strictNoReply, labelMatch, trackingLabelMatch }) {
+  const messages = Array.isArray(thread.messages) ? [...thread.messages] : [];
+  messages.sort((a, b) => {
+    const aTime = typeof a.internalDate === 'number' ? a.internalDate : (typeof a.internalDate === 'string' ? parseInt(a.internalDate, 10) : 0);
+    const bTime = typeof b.internalDate === 'number' ? b.internalDate : (typeof b.internalDate === 'string' ? parseInt(b.internalDate, 10) : 0);
+    return aTime - bTime;
+  });
+
+  if (messages.length === 0) {
+    return { awaiting: false, reason: 'noMessages' };
+  }
+
+  const trackingLabelApplied = trackingLabelMatch
+    ? (Array.isArray(thread.labelIds) && thread.labelIds.includes(trackingLabelMatch.id))
+      || messages.some(msg => Array.isArray(msg.labelIds) && msg.labelIds.includes(trackingLabelMatch.id))
+    : false;
+
+  if (trackingLabelApplied) {
+    return { awaiting: false, reason: 'trackingLabelPresent' };
+  }
+
+  const decorated = messages.map(msg => {
+    const timestamp = typeof msg.internalDate === 'number'
+      ? msg.internalDate
+      : (typeof msg.internalDate === 'string' ? parseInt(msg.internalDate, 10) : null);
+    const fromEmail = typeof msg.from?.email === 'string' ? msg.from.email.toLowerCase() : null;
+    const isUser = fromEmail ? normalizedAddresses.has(fromEmail) : false;
+    return {
+      raw: msg,
+      timestamp,
+      isUser
+    };
+  });
+
+  const lastEntry = decorated[decorated.length - 1];
+  if (!lastEntry) {
+    return { awaiting: false, reason: 'noMessages' };
+  }
+
+  if (lastEntry.isUser) {
+    return { awaiting: false, reason: 'lastMessageFromUser' };
+  }
+
+  const incomingEntries = decorated.filter(entry => !entry.isUser);
+  if (incomingEntries.length === 0) {
+    return { awaiting: false, reason: 'noIncomingMessages' };
+  }
+
+  const lastIncoming = incomingEntries[incomingEntries.length - 1];
+  const userReplies = decorated.filter(entry => entry.isUser);
+  const hasUserReply = userReplies.length > 0;
+
+  if (strictNoReply && hasUserReply) {
+    return { awaiting: false, reason: 'userReplyPresent' };
+  }
+
+  const lastUserReply = userReplies[userReplies.length - 1] || null;
+  const waitingMinutes = lastIncoming.timestamp
+    ? Math.max(0, Math.round((Date.now() - lastIncoming.timestamp) / 60000))
+    : null;
+
+  const sinceLastUserReplyMinutes = lastUserReply?.timestamp && lastIncoming.timestamp
+    ? Math.max(0, Math.round((lastIncoming.timestamp - lastUserReply.timestamp) / 60000))
+    : null;
+
+  const labelApplied = labelMatch ? Array.isArray(thread.labelIds) && thread.labelIds.includes(labelMatch.id) : false;
+  const readSourceLabels = lastIncoming.raw.labelIds?.length ? lastIncoming.raw.labelIds : thread.labelIds || [];
+  const readState = buildReadStateFromLabels(readSourceLabels);
+
+  const item = {
+    threadId: thread.threadId,
+    messageId: lastIncoming.raw.id,
+    subject: lastIncoming.raw.subject || '(bez předmětu)',
+    sender: {
+      name: lastIncoming.raw.from?.name || null,
+      email: lastIncoming.raw.from?.email || null
+    },
+    receivedAt: toPragueIso(lastIncoming.timestamp),
+    receivedInternal: lastIncoming.timestamp || null,
+    snippet: lastIncoming.raw.snippet || '',
+    gmailLinks: buildGmailLinks(thread.threadId, lastIncoming.raw.id),
+    messageCount: thread.count || messages.length,
+    readState,
+    hasUserReply,
+    lastUserReplyAt: lastUserReply?.timestamp ? toPragueIso(lastUserReply.timestamp) : null,
+    lastUserReplyInternal: lastUserReply?.timestamp || null,
+    waitingMinutes,
+    waitingHoursApprox: typeof waitingMinutes === 'number' ? Number((waitingMinutes / 60).toFixed(1)) : null,
+    sinceLastUserReplyMinutes,
+    participants: Array.isArray(thread.participants)
+      ? thread.participants.map(participant => ({
+          email: participant.email,
+          name: participant.name || null
+        }))
+      : [],
+    label: labelMatch
+      ? {
+          suggestedId: labelMatch.id,
+          suggestedName: labelMatch.name,
+          alreadyApplied: labelApplied
+        }
+      : null,
+    labelApplied,
+    trackingLabelApplied,
+    strictFiltered: hasUserReply
+  };
+
+  return {
+    awaiting: true,
+    item
+  };
+}
+
+function toPragueIso(timestamp) {
+  if (!timestamp) {
+    return null;
+  }
+  const date = new Date(timestamp);
+  if (Number.isNaN(date.getTime())) {
+    return null;
+  }
+  const offsetHours = getPragueOffsetHours(date);
+  const pragueDate = new Date(date.getTime() + offsetHours * 60 * 60 * 1000);
+  const sign = offsetHours >= 0 ? '+' : '-';
+  const offset = `${sign}${String(Math.abs(offsetHours)).padStart(2, '0')}:00`;
+  return pragueDate.toISOString().replace('Z', offset);
+}
+
+function stripDiacritics(value = '') {
+  return value.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+}
+
+function normalizeLabelNameCandidate(value = '') {
+  return stripDiacritics(value)
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
+}
+
+function findLabelByName(labels = [], targetName) {
+  if (!targetName) {
+    return null;
+  }
+  const normalizedTarget = normalizeLabelNameCandidate(targetName);
+  return labels.find(label => normalizeLabelNameCandidate(label.name || '') === normalizedTarget) || null;
+}
+
+function buildLabelRecommendation(labels = [], targetName, preferredColor, options = {}) {
+  const existing = findLabelByName(labels, targetName);
+
+  let backgroundColor = '#d93025';
+  let textColor = '#ffffff';
+
+  if (typeof preferredColor === 'string' && preferredColor.trim().startsWith('#')) {
+    backgroundColor = preferredColor.trim();
+  } else if (preferredColor && typeof preferredColor === 'object') {
+    if (typeof preferredColor.backgroundColor === 'string' && preferredColor.backgroundColor.trim().startsWith('#')) {
+      backgroundColor = preferredColor.backgroundColor.trim();
+    }
+    if (typeof preferredColor.textColor === 'string' && preferredColor.textColor.trim().length > 0) {
+      textColor = preferredColor.textColor.trim();
+    }
+  }
+
+  const extraLabelIds = Array.isArray(options.extraLabelIds)
+    ? options.extraLabelIds.filter(value => typeof value === 'string' && value.length > 0)
+    : [];
+
+  const applyLabelIds = existing
+    ? Array.from(new Set([existing.id, ...extraLabelIds]))
+    : [];
+
+  return {
+    suggestedName: targetName,
+    suggestedColor: backgroundColor,
+    textColor,
+    existingLabel: existing
+      ? { id: existing.id, name: existing.name, color: existing.color || null }
+      : null,
+    canCreate: !existing,
+    createRequest: !existing
+      ? {
+          op: 'labels',
+          params: {
+            create: {
+              name: targetName,
+              color: {
+                backgroundColor,
+                textColor
+              }
+            }
+          }
+        }
+      : null,
+    applyRequestTemplate: existing
+      ? {
+          op: 'labels',
+          params: {
+            modify: {
+              messageId: '<messageId>',
+              add: applyLabelIds,
+              remove: []
+            }
+          }
+        }
+      : null
+  };
+}
+
 function generateMapsUrl(locationText) {
   const encoded = encodeURIComponent(locationText);
   return `https://www.google.com/maps/search/?api=1&query=${encoded}`;
@@ -1997,6 +2525,7 @@ const traced = wrapModuleFunctions('services.facadeService', {
   inboxOverview,
   inboxSnippets,
   emailQuickRead,
+  inboxUnansweredRequests,
   calendarPlan,
   calendarSchedule,
   completeCalendarScheduleEnrichment,
@@ -2011,6 +2540,7 @@ const {
   inboxOverview: tracedInboxOverview,
   inboxSnippets: tracedInboxSnippets,
   emailQuickRead: tracedEmailQuickRead,
+  inboxUnansweredRequests: tracedInboxUnansweredRequests,
   calendarPlan: tracedCalendarPlan,
   calendarSchedule: tracedCalendarSchedule,
   completeCalendarScheduleEnrichment: tracedCompleteCalendarScheduleEnrichment,
@@ -2025,6 +2555,7 @@ export {
   tracedInboxOverview as inboxOverview,
   tracedInboxSnippets as inboxSnippets,
   tracedEmailQuickRead as emailQuickRead,
+  tracedInboxUnansweredRequests as inboxUnansweredRequests,
   tracedCalendarPlan as calendarPlan,
   tracedCalendarSchedule as calendarSchedule,
   tracedCompleteCalendarScheduleEnrichment as completeCalendarScheduleEnrichment,

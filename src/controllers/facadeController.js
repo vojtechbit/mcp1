@@ -54,6 +54,37 @@ async function macroInboxSnippets(req, res) {
   }
 }
 
+async function macroInboxUnanswered(req, res) {
+  try {
+    const result = await facadeService.inboxUnansweredRequests(req.user.googleSub, req.body);
+    res.json(result);
+  } catch (error) {
+    console.error('❌ Macro inbox unanswered requests failed:', error.message);
+
+    if (error.statusCode === 401) {
+      return res.status(401).json({
+        error: 'Authentication required',
+        message: error.message,
+        code: 'REAUTH_REQUIRED'
+      });
+    }
+
+    if (error.statusCode === 400) {
+      return res.status(400).json({
+        error: 'Bad request',
+        message: error.message,
+        code: 'INVALID_PARAM'
+      });
+    }
+
+    res.status(500).json({
+      error: 'Inbox unanswered requests failed',
+      message: error.message,
+      code: 'SERVER_ERROR'
+    });
+  }
+}
+
 async function macroEmailQuickRead(req, res) {
   try {
     const result = await facadeService.emailQuickRead(req.user.googleSub, req.body);
@@ -241,6 +272,7 @@ async function macroTasksOverview(req, res) {
 const traced = wrapModuleFunctions('controllers.facadeController', {
   macroInboxOverview,
   macroInboxSnippets,
+  macroInboxUnanswered,
   macroEmailQuickRead,
   macroCalendarPlan,
   macroCalendarSchedule,
@@ -253,6 +285,7 @@ const traced = wrapModuleFunctions('controllers.facadeController', {
 const {
   macroInboxOverview: tracedMacroInboxOverview,
   macroInboxSnippets: tracedMacroInboxSnippets,
+  macroInboxUnanswered: tracedMacroInboxUnanswered,
   macroEmailQuickRead: tracedMacroEmailQuickRead,
   macroCalendarPlan: tracedMacroCalendarPlan,
   macroCalendarSchedule: tracedMacroCalendarSchedule,
@@ -265,6 +298,7 @@ const {
 export {
   tracedMacroInboxOverview as macroInboxOverview,
   tracedMacroInboxSnippets as macroInboxSnippets,
+  tracedMacroInboxUnanswered as macroInboxUnanswered,
   tracedMacroEmailQuickRead as macroEmailQuickRead,
   tracedMacroCalendarPlan as macroCalendarPlan,
   tracedMacroCalendarSchedule as macroCalendarSchedule,
