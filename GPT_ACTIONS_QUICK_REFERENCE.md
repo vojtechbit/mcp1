@@ -139,7 +139,7 @@
 **Request body**
 ```json
 {
-  "contacts": [
+  "entries": [
     {
       "name": "Marek Svoboda",
       "email": "marek@example.com",
@@ -147,7 +147,7 @@
       "notes": "Nový lead z eventu"
     }
   ],
-  "strategy": "ask"
+  "dedupeStrategy": "ask"
 }
 ```
 
@@ -178,11 +178,19 @@
   ],
   "confirmToken": "safeAdd-3f5cf1",
   "warnings": [
-    "Duplicate email(s) detected. Ask the user whether to merge or skip."
+    "Found potential duplicates. Ask the user to create, merge, or skip."
   ]
 }
 ```
-> Pokud dorazí `confirmToken`, je potřeba druhý krok přes `/api/macros/confirm`. Duplicity prezentuj z `skipped[].existing`.
+> Pokud dorazí `confirmToken`, pokračuj přes `/api/macros/confirm`. Duplicity prezentuj z `skipped[].existing`.
+
+> `dedupeStrategy` podporuje hodnoty `ask` (výchozí, dvoukrokové potvrzení), `skip`, `merge` a `create`.
+
+### `/api/macros/confirm` — dokončení dvoukrokových toků
+- **Preview:** `GET /api/macros/confirm/{token}`. Vrací `preview.availableActions` podle typu potvrzení.
+- **Finalize:** `POST /api/macros/confirm` s `{ "confirmToken": "…", "action": "…" }`.
+  - **Kalendář (enrichment):** `action` může být `"auto-fill"` nebo `"skip"`.
+  - **Kontakty (safeAdd dedupe):** `action` může být `"create"`, `"merge"` nebo `"skip"`.
 
 ---
 
@@ -190,7 +198,7 @@
 | Doména | Endpoint | Použití | Poznámky |
 |--------|----------|---------|----------|
 | Kalendář | `/macros/calendar/plan` | Navrhne termíny podle preferencí uživatele (bez zápisu) | Parametr `constraints` definuje časová okna, účastníky, délku meetingu. |
-| Kalendář | `/macros/calendar/schedule` | Vytvoří událost podle zadaného slotu | Respektuj `idempotencyKey` z instrukcí, pokud posíláš opakovaně.<br>Vrací potvrzenou událost. |
+| Kalendář | `/macros/calendar/schedule` | Vytvoří událost podle zadaného slotu | Respektuj `idempotencyKey` z instrukcí, pokud posíláš opakovaně.<br>Při `enrichFromContacts:"ask"` vrací `confirmToken`; dokonči přes `/api/macros/confirm` s `action` `auto-fill/skip`. |
 | Kalendář | `/macros/calendar/reminderDrafts` | Připraví draft emailů s připomenutím | Vrací návrhy textů + metadata událostí. |
 | Úkoly | `/macros/tasks/overview` | Souhrn úkolů podle stavu/termínu | Odpověď obsahuje sekce `overdue`, `today`, `upcoming`. |
 | Úkoly | `/tasks/actions/create` | Vytvoří konkrétní úkol | V requestu posílej `title`, volitelně `due`, `notes`. |
