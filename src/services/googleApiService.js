@@ -914,9 +914,8 @@ function buildDraftMimeMessage({ to, subject, body, cc, bcc }) {
   }
 
   headers.push(`Subject: ${encodedSubject}`);
-  headers.push('');
 
-  const message = headers.join('\r\n') + safeBody;
+  const message = [...headers, '', safeBody].join('\r\n');
 
   return Buffer.from(message, 'utf8')
     .toString('base64')
