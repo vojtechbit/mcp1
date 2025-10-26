@@ -428,7 +428,7 @@ async function calendarRpc(req, res) {
         break;
       }
         
-      case 'update':
+      case 'update': {
         // FIXED: Validate calendar update structure
         if (!params || !params.eventId) {
           return res.status(400).json({
@@ -437,7 +437,7 @@ async function calendarRpc(req, res) {
             code: 'INVALID_PARAM'
           });
         }
-        
+
         if (!params.updates) {
           return res.status(400).json({
             error: 'Invalid request format',
@@ -445,7 +445,7 @@ async function calendarRpc(req, res) {
             code: 'INVALID_PARAM'
           });
         }
-        
+
         // Validate start/end structure if present
         if (params.updates.start || params.updates.end) {
           const validateTimeField = (field, fieldName) => {
@@ -458,7 +458,7 @@ async function calendarRpc(req, res) {
             }
             return null;
           };
-          
+
           const startError = validateTimeField(params.updates.start, 'start');
           if (startError) {
             return res.status(400).json({
@@ -471,7 +471,7 @@ async function calendarRpc(req, res) {
               }
             });
           }
-          
+
           const endError = validateTimeField(params.updates.end, 'end');
           if (endError) {
             return res.status(400).json({
@@ -485,7 +485,7 @@ async function calendarRpc(req, res) {
             });
           }
         }
-        
+
         const { calendarId = 'primary' } = params;
 
         result = await calendarService.updateCalendarEvent(
@@ -495,6 +495,7 @@ async function calendarRpc(req, res) {
           { calendarId }
         );
         break;
+      }
 
       case 'delete':
         result = await calendarService.deleteCalendarEvent(

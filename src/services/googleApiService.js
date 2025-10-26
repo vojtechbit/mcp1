@@ -1274,20 +1274,21 @@ function clonePayloadForPreview(payload, maxBytes) {
     let remaining = budget;
 
     if (part.body) {
-      cloned.body = { ...part.body };
+      const { data, ...bodyMeta } = part.body;
+      cloned.body = { ...bodyMeta };
 
-      if (typeof part.body.data === 'string' && remaining > 0) {
-        const estimatedBytes = Math.ceil((part.body.data.length * 3) / 4);
+      if (typeof data === 'string' && remaining > 0) {
+        const estimatedBytes = Math.ceil((data.length * 3) / 4);
         if (estimatedBytes > remaining) {
           const allowedChars = Math.max(0, Math.floor((remaining * 4) / 3));
-          const truncated = part.body.data.slice(0, allowedChars - (allowedChars % 4 || 0));
+          const truncated = data.slice(0, allowedChars - (allowedChars % 4 || 0));
           cloned.body.data = truncated;
           remaining = 0;
         } else {
           remaining -= estimatedBytes;
         }
-      } else if (typeof part.body.data === 'string') {
-        cloned.body.data = part.body.data;
+      } else if (typeof data === 'string') {
+        cloned.body.data = data;
       }
     }
 
@@ -1299,9 +1300,6 @@ function clonePayloadForPreview(payload, maxBytes) {
           cloned.parts.push(clonedChild);
         }
         remaining = newRemaining;
-        if (remaining <= 0) {
-          break;
-        }
       }
     }
 
