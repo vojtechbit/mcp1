@@ -593,7 +593,7 @@
       "post": {
         "operationId": "macroInboxUserUnanswered",
         "summary": "Find conversations awaiting your reply",
-        "description": "Use this macro when you need a structured view of inbox threads where someone else replied last and you may owe a follow-up — for example confirming showings, responding to offers, or checking on open service requests. By default it scans today's Primary inbox, surfaces unread (never opened) and read (seen but still awaiting action) buckets, and includes guidance for working with the recommended 'nevyřízeno' follow-up label plus the internal 'meta_seen' tracker so conversations are not shown twice.",
+        "description": "Lists inbox threads where the other participant replied last so you can follow up. Scans today's Primary inbox by default, grouping unread and read conversations, and highlights the 'nevyřízeno' follow-up label plus the internal 'meta_seen' tracker.",
         "requestBody": {
           "required": false,
           "content": {
