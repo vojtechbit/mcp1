@@ -31,7 +31,15 @@ afterEach(() => {
   process.env.NODE_ENV = 'test';
 });
 
+const RESTORE_GUARD = Symbol.for('mcp.testIsolation.restoreGuard');
+
 after(() => {
+  if (process[RESTORE_GUARD]) {
+    return;
+  }
+
+  process[RESTORE_GUARD] = true;
+
   mock.restoreAll();
 
   if ('__facadeMocks' in globalThis) {
