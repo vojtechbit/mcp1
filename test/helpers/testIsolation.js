@@ -1,4 +1,7 @@
 import { before, beforeEach, afterEach, after, mock } from 'node:test';
+import { openSync, closeSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 
 let originalEnvSnapshot = null;
 let originalEnvKeys = null;
@@ -31,14 +34,25 @@ afterEach(() => {
   process.env.NODE_ENV = 'test';
 });
 
-const RESTORE_GUARD = Symbol.for('mcp.testIsolation.restoreGuard');
+const RESTORE_GUARD_FILE = join(tmpdir(), `mcp-test-isolation-restore-${process.pid}.lock`);
+let restoreGuardAcquired = false;
 
 after(() => {
-  if (process[RESTORE_GUARD]) {
+  if (!restoreGuardAcquired) {
+    try {
+      const fd = openSync(RESTORE_GUARD_FILE, 'wx');
+      closeSync(fd);
+      restoreGuardAcquired = true;
+    } catch (error) {
+      if (error && error.code === 'EEXIST') {
+        return;
+      }
+
+      throw error;
+    }
+  } else {
     return;
   }
-
-  process[RESTORE_GUARD] = true;
 
   mock.restoreAll();
 
