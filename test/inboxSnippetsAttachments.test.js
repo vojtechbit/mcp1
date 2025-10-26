@@ -13,14 +13,6 @@ const searchEmailsMock = mock.fn();
 const readEmailMock = mock.fn();
 const getEmailPreviewMock = mock.fn();
 
-globalThis.__facadeMocks = {
-  gmailService: {
-    searchEmails: (...args) => searchEmailsMock(...args),
-    readEmail: (...args) => readEmailMock(...args),
-    getEmailPreview: (...args) => getEmailPreviewMock(...args)
-  }
-};
-
 const facadeModule = await import('../src/services/facadeService.js');
 const { inboxSnippets } = facadeModule;
 
@@ -28,6 +20,26 @@ beforeEach(() => {
   searchEmailsMock.mock.resetCalls();
   readEmailMock.mock.resetCalls();
   getEmailPreviewMock.mock.resetCalls();
+
+  globalThis.__facadeMocks = {
+    gmailService: {
+      searchEmails: (...args) => searchEmailsMock(...args),
+      readEmail: (...args) => readEmailMock(...args),
+      getEmailPreview: (...args) => getEmailPreviewMock(...args)
+    },
+    databaseService: {
+      async getUserByGoogleSub(googleSub) {
+        return {
+          _id: 'user-test',
+          google: {
+            sub: googleSub,
+            accessToken: 'test-access-token',
+            refreshToken: 'test-refresh-token'
+          }
+        };
+      }
+    }
+  };
 });
 
 after(() => {

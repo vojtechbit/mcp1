@@ -7,7 +7,7 @@
   "scripts": {
     "start": "node src/server.js",
     "dev": "node --watch src/server.js",
-    "test": "node --test --experimental-test-module-mocks"
+    "test": "node --import ./test/helpers/testIsolation.js --test --experimental-test-module-mocks"
   },
   "keywords": [
     "oauth",
