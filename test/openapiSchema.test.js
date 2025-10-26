@@ -61,6 +61,12 @@ test('openapi schema is valid JSON', async (t) => {
           '',
           `Operation ${method.toUpperCase()} ${pathKey} must have non-empty summary`
         );
+        if (typeof operation.description === 'string') {
+          assert.ok(
+            operation.description.length <= 300,
+            `Operation ${method.toUpperCase()} ${pathKey} description must be 300 characters or fewer`
+          );
+        }
       }
     }
   });
