@@ -86,6 +86,39 @@ function resolveDatabaseService() {
   return { getUserByGoogleSub };
 }
 
+function resolveCalendarService() {
+  const mocks = globalThis?.__facadeMocks;
+
+  if (process.env.NODE_ENV === 'test' && mocks?.calendarService) {
+    return Object.assign({}, calendarService, mocks.calendarService);
+  }
+
+  return calendarService;
+}
+
+function resolveContactsService() {
+  const mocks = globalThis?.__facadeMocks;
+
+  if (process.env.NODE_ENV === 'test' && mocks?.contactsService) {
+    return Object.assign({}, contactsService, mocks.contactsService);
+  }
+
+  return contactsService;
+}
+
+function resolveCreatePendingConfirmation() {
+  const mocks = globalThis?.__facadeMocks;
+
+  if (
+    process.env.NODE_ENV === 'test' &&
+    mocks?.confirmationStore?.createPendingConfirmation
+  ) {
+    return mocks.confirmationStore.createPendingConfirmation;
+  }
+
+  return createPendingConfirmation;
+}
+
 // ==================== INBOX MACROS ====================
 
 /**
