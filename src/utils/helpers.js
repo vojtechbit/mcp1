@@ -275,22 +275,21 @@ export function convertToUtcIfNeeded(dateTimeString) {
  * Normalize a datetime string for Google Calendar API.
  * Converts to UTC, interpreting times without timezone as Prague local time.
  *
- * Strategy: ALWAYS convert to UTC by:
+ * Strategy: Add correct Prague offset, then parse to UTC
  * 1. Strip any wrong offset from GPT (e.g., +02:00 for winter dates)
- * 2. Interpret as Prague local time
- * 3. Convert to UTC using fromZonedTime (handles DST automatically)
- * 4. Return UTC string with Z suffix
+ * 2. Determine if date is in DST (summer) or not (winter)
+ * 3. Add correct Prague offset (+01:00 for winter, +02:00 for summer)
+ * 4. Let parseISO convert to UTC
  *
  * Why this works:
- * - GPT may send wrong offset (e.g., +02:00 for winter dates)
- * - We strip it and treat time as Prague local time
- * - Convert to UTC (fromZonedTime handles DST automatically)
- * - Google Calendar displays UTC time correctly in user's timezone
+ * - parseISO on UTC server treats "07:00:00" as UTC, not local
+ * - We must add explicit offset before parsing
+ * - getPragueOffsetHours determines correct offset for the date
  *
  * Examples:
- * - "2025-10-28T07:00:00+02:00" (wrong offset) → "2025-10-28T06:00:00.000Z" (UTC)
- * - "2025-10-28T07:00:00" (no timezone) → "2025-10-28T06:00:00.000Z" (UTC)
- * - "2025-10-28T06:00:00Z" (already UTC) → "2025-10-28T06:00:00.000Z" (UTC)
+ * - "2025-10-28T07:00:00+02:00" (wrong) → "2025-10-28T07:00:00+01:00" → "2025-10-28T06:00:00.000Z"
+ * - "2025-10-28T07:00:00" → "2025-10-28T07:00:00+01:00" → "2025-10-28T06:00:00.000Z"
+ * - "2025-07-28T07:00:00" → "2025-07-28T07:00:00+02:00" → "2025-07-28T05:00:00.000Z"
  *
  * @param {string} dateTimeString - ISO 8601 datetime string
  * @returns {object} Object with dateTime in UTC
@@ -306,16 +305,23 @@ export function normalizeCalendarTime(dateTimeString) {
   }
 
   // Strip any timezone offset (e.g., +02:00, +01:00, -05:00)
-  // This removes wrong offsets from GPT
   const withoutOffset = dateTimeString.replace(/[+-]\d{2}:\d{2}$/, '');
 
-  // Parse as local time and convert to UTC
-  // fromZonedTime interprets the time as being in the specified timezone
-  // and converts it to UTC (handles DST automatically)
-  const localTime = parseISO(withoutOffset);
-  const utcTime = fromZonedTime(localTime, REFERENCE_TIMEZONE);
+  // Parse the date to determine DST status (use a rough Date for offset calculation)
+  const roughDate = new Date(withoutOffset);
+  const pragueOffset = getPragueOffsetHours(roughDate);
 
-  return { dateTime: utcTime.toISOString() };
+  // Add correct Prague offset
+  const offsetString = pragueOffset > 0
+    ? `+${String(pragueOffset).padStart(2, '0')}:00`
+    : `-${String(Math.abs(pragueOffset)).padStart(2, '0')}:00`;
+
+  const withCorrectOffset = withoutOffset + offsetString;
+
+  // Now parseISO will correctly convert to UTC
+  const utcDate = parseISO(withCorrectOffset);
+
+  return { dateTime: utcDate.toISOString() };
 }
 
 /**
