@@ -75,7 +75,7 @@ async function saveUser(userData) {
       );
     }, 'saveUser');
 
-    console.log('✅ User saved to database:', email);
+    console.log('✅ User saved to database:', userData.email);
     return result;
   } catch (error) {
     console.error('❌ [DATABASE_ERROR] Failed to save user');
