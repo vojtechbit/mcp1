@@ -176,9 +176,10 @@ async function callback(req, res) {
     console.log('✅ Google tokens received from Google OAuth');
 
     // Get user info from Google
-    const { oauth2Client } = await import('../config/oauth.js');
+    const { createOAuthClient } = await import('../config/oauth.js');
+    const oauth2Client = createOAuthClient();
     oauth2Client.setCredentials(tokens);
-    
+
     const oauth2 = google.oauth2({ version: 'v2', auth: oauth2Client });
     const userInfoResponse = await oauth2.userinfo.get();
     const userInfo = userInfoResponse.data;
