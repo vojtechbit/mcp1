@@ -273,41 +273,49 @@ export function convertToUtcIfNeeded(dateTimeString) {
 
 /**
  * Normalize a datetime string for Google Calendar API.
- * Returns { dateTime, timeZone } object suitable for Google Calendar.
+ * Converts to UTC, interpreting times without timezone as Prague local time.
  *
- * Strategy: ALWAYS interpret as Prague local time (ignore any offset from GPT)
- * so Google Calendar handles DST automatically with correct timezone rules.
+ * Strategy: ALWAYS convert to UTC by:
+ * 1. Strip any wrong offset from GPT (e.g., +02:00 for winter dates)
+ * 2. Interpret as Prague local time
+ * 3. Convert to UTC using fromZonedTime (handles DST automatically)
+ * 4. Return UTC string with Z suffix
  *
- * Why ignore offsets: GPT may send wrong offset (e.g., +02:00 for winter date)
- * Better to strip it and let Google Calendar apply correct DST rules.
+ * Why this works:
+ * - GPT may send wrong offset (e.g., +02:00 for winter dates)
+ * - We strip it and treat time as Prague local time
+ * - Convert to UTC (fromZonedTime handles DST automatically)
+ * - Google Calendar displays UTC time correctly in user's timezone
  *
  * Examples:
- * - "2025-10-29T07:00:00" -> { dateTime: "2025-10-29T07:00:00", timeZone: "Europe/Prague" }
- * - "2025-10-29T07:00:00+02:00" -> { dateTime: "2025-10-29T07:00:00", timeZone: "Europe/Prague" } (strip offset!)
- * - "2025-10-27T23:00:00Z" -> { dateTime: "2025-10-27T23:00:00Z" } (UTC preserved)
+ * - "2025-10-28T07:00:00+02:00" (wrong offset) → "2025-10-28T06:00:00.000Z" (UTC)
+ * - "2025-10-28T07:00:00" (no timezone) → "2025-10-28T06:00:00.000Z" (UTC)
+ * - "2025-10-28T06:00:00Z" (already UTC) → "2025-10-28T06:00:00.000Z" (UTC)
  *
  * @param {string} dateTimeString - ISO 8601 datetime string
- * @returns {object} Object with dateTime and optionally timeZone
+ * @returns {object} Object with dateTime in UTC
  */
 export function normalizeCalendarTime(dateTimeString) {
   if (!dateTimeString) {
     return null;
   }
 
-  // Preserve UTC times (ending with Z) - these are unambiguous
+  // If already UTC (ends with Z), normalize and return
   if (dateTimeString.endsWith('Z')) {
-    return { dateTime: dateTimeString };
+    return { dateTime: parseISO(dateTimeString).toISOString() };
   }
 
-  // Strip any timezone offset (e.g., +02:00, +01:00, -05:00) and interpret as Prague time
-  // This fixes the problem where GPT sends wrong offset (e.g., +02:00 for winter dates)
+  // Strip any timezone offset (e.g., +02:00, +01:00, -05:00)
+  // This removes wrong offsets from GPT
   const withoutOffset = dateTimeString.replace(/[+-]\d{2}:\d{2}$/, '');
 
-  // Add Prague timezone - Google will apply correct DST rules
-  return {
-    dateTime: withoutOffset,
-    timeZone: REFERENCE_TIMEZONE
-  };
+  // Parse as local time and convert to UTC
+  // fromZonedTime interprets the time as being in the specified timezone
+  // and converts it to UTC (handles DST automatically)
+  const localTime = parseISO(withoutOffset);
+  const utcTime = fromZonedTime(localTime, REFERENCE_TIMEZONE);
+
+  return { dateTime: utcTime.toISOString() };
 }
 
 /**

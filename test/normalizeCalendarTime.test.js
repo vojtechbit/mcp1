@@ -12,55 +12,50 @@ process.env.NODE_ENV = 'test';
 
 const { normalizeCalendarTime } = await import('../src/utils/helpers.js');
 
-describe('normalizeCalendarTime - CORRECT timezone approach', () => {
-  it('adds timeZone field for Prague time without timezone (THE FIX)', () => {
+describe('normalizeCalendarTime - UTC conversion approach', () => {
+  it('converts Prague time to UTC (THE FIX)', () => {
     // User wants 23:00 Prague time
     const input = '2025-10-28T23:00:00';
     const result = normalizeCalendarTime(input);
 
-    // Should return time as-is WITH timeZone field
-    // Google Calendar will then interpret it correctly with DST
+    // Should convert to UTC: 23:00 Prague (winter = UTC+1) = 22:00 UTC
     assert.deepEqual(result, {
-      dateTime: '2025-10-28T23:00:00',
-      timeZone: 'Europe/Prague'
+      dateTime: '2025-10-28T22:00:00.000Z'
     });
 
-    console.log('✅ Correct approach: Send Prague time WITH timeZone field');
-    console.log('   Google Calendar will display: 23:00 Prague time');
+    console.log('✅ Correct approach: Convert Prague time to UTC');
+    console.log('   Result: 22:00 UTC = 23:00 Prague (winter time)');
   });
 
-  it('preserves UTC times without timeZone field', () => {
+  it('normalizes UTC times', () => {
     const input = '2025-10-28T22:00:00Z';
     const result = normalizeCalendarTime(input);
 
-    // UTC times don't need timeZone field
+    // UTC times are normalized
     assert.deepEqual(result, {
-      dateTime: '2025-10-28T22:00:00Z'
+      dateTime: '2025-10-28T22:00:00.000Z'
     });
   });
 
-  it('strips explicit offset and adds timeZone (safer approach)', () => {
+  it('strips offset and converts to UTC (safer approach)', () => {
     const input = '2025-10-28T23:00:00+01:00';
     const result = normalizeCalendarTime(input);
 
-    // Now we STRIP offset and add timeZone field
-    // This is safer because GPT may send wrong offset
+    // Strip offset, interpret as Prague time, convert to UTC
+    // 23:00 Prague (winter = UTC+1) = 22:00 UTC
     assert.deepEqual(result, {
-      dateTime: '2025-10-28T23:00:00',
-      timeZone: 'Europe/Prague'
+      dateTime: '2025-10-28T22:00:00.000Z'
     });
   });
 
   it('handles summer time correctly (demonstrates DST awareness)', () => {
-    // July 27 is summer time (CEST)
+    // July 27 is summer time (CEST = UTC+2)
     const input = '2025-07-27T23:00:00';
     const result = normalizeCalendarTime(input);
 
-    // Same approach - add timeZone field
-    // Google will apply CEST (UTC+2) automatically
+    // Convert to UTC: 23:00 Prague (summer = UTC+2) = 21:00 UTC
     assert.deepEqual(result, {
-      dateTime: '2025-07-27T23:00:00',
-      timeZone: 'Europe/Prague'
+      dateTime: '2025-07-27T21:00:00.000Z'
     });
   });
 });

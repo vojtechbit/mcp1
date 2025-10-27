@@ -13,7 +13,7 @@ process.env.NODE_ENV = 'test';
 const { normalizeCalendarTime } = await import('../src/utils/helpers.js');
 
 describe('Fix GPT wrong offset bug', () => {
-  it('strips WRONG offset from GPT and uses Prague timezone (THE BUG FIX)', () => {
+  it('strips WRONG offset from GPT and converts to UTC (THE BUG FIX)', () => {
     // REAL PROBLEM: GPT sent this on Oct 28 (after DST switch to winter):
     // "2025-10-29T07:00:00+02:00"
     // But Oct 29 is WINTER time (CET = UTC+1), NOT summer time (UTC+2)!
@@ -21,49 +21,48 @@ describe('Fix GPT wrong offset bug', () => {
     const gptInput = '2025-10-29T07:00:00+02:00'; // ❌ Wrong offset for winter!
     const result = normalizeCalendarTime(gptInput);
 
-    // Should STRIP the +02:00 and add Prague timezone
-    // Google will then apply CORRECT offset (UTC+1 for winter)
+    // Should STRIP the +02:00, interpret as Prague time, convert to UTC
+    // 7:00 Prague (winter = UTC+1) = 6:00 UTC
     assert.deepEqual(result, {
-      dateTime: '2025-10-29T07:00:00',  // ✅ Offset stripped
-      timeZone: 'Europe/Prague'          // ✅ Let Google handle DST
+      dateTime: '2025-10-29T06:00:00.000Z'  // ✅ Converted to UTC
     });
 
-    console.log('✅ FIX: Stripped wrong +02:00 offset from GPT');
-    console.log('   Result: 7:00 Prague time (Google will use UTC+1 for winter)');
+    console.log('✅ FIX: Stripped wrong +02:00 offset from GPT and converted to UTC');
+    console.log('   Result: 06:00 UTC = 07:00 Prague (winter time)');
   });
 
-  it('also strips correct offset (safer to always use timeZone)', () => {
-    // Even if offset is correct, strip it and use timeZone
+  it('also strips correct offset and converts to UTC', () => {
+    // Even if offset is correct, strip it and convert to UTC
     // This ensures consistency
     const input = '2025-10-29T07:00:00+01:00'; // Correct offset for winter
     const result = normalizeCalendarTime(input);
 
+    // 7:00 Prague (winter = UTC+1) = 6:00 UTC
     assert.deepEqual(result, {
-      dateTime: '2025-10-29T07:00:00',
-      timeZone: 'Europe/Prague'
+      dateTime: '2025-10-29T06:00:00.000Z'
     });
   });
 
-  it('preserves UTC times (Z suffix)', () => {
-    // UTC times are unambiguous, keep them
+  it('normalizes UTC times (Z suffix)', () => {
+    // UTC times are preserved
     const input = '2025-10-29T06:00:00Z'; // 6 UTC = 7 CET (winter)
     const result = normalizeCalendarTime(input);
 
     assert.deepEqual(result, {
-      dateTime: '2025-10-29T06:00:00Z'
+      dateTime: '2025-10-29T06:00:00.000Z'
     });
   });
 
   it('handles summer time correctly too', () => {
     // July is summer time (CEST = UTC+2)
-    // But GPT might send wrong offset here too
+    // GPT sends wrong offset here too
     const input = '2025-07-29T07:00:00+01:00'; // Wrong offset for summer!
     const result = normalizeCalendarTime(input);
 
-    // Strip and use Prague timezone
+    // Strip offset, interpret as Prague time, convert to UTC
+    // 7:00 Prague (summer = UTC+2) = 5:00 UTC
     assert.deepEqual(result, {
-      dateTime: '2025-07-29T07:00:00',
-      timeZone: 'Europe/Prague'
+      dateTime: '2025-07-29T05:00:00.000Z'
     });
   });
 
@@ -71,9 +70,10 @@ describe('Fix GPT wrong offset bug', () => {
     const input = '2025-10-29T07:00:00';
     const result = normalizeCalendarTime(input);
 
+    // Interpret as Prague time, convert to UTC
+    // 7:00 Prague (winter = UTC+1) = 6:00 UTC
     assert.deepEqual(result, {
-      dateTime: '2025-10-29T07:00:00',
-      timeZone: 'Europe/Prague'
+      dateTime: '2025-10-29T06:00:00.000Z'
     });
   });
 });
