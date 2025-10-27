@@ -39,13 +39,15 @@ describe('normalizeCalendarTime - CORRECT timezone approach', () => {
     });
   });
 
-  it('preserves times with explicit offset', () => {
+  it('strips explicit offset and adds timeZone (safer approach)', () => {
     const input = '2025-10-28T23:00:00+01:00';
     const result = normalizeCalendarTime(input);
 
-    // Times with offset don't need timeZone field
+    // Now we STRIP offset and add timeZone field
+    // This is safer because GPT may send wrong offset
     assert.deepEqual(result, {
-      dateTime: '2025-10-28T23:00:00+01:00'
+      dateTime: '2025-10-28T23:00:00',
+      timeZone: 'Europe/Prague'
     });
   });
 
