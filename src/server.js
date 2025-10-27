@@ -17,6 +17,10 @@ import { errorHandler, notFoundHandler } from './middleware/errorHandler.js';
 // Load environment variables FIRST (before importing limits)
 dotenv.config();
 
+if (!process.env.TZ) {
+  process.env.TZ = 'UTC';
+}
+
 const app = express();
 const PORT = process.env.PORT || 3000;
 

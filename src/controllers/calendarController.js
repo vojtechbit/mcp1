@@ -6,7 +6,8 @@ import { handleControllerError } from '../utils/errors.js';
 import {
   PAGE_SIZE_DEFAULT,
   PAGE_SIZE_MAX,
-  AGGREGATE_CAP_CAL
+  AGGREGATE_CAP_CAL,
+  REFERENCE_TIMEZONE
 } from '../config/limits.js';
 import { debugStep, wrapModuleFunctions } from '../utils/advancedDebugging.js';
 
@@ -71,14 +72,53 @@ async function createEvent(req, res) {
 
     console.log(`📅 Creating calendar event: ${summary}`);
 
+    const fallbackTimeZone = timeZone || REFERENCE_TIMEZONE;
+
+    const normalizeEventTime = (value, label) => {
+      if (!value) {
+        return null;
+      }
+
+      if (typeof value === 'string') {
+        return { dateTime: value, timeZone: fallbackTimeZone };
+      }
+
+      if (value.dateTime) {
+        return {
+          dateTime: value.dateTime,
+          timeZone: value.timeZone || fallbackTimeZone
+        };
+      }
+
+      if (value.date) {
+        const normalized = { date: value.date };
+        if (value.timeZone || fallbackTimeZone) {
+          normalized.timeZone = value.timeZone || fallbackTimeZone;
+        }
+        return normalized;
+      }
+
+      throw new Error(`Invalid ${label} payload. Expected ISO string or {dateTime/date}`);
+    };
+
+    const normalizedStart = normalizeEventTime(start, 'start');
+    const normalizedEnd = normalizeEventTime(end, 'end');
+
+    if (!normalizedStart || !normalizedEnd) {
+      return res.status(400).json({
+        error: 'Bad Request',
+        message: 'start and end must be valid ISO strings or objects with date/dateTime'
+      });
+    }
+
     const eventData = {
       summary,
-      start,
-      end,
+      start: normalizedStart,
+      end: normalizedEnd,
       description,
       location,
       attendees,
-      timeZone: timeZone || 'UTC',
+      timeZone: fallbackTimeZone,
       reminders
     };
 

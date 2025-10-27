@@ -4,6 +4,7 @@ import { getUserByGoogleSub, updateTokens, updateLastUsed } from './databaseServ
 import { generateSignedAttachmentUrl } from '../utils/signedUrlGenerator.js';
 import { isBlocked } from '../utils/attachmentSecurity.js';
 import { getPragueOffsetHours } from '../utils/helpers.js';
+import { REFERENCE_TIMEZONE } from '../config/limits.js';
 import { debugStep, wrapModuleFunctions } from '../utils/advancedDebugging.js';
 import dotenv from 'dotenv';
 import {
@@ -2764,11 +2765,36 @@ async function createCalendarEvent(googleSub, eventData, options = {}) {
     const authClient = await getAuthenticatedClient(googleSub);
     const calendar = google.calendar({ version: 'v3', auth: authClient });
 
+    const fallbackTimeZone = eventData.timeZone || REFERENCE_TIMEZONE;
+
+    const normalizeTimeForApi = (time, label) => {
+      if (!time) {
+        throw new Error(`Event ${label} is required`);
+      }
+
+      if (time.dateTime) {
+        return {
+          dateTime: time.dateTime,
+          timeZone: time.timeZone || fallbackTimeZone
+        };
+      }
+
+      if (time.date) {
+        const normalized = { date: time.date };
+        if (time.timeZone || fallbackTimeZone) {
+          normalized.timeZone = time.timeZone || fallbackTimeZone;
+        }
+        return normalized;
+      }
+
+      throw new Error(`Unsupported ${label} format. Provide dateTime or date`);
+    };
+
     const event = {
       summary: eventData.summary,
       description: eventData.description || '',
-      start: eventData.start,
-      end: eventData.end
+      start: normalizeTimeForApi(eventData.start, 'start'),
+      end: normalizeTimeForApi(eventData.end, 'end')
     };
 
     if (eventData.attendees) {

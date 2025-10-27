@@ -5,6 +5,50 @@
 import crypto from 'crypto';
 import { REFERENCE_TIMEZONE } from '../config/limits.js';
 
+const MS_IN_HOUR = 60 * 60 * 1000;
+
+function resolveDateParts({ year, month, day }) {
+  const normalized = new Date(Date.UTC(year, month - 1, day, 12, 0, 0, 0));
+  return {
+    year: normalized.getUTCFullYear(),
+    month: normalized.getUTCMonth() + 1,
+    day: normalized.getUTCDate()
+  };
+}
+
+function ensurePragueParts(input) {
+  if (input && typeof input === 'object' && 'year' in input && 'month' in input && 'day' in input) {
+    return resolveDateParts(input);
+  }
+
+  return getPragueDateParts(input);
+}
+
+function getPragueDateTimeParts(date) {
+  const formatter = new Intl.DateTimeFormat('en-US', {
+    timeZone: REFERENCE_TIMEZONE,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false
+  });
+
+  const parts = formatter.formatToParts(date);
+  const map = Object.fromEntries(parts.filter(p => p.type !== 'literal').map(p => [p.type, p.value]));
+
+  return {
+    year: parseInt(map.year, 10),
+    month: parseInt(map.month, 10),
+    day: parseInt(map.day, 10),
+    hour: parseInt(map.hour, 10),
+    minute: parseInt(map.minute, 10),
+    second: parseInt(map.second, 10)
+  };
+}
+
 /**
  * Get timezone offset for Europe/Prague in hours (accounts for DST)
  * 
@@ -53,6 +97,41 @@ export function getPragueOffsetHours(date) {
   return 1; // Winter time UTC+1
 }
 
+export function getPragueDateParts(date) {
+  const formatter = new Intl.DateTimeFormat('en-US', {
+    timeZone: REFERENCE_TIMEZONE,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit'
+  });
+
+  const parts = formatter.formatToParts(date);
+  return {
+    year: parseInt(parts.find(p => p.type === 'year').value),
+    month: parseInt(parts.find(p => p.type === 'month').value),
+    day: parseInt(parts.find(p => p.type === 'day').value)
+  };
+}
+
+export function getPragueMidnightUtc(input) {
+  const { year, month, day } = ensurePragueParts(input);
+  const midnightUtc = new Date(Date.UTC(year, month - 1, day, 0, 0, 0, 0));
+  const offsetHoursForDate = getPragueOffsetHours(midnightUtc);
+  return new Date(midnightUtc.getTime() - (offsetHoursForDate * MS_IN_HOUR));
+}
+
+export function getPragueEndOfDayUtc(input) {
+  const { year, month, day } = ensurePragueParts(input);
+  const nextDayParts = resolveDateParts({ year, month, day: day + 1 });
+  const nextMidnight = getPragueMidnightUtc(nextDayParts);
+  return new Date(nextMidnight.getTime() - 1000);
+}
+
+export function addPragueDays(input, days) {
+  const { year, month, day } = ensurePragueParts(input);
+  return resolveDateParts({ year, month, day: day + days });
+}
+
 /**
  * Parse relative time keywords to concrete Unix timestamps (in seconds)
  * Reference timezone: Europe/Prague
@@ -62,55 +141,15 @@ export function getPragueOffsetHours(date) {
  */
 export function parseRelativeTime(relative, referenceDate = new Date()) {
   const now = new Date(referenceDate);
-  
-  // Get Prague time components using Intl
-  const formatter = new Intl.DateTimeFormat('en-US', {
-    timeZone: REFERENCE_TIMEZONE,
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-    hour12: false
-  });
-  
-  const parts = formatter.formatToParts(now);
-  const pragueNow = {
-    year: parseInt(parts.find(p => p.type === 'year').value),
-    month: parseInt(parts.find(p => p.type === 'month').value),
-    day: parseInt(parts.find(p => p.type === 'day').value),
-    hour: parseInt(parts.find(p => p.type === 'hour').value),
-    minute: parseInt(parts.find(p => p.type === 'minute').value),
-    second: parseInt(parts.find(p => p.type === 'second').value)
-  };
-  
-  // Helper to create UTC Date for midnight Prague time
-  const createPragueMidnight = (year, month, day) => {
-    // Midnight in Prague local time
-    // To convert to UTC: subtract the offset for that specific date
-    const utcMidnight = new Date(Date.UTC(year, month - 1, day, 0, 0, 0, 0));
-    const offsetHoursForDate = getPragueOffsetHours(utcMidnight);
-    const adjusted = new Date(utcMidnight.getTime() - (offsetHoursForDate * 60 * 60 * 1000));
-    return adjusted;
-  };
 
-  const createPragueEndOfDay = (year, month, day) => {
-    const nextDay = new Date(year, month - 1, day + 1);
-    const nextMidnight = createPragueMidnight(
-      nextDay.getFullYear(),
-      nextDay.getMonth() + 1,
-      nextDay.getDate()
-    );
-    return new Date(nextMidnight.getTime() - 1000);
-  };
+  const pragueNow = getPragueDateTimeParts(now);
   
   const toUnixSeconds = (date) => Math.floor(date.getTime() / 1000);
   
   switch (relative?.toLowerCase()) {
     case 'today': {
-      const start = createPragueMidnight(pragueNow.year, pragueNow.month, pragueNow.day);
-      const end = createPragueEndOfDay(pragueNow.year, pragueNow.month, pragueNow.day);
+      const start = getPragueMidnightUtc(pragueNow);
+      const end = getPragueEndOfDayUtc(pragueNow);
 
       return {
         after: toUnixSeconds(start),
@@ -119,18 +158,9 @@ export function parseRelativeTime(relative, referenceDate = new Date()) {
     }
     
     case 'tomorrow': {
-      // Add one day to Prague date
-      const tomorrow = new Date(pragueNow.year, pragueNow.month - 1, pragueNow.day + 1);
-      const start = createPragueMidnight(
-        tomorrow.getFullYear(),
-        tomorrow.getMonth() + 1,
-        tomorrow.getDate()
-      );
-      const end = createPragueEndOfDay(
-        tomorrow.getFullYear(),
-        tomorrow.getMonth() + 1,
-        tomorrow.getDate()
-      );
+      const tomorrow = addPragueDays(pragueNow, 1);
+      const start = getPragueMidnightUtc(tomorrow);
+      const end = getPragueEndOfDayUtc(tomorrow);
 
       return {
         after: toUnixSeconds(start),
@@ -144,21 +174,12 @@ export function parseRelativeTime(relative, referenceDate = new Date()) {
       const currentDay = new Date(pragueNow.year, pragueNow.month - 1, pragueNow.day);
       const dayOfWeek = currentDay.getDay(); // 0 = Sunday
       const daysToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
-      
-      const monday = new Date(pragueNow.year, pragueNow.month - 1, pragueNow.day + daysToMonday);
-      const sunday = new Date(monday);
-      sunday.setDate(monday.getDate() + 6);
-      
-      const start = createPragueMidnight(
-        monday.getFullYear(),
-        monday.getMonth() + 1,
-        monday.getDate()
-      );
-      const end = createPragueEndOfDay(
-        sunday.getFullYear(),
-        sunday.getMonth() + 1,
-        sunday.getDate()
-      );
+
+      const monday = addPragueDays(pragueNow, daysToMonday);
+      const sunday = addPragueDays(monday, 6);
+
+      const start = getPragueMidnightUtc(monday);
+      const end = getPragueEndOfDayUtc(sunday);
       
       return {
         after: toUnixSeconds(start),
@@ -191,17 +212,9 @@ export function parseRelativeTime(relative, referenceDate = new Date()) {
     }
     
     case 'yesterday': {
-      const yesterday = new Date(pragueNow.year, pragueNow.month - 1, pragueNow.day - 1);
-      const start = createPragueMidnight(
-        yesterday.getFullYear(),
-        yesterday.getMonth() + 1,
-        yesterday.getDate()
-      );
-      const end = createPragueEndOfDay(
-        yesterday.getFullYear(),
-        yesterday.getMonth() + 1,
-        yesterday.getDate()
-      );
+      const yesterday = addPragueDays(pragueNow, -1);
+      const start = getPragueMidnightUtc(yesterday);
+      const end = getPragueEndOfDayUtc(yesterday);
       return {
         after: toUnixSeconds(start),
         before: toUnixSeconds(end)
@@ -211,26 +224,10 @@ export function parseRelativeTime(relative, referenceDate = new Date()) {
     case 'last7d': {
       // FIX: Use Prague midnight (not UTC) - consistent with other relative filters
       // Calculate 7 days ago in Prague time
-      const sevenDaysAgoPrague = new Date(
-        pragueNow.year,
-        pragueNow.month - 1,
-        pragueNow.day - 7
-      );
-      
-      const start = createPragueMidnight(
-        sevenDaysAgoPrague.getFullYear(),
-        sevenDaysAgoPrague.getMonth() + 1,
-        sevenDaysAgoPrague.getDate()
-      );
-      const periodEnd = new Date(sevenDaysAgoPrague);
-      periodEnd.setDate(periodEnd.getDate() + 7);
-      const end = new Date(
-        createPragueMidnight(
-          periodEnd.getFullYear(),
-          periodEnd.getMonth() + 1,
-          periodEnd.getDate()
-        ).getTime() - 1000
-      );
+      const sevenDaysAgoPrague = addPragueDays(pragueNow, -7);
+
+      const start = getPragueMidnightUtc(sevenDaysAgoPrague);
+      const end = getPragueEndOfDayUtc(addPragueDays(sevenDaysAgoPrague, 6));
 
       return {
         after: toUnixSeconds(start),

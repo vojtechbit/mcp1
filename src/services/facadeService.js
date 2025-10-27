@@ -13,7 +13,13 @@ import * as contactsService from './contactsService.js';
 import * as tasksService from './tasksService.js';
 import { getUserByGoogleSub } from './databaseService.js';
 import { classifyEmailCategory } from './googleApiService.js';
-import { parseRelativeTime, getPragueOffsetHours } from '../utils/helpers.js';
+import {
+  parseRelativeTime,
+  getPragueOffsetHours,
+  getPragueMidnightUtc,
+  addPragueDays,
+  getPragueDateParts
+} from '../utils/helpers.js';
 import { REFERENCE_TIMEZONE } from '../config/limits.js';
 import { processAttachments } from '../utils/attachmentSecurity.js';
 import { generateSignedAttachmentUrl } from '../utils/signedUrlGenerator.js';
@@ -639,63 +645,25 @@ async function calendarPlan(googleSub, params) {
   
   // Parse date and calculate range using Prague timezone
   const anchorDate = new Date(date);
+  const pragueDate = getPragueDateParts(anchorDate);
   let start, end;
-  
+
   if (scope === 'daily') {
-    // Parse anchor date in Prague timezone
-    const formatter = new Intl.DateTimeFormat('en-US', {
-      timeZone: REFERENCE_TIMEZONE,
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit'
-    });
-    
-    const parts = formatter.formatToParts(anchorDate);
-    const pragueDate = {
-      year: parseInt(parts.find(p => p.type === 'year').value),
-      month: parseInt(parts.find(p => p.type === 'month').value),
-      day: parseInt(parts.find(p => p.type === 'day').value)
-    };
-    
-    // Create midnight Prague time in UTC
-    const offsetHours = getPragueOffsetHours(anchorDate);
-    const midnight = new Date(Date.UTC(pragueDate.year, pragueDate.month - 1, pragueDate.day, 0, 0, 0, 0));
-    start = new Date(midnight.getTime() - (offsetHours * 60 * 60 * 1000));
-    
-    end = new Date(start.getTime() + (24 * 60 * 60 * 1000));
+    start = getPragueMidnightUtc(pragueDate);
+    end = getPragueMidnightUtc(addPragueDays(pragueDate, 1));
   } else if (scope === 'weekly') {
-    // Find Monday of the week in Prague timezone
-    const formatter = new Intl.DateTimeFormat('en-US', {
-      timeZone: REFERENCE_TIMEZONE,
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-      weekday: 'narrow'
-    });
-    
-    const parts = formatter.formatToParts(anchorDate);
-    const pragueDate = {
-      year: parseInt(parts.find(p => p.type === 'year').value),
-      month: parseInt(parts.find(p => p.type === 'month').value),
-      day: parseInt(parts.find(p => p.type === 'day').value)
-    };
-    
-    const weekdayMap = { S: 0, M: 1, T: 2, W: 3, T: 4, F: 5, S: 6 }; // Simplified
     const dayOfWeek = new Date(pragueDate.year, pragueDate.month - 1, pragueDate.day).getDay();
     const daysToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
-    
-    const mondayDate = new Date(pragueDate.year, pragueDate.month - 1, pragueDate.day + daysToMonday);
-    
-    // Create midnight Prague time for Monday
-    const offsetHours = getPragueOffsetHours(anchorDate);
-    const midnight = new Date(Date.UTC(mondayDate.getFullYear(), mondayDate.getMonth(), mondayDate.getDate(), 0, 0, 0, 0));
-    start = new Date(midnight.getTime() - (offsetHours * 60 * 60 * 1000));
-    
-    end = new Date(start.getTime() + (7 * 24 * 60 * 60 * 1000));
+
+    const monday = addPragueDays(pragueDate, daysToMonday);
+    start = getPragueMidnightUtc(monday);
+    end = getPragueMidnightUtc(addPragueDays(monday, 7));
   }
   
   // Fetch events
-  const events = await calendarService.listCalendarEvents(googleSub, {
+  const calendarApi = resolveCalendarService();
+
+  const events = await calendarApi.listCalendarEvents(googleSub, {
     calendarId,
     timeMin: start.toISOString(),
     timeMax: end.toISOString(),
