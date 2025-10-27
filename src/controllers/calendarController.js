@@ -1,6 +1,6 @@
 import * as calendarService from '../services/googleApiService.js';
 import { heavyLimiter } from '../server.js';
-import { computeETag, checkETagMatch } from '../utils/helpers.js';
+import { computeETag, checkETagMatch, convertToUtcIfNeeded } from '../utils/helpers.js';
 import { createSnapshot, getSnapshot } from '../utils/snapshotStore.js';
 import { handleControllerError } from '../utils/errors.js';
 import {
@@ -80,22 +80,20 @@ async function createEvent(req, res) {
       }
 
       if (typeof value === 'string') {
-        return { dateTime: value, timeZone: fallbackTimeZone };
+        // Convert to UTC, interpreting as Prague time if no timezone specified
+        const utcDateTime = convertToUtcIfNeeded(value);
+        return { dateTime: utcDateTime };
       }
 
       if (value.dateTime) {
-        return {
-          dateTime: value.dateTime,
-          timeZone: value.timeZone || fallbackTimeZone
-        };
+        // Convert to UTC, interpreting as Prague time if no timezone specified
+        const utcDateTime = convertToUtcIfNeeded(value.dateTime);
+        return { dateTime: utcDateTime };
       }
 
       if (value.date) {
-        const normalized = { date: value.date };
-        if (value.timeZone || fallbackTimeZone) {
-          normalized.timeZone = value.timeZone || fallbackTimeZone;
-        }
-        return normalized;
+        // All-day events don't need timezone conversion
+        return { date: value.date };
       }
 
       throw new Error(`Invalid ${label} payload. Expected ISO string or {dateTime/date}`);
@@ -118,7 +116,6 @@ async function createEvent(req, res) {
       description,
       location,
       attendees,
-      timeZone: fallbackTimeZone,
       reminders
     };
 
@@ -476,6 +473,23 @@ async function updateEvent(req, res) {
     }
 
     console.log(`✏️  Updating calendar event ${eventId}...`);
+
+    // Normalize time fields if present
+    if (updates.start) {
+      if (typeof updates.start === 'string') {
+        updates.start = { dateTime: convertToUtcIfNeeded(updates.start) };
+      } else if (updates.start.dateTime) {
+        updates.start.dateTime = convertToUtcIfNeeded(updates.start.dateTime);
+      }
+    }
+
+    if (updates.end) {
+      if (typeof updates.end === 'string') {
+        updates.end = { dateTime: convertToUtcIfNeeded(updates.end) };
+      } else if (updates.end.dateTime) {
+        updates.end.dateTime = convertToUtcIfNeeded(updates.end.dateTime);
+      }
+    }
 
     debugStep('Sending update to Google API', {
       eventId,
