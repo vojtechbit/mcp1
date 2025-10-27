@@ -4,6 +4,8 @@
 
 import crypto from 'crypto';
 import { REFERENCE_TIMEZONE } from '../config/limits.js';
+import { toZonedTime, fromZonedTime } from 'date-fns-tz';
+import { parseISO } from 'date-fns';
 
 const MS_IN_HOUR = 60 * 60 * 1000;
 
@@ -238,6 +240,35 @@ export function parseRelativeTime(relative, referenceDate = new Date()) {
     default:
       return null;
   }
+}
+
+/**
+ * Convert a datetime string to UTC, interpreting it as Prague time if no timezone is specified.
+ *
+ * Examples:
+ * - "2025-10-27T23:00:00" -> interpreted as 23:00 Prague time -> converted to UTC
+ * - "2025-10-27T23:00:00Z" -> already UTC, returned as-is
+ * - "2025-10-27T23:00:00+01:00" -> already has timezone, converted to UTC
+ *
+ * @param {string} dateTimeString - ISO 8601 datetime string
+ * @returns {string} ISO 8601 datetime string in UTC (with Z suffix)
+ */
+export function convertToUtcIfNeeded(dateTimeString) {
+  if (!dateTimeString) {
+    return dateTimeString;
+  }
+
+  // If it already has timezone (ends with Z or has +/- offset), parse and convert to UTC
+  if (dateTimeString.endsWith('Z') || /[+-]\d{2}:\d{2}$/.test(dateTimeString)) {
+    const date = parseISO(dateTimeString);
+    return date.toISOString();
+  }
+
+  // No timezone specified - interpret as Prague time and convert to UTC
+  // fromZonedTime takes a date in the specified timezone and converts it to UTC
+  const pragueDate = parseISO(dateTimeString);
+  const utcDate = fromZonedTime(pragueDate, REFERENCE_TIMEZONE);
+  return utcDate.toISOString();
 }
 
 /**
