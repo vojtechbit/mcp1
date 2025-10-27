@@ -20,29 +20,37 @@ export function getPragueOffsetHours(date) {
     timeZone: REFERENCE_TIMEZONE,
     timeZoneName: 'short'
   });
-  
+
   const parts = formatter.formatToParts(date);
   const tzName = parts.find(p => p.type === 'timeZoneName')?.value || '';
-  
+
   // Extract offset from timezone name (e.g., "GMT+1" or "GMT+2")
   if (tzName.includes('+')) {
     return parseInt(tzName.split('+')[1]);
   } else if (tzName.includes('-')) {
     return -parseInt(tzName.split('-')[1]);
   }
-  
-  // Fallback: check month
-  // Prague is UTC+1 in winter (November-February)
-  // Prague is UTC+2 in summer DST (March-October)
-  const month = date.getMonth(); // 0=Jan, 1=Feb, 2=Mar, ... 9=Oct, 10=Nov, 11=Dec
-  
-  // FIXED: Changed from (month >= 3 && month <= 9) to (month >= 2 && month <= 9)
-  // Now correctly includes October (month 9) in DST range
-  if (month >= 2 && month <= 9) {
-    return 2; // Summer time UTC+2 (DST: March through October)
-  } else {
-    return 1; // Winter time UTC+1 (November through February)
+
+  // Fallback when Intl API cannot provide timezone information
+  // Compute DST start/end manually: Europe/Prague switches at 01:00 UTC
+  // on the last Sunday in March (to UTC+2) and the last Sunday in October (back to UTC+1)
+  const year = date.getUTCFullYear();
+
+  const getDstTransitionUtc = (monthIndex) => {
+    const lastDayOfMonth = new Date(Date.UTC(year, monthIndex + 1, 0, 0, 0, 0, 0));
+    const lastSundayDate = lastDayOfMonth.getUTCDate() - lastDayOfMonth.getUTCDay();
+    return Date.UTC(year, monthIndex, lastSundayDate, 1, 0, 0, 0);
+  };
+
+  const dstStartUtc = getDstTransitionUtc(2); // March
+  const dstEndUtc = getDstTransitionUtc(9); // October
+  const timestamp = date.getTime();
+
+  if (timestamp >= dstStartUtc && timestamp < dstEndUtc) {
+    return 2; // Summer time UTC+2
   }
+
+  return 1; // Winter time UTC+1
 }
 
 /**
