@@ -272,6 +272,39 @@ export function convertToUtcIfNeeded(dateTimeString) {
 }
 
 /**
+ * Normalize a datetime string for Google Calendar API.
+ * Returns { dateTime, timeZone } object suitable for Google Calendar.
+ *
+ * Strategy: Keep times in Prague timezone with explicit timeZone field
+ * so Google Calendar handles DST automatically.
+ *
+ * Examples:
+ * - "2025-10-27T23:00:00" -> { dateTime: "2025-10-27T23:00:00", timeZone: "Europe/Prague" }
+ * - "2025-10-27T23:00:00Z" -> { dateTime: "2025-10-27T23:00:00Z" } (UTC, no timeZone)
+ * - "2025-10-27T23:00:00+01:00" -> { dateTime: "2025-10-27T23:00:00+01:00" } (has offset)
+ *
+ * @param {string} dateTimeString - ISO 8601 datetime string
+ * @returns {object} Object with dateTime and optionally timeZone
+ */
+export function normalizeCalendarTime(dateTimeString) {
+  if (!dateTimeString) {
+    return null;
+  }
+
+  // If it already has timezone (ends with Z or has +/- offset), use as-is
+  if (dateTimeString.endsWith('Z') || /[+-]\d{2}:\d{2}$/.test(dateTimeString)) {
+    return { dateTime: dateTimeString };
+  }
+
+  // No timezone specified - interpret as Prague time and add timeZone field
+  // This lets Google Calendar handle DST automatically
+  return {
+    dateTime: dateTimeString,
+    timeZone: REFERENCE_TIMEZONE
+  };
+}
+
+/**
  * Normalize query string:
  * - Strip diacritics
  * - Escape unsafe characters

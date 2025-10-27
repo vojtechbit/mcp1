@@ -1,6 +1,6 @@
 import * as calendarService from '../services/googleApiService.js';
 import { heavyLimiter } from '../server.js';
-import { computeETag, checkETagMatch, convertToUtcIfNeeded } from '../utils/helpers.js';
+import { computeETag, checkETagMatch, normalizeCalendarTime } from '../utils/helpers.js';
 import { createSnapshot, getSnapshot } from '../utils/snapshotStore.js';
 import { handleControllerError } from '../utils/errors.js';
 import {
@@ -80,20 +80,18 @@ async function createEvent(req, res) {
       }
 
       if (typeof value === 'string') {
-        // Convert to UTC, interpreting as Prague time if no timezone specified
-        const utcDateTime = convertToUtcIfNeeded(value);
-        return { dateTime: utcDateTime };
+        // Normalize time - will add timeZone field if no timezone specified
+        return normalizeCalendarTime(value);
       }
 
       if (value.dateTime) {
-        // Convert to UTC, interpreting as Prague time if no timezone specified
-        const utcDateTime = convertToUtcIfNeeded(value.dateTime);
-        return { dateTime: utcDateTime };
+        // Normalize time - will add timeZone field if no timezone specified
+        return normalizeCalendarTime(value.dateTime);
       }
 
       if (value.date) {
-        // All-day events don't need timezone conversion
-        return { date: value.date };
+        // All-day events
+        return { date: value.date, timeZone: REFERENCE_TIMEZONE };
       }
 
       throw new Error(`Invalid ${label} payload. Expected ISO string or {dateTime/date}`);
@@ -477,17 +475,19 @@ async function updateEvent(req, res) {
     // Normalize time fields if present
     if (updates.start) {
       if (typeof updates.start === 'string') {
-        updates.start = { dateTime: convertToUtcIfNeeded(updates.start) };
+        updates.start = normalizeCalendarTime(updates.start);
       } else if (updates.start.dateTime) {
-        updates.start.dateTime = convertToUtcIfNeeded(updates.start.dateTime);
+        const normalized = normalizeCalendarTime(updates.start.dateTime);
+        updates.start = { ...updates.start, ...normalized };
       }
     }
 
     if (updates.end) {
       if (typeof updates.end === 'string') {
-        updates.end = { dateTime: convertToUtcIfNeeded(updates.end) };
+        updates.end = normalizeCalendarTime(updates.end);
       } else if (updates.end.dateTime) {
-        updates.end.dateTime = convertToUtcIfNeeded(updates.end.dateTime);
+        const normalized = normalizeCalendarTime(updates.end.dateTime);
+        updates.end = { ...updates.end, ...normalized };
       }
     }
 

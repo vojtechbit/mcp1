@@ -2773,15 +2773,17 @@ async function createCalendarEvent(googleSub, eventData, options = {}) {
       }
 
       if (time.dateTime) {
-        // dateTime should already be in UTC with Z suffix from controller
-        // Don't add timeZone field for UTC times
-        return {
-          dateTime: time.dateTime
-        };
+        // Controller already normalized the time with proper timeZone field
+        // Pass through as-is (may have timeZone field for Prague times)
+        const normalized = { dateTime: time.dateTime };
+        if (time.timeZone) {
+          normalized.timeZone = time.timeZone;
+        }
+        return normalized;
       }
 
       if (time.date) {
-        // All-day events can have timeZone
+        // All-day events
         const normalized = { date: time.date };
         if (time.timeZone || fallbackTimeZone) {
           normalized.timeZone = time.timeZone || fallbackTimeZone;
