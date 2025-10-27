@@ -275,13 +275,16 @@ export function convertToUtcIfNeeded(dateTimeString) {
  * Normalize a datetime string for Google Calendar API.
  * Returns { dateTime, timeZone } object suitable for Google Calendar.
  *
- * Strategy: Keep times in Prague timezone with explicit timeZone field
- * so Google Calendar handles DST automatically.
+ * Strategy: ALWAYS interpret as Prague local time (ignore any offset from GPT)
+ * so Google Calendar handles DST automatically with correct timezone rules.
+ *
+ * Why ignore offsets: GPT may send wrong offset (e.g., +02:00 for winter date)
+ * Better to strip it and let Google Calendar apply correct DST rules.
  *
  * Examples:
- * - "2025-10-27T23:00:00" -> { dateTime: "2025-10-27T23:00:00", timeZone: "Europe/Prague" }
- * - "2025-10-27T23:00:00Z" -> { dateTime: "2025-10-27T23:00:00Z" } (UTC, no timeZone)
- * - "2025-10-27T23:00:00+01:00" -> { dateTime: "2025-10-27T23:00:00+01:00" } (has offset)
+ * - "2025-10-29T07:00:00" -> { dateTime: "2025-10-29T07:00:00", timeZone: "Europe/Prague" }
+ * - "2025-10-29T07:00:00+02:00" -> { dateTime: "2025-10-29T07:00:00", timeZone: "Europe/Prague" } (strip offset!)
+ * - "2025-10-27T23:00:00Z" -> { dateTime: "2025-10-27T23:00:00Z" } (UTC preserved)
  *
  * @param {string} dateTimeString - ISO 8601 datetime string
  * @returns {object} Object with dateTime and optionally timeZone
@@ -291,15 +294,18 @@ export function normalizeCalendarTime(dateTimeString) {
     return null;
   }
 
-  // If it already has timezone (ends with Z or has +/- offset), use as-is
-  if (dateTimeString.endsWith('Z') || /[+-]\d{2}:\d{2}$/.test(dateTimeString)) {
+  // Preserve UTC times (ending with Z) - these are unambiguous
+  if (dateTimeString.endsWith('Z')) {
     return { dateTime: dateTimeString };
   }
 
-  // No timezone specified - interpret as Prague time and add timeZone field
-  // This lets Google Calendar handle DST automatically
+  // Strip any timezone offset (e.g., +02:00, +01:00, -05:00) and interpret as Prague time
+  // This fixes the problem where GPT sends wrong offset (e.g., +02:00 for winter dates)
+  const withoutOffset = dateTimeString.replace(/[+-]\d{2}:\d{2}$/, '');
+
+  // Add Prague timezone - Google will apply correct DST rules
   return {
-    dateTime: dateTimeString,
+    dateTime: withoutOffset,
     timeZone: REFERENCE_TIMEZONE
   };
 }
