@@ -29,14 +29,17 @@ const SCOPES = [
 ];
 
 // Create OAuth2 client
-const oauth2Client = new google.auth.OAuth2(
-  GOOGLE_CLIENT_ID,
-  GOOGLE_CLIENT_SECRET,
-  REDIRECT_URI
-);
+function createOAuthClient() {
+  return new google.auth.OAuth2(
+    GOOGLE_CLIENT_ID,
+    GOOGLE_CLIENT_SECRET,
+    REDIRECT_URI
+  );
+}
 
 function getAuthUrl(state) {
-  return oauth2Client.generateAuthUrl({
+  const client = createOAuthClient();
+  return client.generateAuthUrl({
     access_type: 'offline',
     scope: SCOPES,
     prompt: 'consent', // Force consent to ensure refresh token
@@ -47,7 +50,8 @@ function getAuthUrl(state) {
 
 async function getTokensFromCode(code) {
   try {
-    const { tokens } = await oauth2Client.getToken(code);
+    const client = createOAuthClient();
+    const { tokens } = await client.getToken(code);
     return tokens;
   } catch (error) {
     console.error('❌ [OAUTH_ERROR] Failed to exchange authorization code for tokens');
@@ -62,9 +66,10 @@ async function getTokensFromCode(code) {
 
 async function refreshAccessToken(refreshToken) {
   try {
-    oauth2Client.setCredentials({ refresh_token: refreshToken });
-    const { credentials } = await oauth2Client.refreshAccessToken();
-    
+    const client = createOAuthClient();
+    client.setCredentials({ refresh_token: refreshToken });
+    const { credentials } = await client.refreshAccessToken();
+
     console.log('✅ Access token refreshed successfully');
     return credentials;
   } catch (error) {
@@ -79,7 +84,7 @@ async function refreshAccessToken(refreshToken) {
 }
 
 export {
-  oauth2Client,
+  createOAuthClient,
   getAuthUrl,
   getTokensFromCode,
   refreshAccessToken,

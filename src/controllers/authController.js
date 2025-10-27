@@ -88,11 +88,12 @@ async function handleCallback(req, res) {
 
     // Get user info from access token
     const { google } = await import('googleapis');
-    const { oauth2Client } = await import('../config/oauth.js');
-    
-    // Set credentials on oauth2Client
+    const { createOAuthClient } = await import('../config/oauth.js');
+
+    // Create dedicated OAuth2 client for this request
+    const oauth2Client = createOAuthClient();
     oauth2Client.setCredentials(tokens);
-    
+
     const oauth2 = google.oauth2({ version: 'v2', auth: oauth2Client });
     const userInfoResponse = await oauth2.userinfo.get();
     const userInfo = userInfoResponse.data;
