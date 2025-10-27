@@ -11,6 +11,16 @@
       "description": "Production server"
     }
   ],
+  "security": [
+    {
+      "OAuth2": [
+        "gmail",
+        "calendar",
+        "contacts",
+        "tasks"
+      ]
+    }
+  ],
   "paths": {
     "/macros/inbox/overview": {
       "post": {
@@ -3988,6 +3998,23 @@
     }
   },
   "components": {
+    "securitySchemes": {
+      "OAuth2": {
+        "type": "oauth2",
+        "flows": {
+          "authorizationCode": {
+            "authorizationUrl": "https://mcp1-oauth-server.onrender.com/oauth/authorize",
+            "tokenUrl": "https://mcp1-oauth-server.onrender.com/oauth/token",
+            "scopes": {
+              "gmail": "Read and manage Gmail data",
+              "calendar": "Read and manage Google Calendar events",
+              "contacts": "Read and manage Google Contacts",
+              "tasks": "Read and manage Google Tasks"
+            }
+          }
+        }
+      }
+    },
     "schemas": {
       "MacroEmailQuickReadItem": {
         "type": "object",
