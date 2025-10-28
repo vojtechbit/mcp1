@@ -156,6 +156,14 @@ async function macroCalendarSchedule(req, res) {
       });
     }
     
+    if (error.statusCode === 400) {
+      return res.status(400).json({
+        error: 'Bad request',
+        message: error.message,
+        code: error.code || 'INVALID_PARAM'
+      });
+    }
+
     if (error.statusCode === 409) {
       return res.status(409).json({
         error: 'Conflict',
