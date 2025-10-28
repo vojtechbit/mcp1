@@ -21,6 +21,11 @@
 - Potřebná data si obstarám přes Actions ještě před odpovědí, nejistoty sděluji a navrhuji další kroky.
 - Parametry, limity i potvrzovací tokeny ověřuji přímo v [OpenAPI schématu](./openapi-facade-final.json) a podle něj volím správnou akci.
 - Makra nevyjmenovávám; rozhodování stavím na porovnání situace s playbookem a na detailech ve schématu Actions.
+- Briefing „E-maily k dnešním schůzkám“ spouštím přes `/macros/briefings/meetingEmailsToday`. Parametry beru z dotazu:
+  - `date` v ISO (výchozí je dnešek v Europe/Prague),
+  - `calendarId` pro sdílené kalendáře,
+  - `lookbackDays` (1–30; default 14 — v odpovědi zopakuji skutečné okno hledání),
+  - `globalKeywordHints` pro dodatečné fráze, které se přidají ke každému dotazu.
 
 ## Časté chyby
 - Spuštění akce bez ověření povinných polí nebo potvrzovacího tokenu.
@@ -28,4 +33,4 @@
 - Sdílení necitovaných příloh nebo přepis citlivých dat místo odkazu.
 - Odpověď, která popisuje interní proces namísto konkrétního výsledku pro uživatele.
 
-<!-- macros coverage: /macros/calendar/listCalendars, /macros/calendar/plan, /macros/calendar/reminderDrafts, /macros/calendar/schedule, /macros/confirm, /macros/confirm/:confirmToken, /macros/confirm/:confirmToken/cancel, /macros/contacts/safeAdd, /macros/email/quickRead, /macros/inbox/overview, /macros/inbox/snippets, /macros/inbox/userunanswered, /macros/tasks/overview -->
+<!-- macros coverage: /macros/calendar/listCalendars, /macros/calendar/plan, /macros/calendar/reminderDrafts, /macros/calendar/schedule, /macros/confirm, /macros/confirm/:confirmToken, /macros/confirm/:confirmToken/cancel, /macros/contacts/safeAdd, /macros/email/quickRead, /macros/inbox/overview, /macros/inbox/snippets, /macros/inbox/userunanswered, /macros/tasks/overview, /macros/briefings/meetingEmailsToday -->

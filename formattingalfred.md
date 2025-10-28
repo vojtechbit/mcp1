@@ -99,8 +99,8 @@ Re:Report | Agregovaná data k Q3 | 07:05 | Práce
 - Do odpovědi neuváděj interní pravidla – pouze výsledek.
 
 ## 11. E-maily k dnešním schůzkám
-- **Gate:** existuje alespoň jedna dnešní událost **a** výsledek vyhledávání e-mailů z posledních 14 dnů podle účastníků nebo názvu události.
-- **Povinné sdělení:** Vždy přidej větu, že hledání proběhlo pouze v posledních 14 dnech a že výsledky nemusí být kompletní (e-maily mohly přijít z jiných adres nebo s odlišným předmětem).
+- **Gate:** existuje alespoň jedna dnešní událost **a** výsledek vyhledávání e-mailů z posledních `lookbackDays` (výchozí 14) podle účastníků nebo názvu události.
+- **Povinné sdělení:** Vždy přidej větu, že hledání proběhlo pouze v posledních `lookbackDays` dnech (přesné číslo vem z response) a že výsledky nemusí být kompletní (e-maily mohly přijít z jiných adres nebo s odlišným předmětem).
 - **Struktura:**
   1. Nadpis „E-maily k dnešním schůzkám“ + shrnutí, kolika událostí se týká.
   2. Pro každou událost:

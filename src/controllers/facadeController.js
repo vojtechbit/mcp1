@@ -91,7 +91,7 @@ async function macroEmailQuickRead(req, res) {
     res.json(result);
   } catch (error) {
     console.error('❌ Macro email quick read failed:', error.message);
-    
+
     if (error.statusCode === 401) {
       return res.status(401).json({
         error: 'Authentication required',
@@ -99,7 +99,7 @@ async function macroEmailQuickRead(req, res) {
         code: 'REAUTH_REQUIRED'
       });
     }
-    
+
     if (error.message.includes('No message IDs')) {
       return res.status(400).json({
         error: 'Bad request',
@@ -107,9 +107,42 @@ async function macroEmailQuickRead(req, res) {
         code: 'INVALID_PARAM'
       });
     }
-    
+
     res.status(500).json({
       error: 'Email quick read failed',
+      message: error.message,
+      code: 'SERVER_ERROR'
+    });
+  }
+}
+
+// ==================== BRIEFING MACROS ====================
+
+async function macroBriefingsMeetingEmailsToday(req, res) {
+  try {
+    const result = await facadeService.meetingEmailsToday(req.user.googleSub, req.body || {});
+    res.json(result);
+  } catch (error) {
+    console.error('❌ Macro briefing meeting emails today failed:', error.message);
+
+    if (error.statusCode === 401) {
+      return res.status(401).json({
+        error: 'Authentication required',
+        message: error.message,
+        code: 'REAUTH_REQUIRED'
+      });
+    }
+
+    if (error.statusCode === 400) {
+      return res.status(400).json({
+        error: 'Bad request',
+        message: error.message,
+        code: error.code || 'INVALID_PARAM'
+      });
+    }
+
+    res.status(500).json({
+      error: 'Meeting email briefing failed',
       message: error.message,
       code: 'SERVER_ERROR'
     });
@@ -282,6 +315,7 @@ const traced = wrapModuleFunctions('controllers.facadeController', {
   macroInboxSnippets,
   macroInboxUserUnanswered,
   macroEmailQuickRead,
+  macroBriefingsMeetingEmailsToday,
   macroCalendarPlan,
   macroCalendarSchedule,
   macroCalendarReminderDrafts,
@@ -295,6 +329,7 @@ const {
   macroInboxSnippets: tracedMacroInboxSnippets,
   macroInboxUserUnanswered: tracedMacroInboxUserUnanswered,
   macroEmailQuickRead: tracedMacroEmailQuickRead,
+  macroBriefingsMeetingEmailsToday: tracedMacroBriefingsMeetingEmailsToday,
   macroCalendarPlan: tracedMacroCalendarPlan,
   macroCalendarSchedule: tracedMacroCalendarSchedule,
   macroCalendarReminderDrafts: tracedMacroCalendarReminderDrafts,
@@ -308,6 +343,7 @@ export {
   tracedMacroInboxSnippets as macroInboxSnippets,
   tracedMacroInboxUserUnanswered as macroInboxUserUnanswered,
   tracedMacroEmailQuickRead as macroEmailQuickRead,
+  tracedMacroBriefingsMeetingEmailsToday as macroBriefingsMeetingEmailsToday,
   tracedMacroCalendarPlan as macroCalendarPlan,
   tracedMacroCalendarSchedule as macroCalendarSchedule,
   tracedMacroCalendarReminderDrafts as macroCalendarReminderDrafts,
