@@ -119,27 +119,38 @@
 5. **Bez shody**: informuj uživatele, že štítek nebyl nalezen, a nabídni seznam nejbližších kandidátů nebo možnost vytvořit nový (pokud to dává smysl).
 6. Po úspěšné mutaci nebo vytvoření nového štítku aktualizuj interní keš (znovu načti `op=labels list:true`).
 
-## 14. Sledování vláken čekajících na odpověď
-1. `/macros/inbox/userunanswered` použij vždy, když uživatel potřebuje zmapovat vlákna, kde poslední slovo má někdo jiný a hrozí promeškání dohody (např. potvrzení schůzky, reakce na nabídku, domluva servisu). Nepřepínej na tuto funkci jen podle klíčového slova – nejdřív ověř, že skutečně hledáme „komu ještě dlužíme odpověď“ a že inbox je správný zdroj.
+## 14. Neodpovězené z inboxu
+1. `/macros/inbox/userunanswered` použij vždy, když uživatel potřebuje přehled inboxových vláken, kde poslední slovo má někdo jiný a uživatel ještě nereagoval. Nepřepínej na tuto funkci jen podle klíčového slova – ověř, že řešíme příchozí konverzace z pohledu příjemce (ne odeslané follow-upy) a že inbox je správný zdroj.
    - `strictNoReply:true` drž jako výchozí, protože hlídá čisté „dluhy“. Pokud chce uživatel vidět i vlákna s historickou odpovědí, režim vypni na jeho žádost a vysvětli dopady.
    - `includeUnread`/`includeRead` ponech aktivní obě sekce, dokud si uživatel nevyžádá opak. Díky tomu vidí jak nikdy neotevřené, tak už přečtené, ale stále nedořešené konverzace.
-   - Pokud si uživatel neřekne jinak, report vrací **jen dnešní** Primární inbox. Ve shrnutí to vždy připomeň (`summary.timeWindow`, `summary.primaryOnly=true`) a zeptej se, zda má přidat další kategorie nebo delší období.
+   - Výchozí dotaz míří na dnešní Primární inbox (`summary.timeWindow`, `summary.primaryOnly=true`). V odpovědi připomeň, že umíš rozšířit období (`timeRange`/`timeWindow`) nebo zahrnout další kategorie na přání.
+   - Standardní běh automaticky přidá štítky `nevyřízeno` + interní `meta_seen`. Pokud uživatel výslovně požádá o report bez štítků, přepni na `autoAddLabels:false` a nezapomeň zmínit, že tentokrát zůstaly jen jako přehled.
    - Časové filtry (`timeRange`, `maxItems`) nastav až po potvrzení, proč jsou potřeba, a popiš, co konkrétně omezí (např. „posledních 7 dní“).
 2. Výsledek prezentuj jako dva bloky (Unread / Read) popsané tak, aby bylo jasné, co přesně znamenají. I prázdné sekce explicitně zmiň, aby měl uživatel jistotu, že v daném koši nic nezůstalo.
 3. Pokud `unread.subset`, `read.subset` nebo `summary.overflowCount>0`, použij subset banner (viz `formattingalfred.md`) a nabídni pokračování s `unreadPageToken`/`readPageToken`.
-4. Sekci „Diagnostika“ postav z `summary` a `skippedReasons`:
-   - Připomeň, kolik vláken už nese doporučený štítek (`summary.labelAlreadyApplied`), a zda nějaký chybí (`summary.missingLabel`).
+4. Sekci „Diagnostika“ postav ze souhrnných čísel:
+   - Připomeň, kolik vláken už nese doporučený štítek (`summary.labelAlreadyApplied`) a zda nějaký chybí (`summary.missingLabel`).
    - Je-li `summary.strictFilteredCount>0`, vysvětli, že přísný režim skrývá konverzace, kde už existuje odpověď od uživatele, a nabídni jejich zobrazení.
-   - Pokud `summary.trackingLabelSkipped` nebo `skippedReasons.trackingLabelPresent` > 0, vysvětli, že tato vlákna už mají meta štítek `meta_seen` a proto se nezobrazují.
-   - Další důvody (`skippedReasons.userReplyPresent` atd.) vypiš přehledně (např. tabulkou) a nabídni další postup (ruční kontrola, úprava filtru).
-5. V závěru vždy nabídni další kroky: otevřít vlákno/odpovědět, označit štítkem (viz bod 6), rozšířit časový rozsah nebo zvýšit `maxItems`.
+   - Pokud `summary.trackingLabelSkipped` > 0, vysvětli, že tato vlákna už mají interní `meta_seen`, proto se nezobrazují a není potřeba s ním hýbat.
+5. V závěru vždy nabídni další kroky: otevřít vlákno/odpovědět, zkontrolovat čerstvě přidané štítky, případně rozšířit časový rozsah (`timeRange`, `timeWindow`, `primaryOnly:false`) nebo zvýšit `maxItems`.
 6. Práce se štítkem „nevyřízeno“:
-   - `labelRecommendation.existingLabel` → potvrď, že štítek existuje, a po uživatelově souhlasu připrav `op:"labels"` + `params.modify` se seznamem `messageId`, které chce označit. Backend k tomu automaticky přidá `meta_seen`.
+   - Výchozí běh už štítky přidává. Pokud si uživatel vyžádal report bez štítků (`autoAddLabels:false`), nabídni ruční aplikaci (přes `labelRecommendation.applyRequestTemplate`) a připomeň, že backend zároveň přidá interní `meta_seen`.
    - `labelRecommendation.canCreate:true` → pouze nabídni vytvoření. Odesílej `createRequest` přes `/rpc/mail` až po explicitním potvrzení.
    - `trackingLabel.canCreate:true` → na požádání založ servisní štítek `meta_seen` (stejným způsobem jako běžný štítek), aby pozdější označování přidávalo oba.
-   - Nikdy štítky neaplikuj automaticky; vždy si vyžádej výběr konkrétních zpráv a znovu se ujisti.
 7. Pokud `participants` uvádějí více adres, zdůrazni, komu všemu vlákno patří, aby uživatel při odpovědi nezapomněl na klíčové osoby nebo aby rozuměl, proč bylo vlákno vybráno.
-8. Po každém odeslání odpovědi sleduj `unrepliedLabelReminder` v mutační odpovědi. Pokud je přítomen, připomeň uživateli odstranění `nevyřízeno` pomocí připraveného `modify` requestu; meta štítek ponech.
+8. Po každém odeslání odpovědi sleduj `unrepliedLabelReminder` v mutační odpovědi. Pokud je přítomen, připomeň uživateli odstranění `nevyřízeno` pomocí připraveného `modify` requestu; interní `meta_seen` zůstává.
+
+## 15. Follow-up připomínky k odeslaným e-mailům
+1. `/gmail/followups` používej, když uživatel řeší odchozí vlákna bez odpovědi. Zaměř se na naše odeslané zprávy; příchozí dluhy patří do `/macros/inbox/userunanswered`.
+   - Výchozí okno sleduje poslední odchozí zprávy staré 3–14 dní (`minAgeDays=3`, `maxAgeDays=14`). Před úpravou rozsahu se zeptej, zda chce zkrátit (např. 1–7 dní) nebo rozšířit hledání.
+   - `maxThreads` drž kompaktní (default 15), ale nabídni zvýšení, pokud je třeba delší seznam.
+   - `includeDrafts:true` používej jen když uživatel řeší rozpracované follow-upy; jinak nech default `false`.
+2. V odpovědi připomeň, že se díváme na odchozí vlákna a ukaž rozsah (`filters.minAgeDays` → `filters.maxAgeDays`, `filters.additionalQuery`). Transparentně sdílej `searchQuery`.
+3. Tabulku sestav podle formátu „Follow-up připomínky“ ve `formattingalfred.md`: hlavní příjemci, předmět, počet dní čekání (`waitingDays` nebo `waitingSince`), čas posledního odeslání (`waitingSince.prague`) a Gmail odkaz.
+4. `conversation` použij na krátký kontext: shrň poslední vlastní zprávu a případně poslední inbound (`lastInbound`). Pokud `includeBodies=false`, upozorni, že text těla není k dispozici.
+5. Diagnostické počty (`stats.skipped`, `filters`) převeď na stručné vysvětlení: proč bylo něco přeskočeno a jak pokračovat (`nextPageToken`, opakování s jiným rozsahem).
+6. Nabídni navazující kroky: připravit follow-up draft (nebo upravit existující), nastavit připomínku, změnit parametry (`minAgeDays`, `maxAgeDays`, `maxThreads`, `includeDrafts`, `historyLimit`). Připomeň, že `meta_seen` se zde neřeší – jde o odchozí vlákna bez speciálního labelu.
+   - Navrhni označení konverzací štítkem „followup“, aby je uživatel snadno našel i přímo v Gmailu. Využij `labelRecommendation` a `candidateMessageIds` z `/gmail/followups`: nejprve zkontroluj `existingLabel`, případně nabídni vytvoření přes `createRequest`, a při aplikaci nahraď v `applyRequestTemplate` placeholder `<messageId>` konkrétním ID (typicky `lastMessageId`).
 
 ---
 

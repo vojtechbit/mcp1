@@ -11,7 +11,9 @@ import dotenv from 'dotenv';
 import {
   UNREPLIED_LABEL_NAME,
   TRACKING_LABEL_NAME,
-  TRACKING_LABEL_DEFAULTS
+  TRACKING_LABEL_DEFAULTS,
+  FOLLOWUP_LABEL_NAME,
+  FOLLOWUP_LABEL_DEFAULTS
 } from '../config/unrepliedLabels.js';
 // pdf-parse má problém s importem - načteme až když je potřeba
 import XLSX from 'xlsx-js-style';
@@ -1241,6 +1243,11 @@ async function listFollowupCandidates(googleSub, options = {}) {
             : null,
           participants: collectParticipants(threadMessages, userEmailNormalized),
           conversation,
+          candidateMessageIds: Array.from(new Set(
+            threadMessages
+              .map(message => typeof message.id === 'string' ? message.id : null)
+              .filter(id => typeof id === 'string' && id.length > 0)
+          )),
           links: generateGmailLinks(threadResult.data.id, lastMessage.id)
         };
 
@@ -1283,6 +1290,17 @@ async function listFollowupCandidates(googleSub, options = {}) {
       nextPageToken: nextPageToken || null
     };
   });
+
+  const { followupLabel } = await getFollowupLabelContext(googleSub).catch(() => ({
+    followupLabel: null
+  }));
+
+  const labelRecommendation = buildFollowupLabelRecommendation(followupLabel);
+
+  return {
+    ...baseResult,
+    labelRecommendation
+  };
 }
 
 function clonePayloadForPreview(payload, maxBytes) {
@@ -2012,6 +2030,16 @@ async function getWatchlistLabelContext(googleSub, { forceRefresh = false } = {}
   };
 }
 
+async function getFollowupLabelContext(googleSub, { forceRefresh = false } = {}) {
+  const labels = await getLabelDirectory(googleSub, { forceRefresh });
+  const followupLabel = findLabelByExactName(labels, FOLLOWUP_LABEL_NAME);
+
+  return {
+    labels,
+    followupLabel
+  };
+}
+
 function buildUnrepliedLabelReminderPayload(label, { messageIds = [], threadId } = {}) {
   if (!label) {
     return null;
@@ -2043,6 +2071,56 @@ function buildUnrepliedLabelReminderPayload(label, { messageIds = [], threadId }
         }
       }
     }))
+  };
+}
+
+function buildFollowupLabelRecommendation(followupLabel) {
+  const targetName = FOLLOWUP_LABEL_NAME || FOLLOWUP_LABEL_DEFAULTS.name;
+  const defaultColors = FOLLOWUP_LABEL_DEFAULTS.color || {};
+
+  const existing = followupLabel
+    ? {
+        id: followupLabel.id,
+        name: followupLabel.name,
+        color: followupLabel.color || null
+      }
+    : null;
+
+  const suggestedColor = existing?.color || defaultColors.backgroundColor || '#42a5f5';
+  const textColor = defaultColors.textColor || '#ffffff';
+
+  return {
+    suggestedName: targetName,
+    suggestedColor,
+    textColor,
+    existingLabel: existing,
+    canCreate: !existing,
+    createRequest: existing
+      ? null
+      : {
+          op: 'labels',
+          params: {
+            create: {
+              name: targetName,
+              color: {
+                backgroundColor: defaultColors.backgroundColor || suggestedColor,
+                textColor
+              }
+            }
+          }
+        },
+    applyRequestTemplate: existing
+      ? {
+          op: 'labels',
+          params: {
+            modify: {
+              messageId: '<messageId>',
+              add: [existing.id],
+              remove: []
+            }
+          }
+        }
+      : null
   };
 }
 

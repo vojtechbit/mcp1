@@ -47,6 +47,9 @@ Na Render.com přidej environment variables (včetně `OAUTH_CLIENT_SECRET`).
 
 **Conversation Starters:**
 - Stejný postup jako výše – spravuj je v GPT editoru (soubor s quick actions jsme z repozitáře odstranili).
+- Doporučené příklady pro watchlist:
+  - „Zkontroluj dnešní nevyřízené maily a rovnou je označ.“
+  - „Zkontroluj dnešní nevyřízené maily, ale nech je zatím bez štítků.“
 
 > 📎 **Poznámka:** Quick actions ani starý prompt už v repozitáři nejsou. Pokud potřebuješ tahák, vytvoř si vlastní poznámky mimo repo, aby neovlivňovaly produkční konfiguraci.
 
