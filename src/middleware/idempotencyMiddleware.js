@@ -19,6 +19,32 @@ import { wrapModuleFunctions } from '../utils/advancedDebugging.js';
 
 const IDEMPOTENCY_TTL_HOURS = 12;
 
+let initializationPromise = null;
+
+async function initializeIdempotencyIndexes() {
+  if (!initializationPromise) {
+    initializationPromise = (async () => {
+      const db = await getDatabase();
+      const collection = db.collection('idempotency_records');
+
+      await collection.createIndex(
+        { key: 1, method: 1, path: 1 },
+        { unique: true }
+      );
+
+      await collection.createIndex(
+        { createdAt: 1 },
+        { expireAfterSeconds: IDEMPOTENCY_TTL_HOURS * 3600 }
+      );
+    })().catch((error) => {
+      initializationPromise = null;
+      throw error;
+    });
+  }
+
+  return initializationPromise;
+}
+
 /**
  * Compute canonical JSON for fingerprinting
  * Removes idempotency_key and timestamp fields, then sorts keys
@@ -92,16 +118,6 @@ async function idempotencyMiddleware(req, res, next) {
   try {
     const db = await getDatabase();
     const collection = db.collection('idempotency_records');
-
-    // Ensure indexes exist (safe to call multiple times)
-    await collection.createIndex(
-      { key: 1, method: 1, path: 1 },
-      { unique: true }
-    );
-    await collection.createIndex(
-      { createdAt: 1 },
-      { expireAfterSeconds: IDEMPOTENCY_TTL_HOURS * 3600 }
-    );
 
     // Look for existing record
     const existing = await collection.findOne({
@@ -205,14 +221,17 @@ async function cleanupExpiredRecords() {
 const traced = wrapModuleFunctions('middleware.idempotencyMiddleware', {
   idempotencyMiddleware,
   cleanupExpiredRecords,
+  initializeIdempotencyIndexes,
 });
 
 const {
   idempotencyMiddleware: tracedIdempotencyMiddleware,
   cleanupExpiredRecords: tracedCleanupExpiredRecords,
+  initializeIdempotencyIndexes: tracedInitializeIdempotencyIndexes,
 } = traced;
 
 export {
   tracedIdempotencyMiddleware as idempotencyMiddleware,
   tracedCleanupExpiredRecords as cleanupExpiredRecords,
+  tracedInitializeIdempotencyIndexes as initializeIdempotencyIndexes,
 };
