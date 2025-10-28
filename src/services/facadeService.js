@@ -717,6 +717,647 @@ async function inboxUserUnansweredRequests(googleSub, params = {}) {
   };
 }
 
+// ==================== BRIEFING MACROS ====================
+
+const MAX_MEETING_BRIEFING_EVENTS = 25;
+const MAX_MEETING_BRIEFING_SEARCH_RESULTS = 10;
+const MAX_MEETING_BRIEFING_AUTO_KEYWORDS = 5;
+const MAX_MEETING_BRIEFING_SEARCH_VARIANTS = 30;
+
+async function meetingEmailsToday(googleSub, rawParams = {}) {
+  const params = rawParams || {};
+  const {
+    date,
+    lookbackDays = 14,
+    calendarId = 'primary',
+    globalKeywordHints
+  } = params;
+
+  const targetDateParts = normalizeBriefingDateParts(date);
+  const safeLookbackDays = normalizeBriefingLookback(lookbackDays);
+  const safeCalendarId = normalizeBriefingCalendarId(calendarId);
+  const keywordHints = normalizeBriefingKeywordHints(globalKeywordHints);
+
+  const dayStartUtc = getPragueMidnightUtc(targetDateParts);
+  const nextDayUtc = getPragueMidnightUtc(addPragueDays(targetDateParts, 1));
+  const lookbackStartParts = addPragueDays(targetDateParts, -safeLookbackDays);
+  const lookbackStartUtc = getPragueMidnightUtc(lookbackStartParts);
+
+  const searchWindowStartSeconds = Math.floor(lookbackStartUtc.getTime() / 1000);
+  const searchWindowEndSeconds = Math.floor(nextDayUtc.getTime() / 1000);
+  const timeWindowClause = `after:${searchWindowStartSeconds} before:${searchWindowEndSeconds}`;
+
+  const calendarApi = resolveCalendarService();
+  const gmail = resolveGmailService();
+
+  const eventsResponse = await calendarApi.listCalendarEvents(googleSub, {
+    calendarId: safeCalendarId,
+    timeMin: dayStartUtc.toISOString(),
+    timeMax: nextDayUtc.toISOString(),
+    maxResults: MAX_MEETING_BRIEFING_EVENTS
+  });
+
+  const calendarEvents = Array.isArray(eventsResponse?.items) ? eventsResponse.items : [];
+  const metadataCache = new Map();
+  const accumulatedWarnings = [];
+  let subsetDetected = false;
+
+  const events = [];
+
+  for (const event of calendarEvents) {
+    const processed = await buildMeetingBriefingEntry({
+      event,
+      gmail,
+      googleSub,
+      timeWindowClause,
+      keywordHints,
+      metadataCache,
+      accumulatedWarnings
+    });
+
+    if (!processed) {
+      continue;
+    }
+
+    events.push(processed.entry);
+
+    if (processed.subset) {
+      subsetDetected = true;
+    }
+  }
+
+  return {
+    date: formatDateParts(targetDateParts),
+    lookbackDays: safeLookbackDays,
+    calendarId: safeCalendarId,
+    globalKeywordHintsUsed: keywordHints,
+    events,
+    subset: subsetDetected,
+    warnings: dedupeWarnings(accumulatedWarnings)
+  };
+}
+
+function normalizeBriefingDateParts(dateValue) {
+  if (dateValue === undefined || dateValue === null || dateValue === '') {
+    return getPragueDateParts(new Date());
+  }
+
+  if (typeof dateValue !== 'string') {
+    const error = new Error('date must be a string in YYYY-MM-DD format.');
+    error.statusCode = 400;
+    error.code = 'INVALID_PARAM';
+    throw error;
+  }
+
+  const trimmed = dateValue.trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
+    const error = new Error('date must use YYYY-MM-DD format.');
+    error.statusCode = 400;
+    error.code = 'INVALID_PARAM';
+    throw error;
+  }
+
+  const [yearStr, monthStr, dayStr] = trimmed.split('-');
+  const year = Number(yearStr);
+  const month = Number(monthStr);
+  const day = Number(dayStr);
+
+  if (!Number.isInteger(year) || !Number.isInteger(month) || !Number.isInteger(day)) {
+    const error = new Error('date must represent a valid calendar day.');
+    error.statusCode = 400;
+    error.code = 'INVALID_PARAM';
+    throw error;
+  }
+
+  const utcCandidate = new Date(Date.UTC(year, month - 1, day));
+  if (
+    utcCandidate.getUTCFullYear() !== year ||
+    utcCandidate.getUTCMonth() + 1 !== month ||
+    utcCandidate.getUTCDate() !== day
+  ) {
+    const error = new Error('date must represent a valid calendar day.');
+    error.statusCode = 400;
+    error.code = 'INVALID_PARAM';
+    throw error;
+  }
+
+  return { year, month, day };
+}
+
+function normalizeBriefingLookback(value) {
+  if (value === undefined || value === null || value === '') {
+    return 14;
+  }
+
+  const parsed = Number(value);
+  const asInteger = Number.isFinite(parsed) ? Math.floor(parsed) : NaN;
+
+  if (!Number.isFinite(asInteger) || asInteger < 1 || asInteger > 30) {
+    const error = new Error('lookbackDays must be an integer between 1 and 30.');
+    error.statusCode = 400;
+    error.code = 'INVALID_PARAM';
+    throw error;
+  }
+
+  return asInteger;
+}
+
+function normalizeBriefingCalendarId(calendarId) {
+  if (calendarId === undefined || calendarId === null) {
+    return 'primary';
+  }
+
+  const cleaned = cleanValue(calendarId);
+  return cleaned || 'primary';
+}
+
+function normalizeBriefingKeywordHints(hints) {
+  if (hints === undefined || hints === null) {
+    return [];
+  }
+
+  if (!Array.isArray(hints)) {
+    const error = new Error('globalKeywordHints must be an array of strings.');
+    error.statusCode = 400;
+    error.code = 'INVALID_PARAM';
+    throw error;
+  }
+
+  if (hints.length > 10) {
+    const error = new Error('globalKeywordHints may include at most 10 entries.');
+    error.statusCode = 400;
+    error.code = 'INVALID_PARAM';
+    throw error;
+  }
+
+  const normalized = [];
+  const seen = new Set();
+
+  for (const hint of hints) {
+    if (typeof hint !== 'string') {
+      const error = new Error('globalKeywordHints entries must be strings.');
+      error.statusCode = 400;
+      error.code = 'INVALID_PARAM';
+      throw error;
+    }
+
+    const trimmed = hint.trim();
+    if (trimmed.length === 0) {
+      const error = new Error('globalKeywordHints entries must not be empty.');
+      error.statusCode = 400;
+      error.code = 'INVALID_PARAM';
+      throw error;
+    }
+
+    if (trimmed.length > 80) {
+      const error = new Error('globalKeywordHints entries must be 80 characters or fewer.');
+      error.statusCode = 400;
+      error.code = 'INVALID_PARAM';
+      throw error;
+    }
+
+    const signature = trimmed.toLowerCase();
+    if (seen.has(signature)) {
+      continue;
+    }
+
+    seen.add(signature);
+    normalized.push(trimmed);
+  }
+
+  return normalized;
+}
+
+function formatDateParts(parts) {
+  const year = String(parts.year).padStart(4, '0');
+  const month = String(parts.month).padStart(2, '0');
+  const day = String(parts.day).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+async function buildMeetingBriefingEntry({ event, gmail, googleSub, timeWindowClause, keywordHints, metadataCache, accumulatedWarnings }) {
+  if (!event || typeof event !== 'object') {
+    return null;
+  }
+
+  const attendees = extractBriefingAttendees(event);
+  const autoKeywords = deriveBriefingAutoKeywords(event);
+  const eventWarnings = [];
+  let subset = false;
+
+  const entry = {
+    eventId: event.id || null,
+    title: cleanValue(event.summary) || '(No title)',
+    start: resolveBriefingEventInstant(event.start),
+    end: resolveBriefingEventInstant(event.end),
+    attendeesUsed: attendees,
+    keywordSources: {
+      auto: autoKeywords,
+      hints: keywordHints
+    },
+    searches: [],
+    relevantEmails: [],
+    possibleMatches: [],
+    notes: null
+  };
+
+  if (!entry.start && event?.start?.date) {
+    entry.start = `${event.start.date}T00:00:00.000Z`;
+  }
+
+  if (!entry.end && event?.end?.date) {
+    entry.end = `${event.end.date}T00:00:00.000Z`;
+  }
+
+  const descriptorCandidates = [];
+  for (const email of attendees) {
+    descriptorCandidates.push({ type: 'attendee', key: email });
+  }
+  for (const keyword of autoKeywords) {
+    descriptorCandidates.push({ type: 'keyword', key: keyword });
+  }
+  for (const hint of keywordHints) {
+    descriptorCandidates.push({ type: 'hint', key: hint });
+  }
+
+  if (attendees.length === 0) {
+    entry.notes = 'No attendee email addresses found; relying on keyword searches.';
+  }
+
+  if (descriptorCandidates.length === 0) {
+    entry.notes = entry.notes
+      ? `${entry.notes} No keywords or hints available for Gmail searches.`
+      : 'No attendees or keyword hints available; Gmail search skipped.';
+    return { entry, subset: false, warnings: eventWarnings };
+  }
+
+  const descriptorSet = new Set();
+  const normalizedAttendees = new Set(attendees.map(email => email.toLowerCase()));
+  const messageSummaries = new Map();
+
+  for (const descriptor of descriptorCandidates) {
+    if (entry.searches.length >= MAX_MEETING_BRIEFING_SEARCH_VARIANTS) {
+      subset = true;
+      break;
+    }
+
+    const signature = `${descriptor.type}:${descriptor.key.toLowerCase()}`;
+    if (descriptorSet.has(signature)) {
+      continue;
+    }
+    descriptorSet.add(signature);
+
+    const query = buildBriefingGmailQuery(timeWindowClause, descriptor);
+
+    try {
+      const searchResult = await gmail.searchEmails(googleSub, {
+        query,
+        maxResults: MAX_MEETING_BRIEFING_SEARCH_RESULTS
+      });
+
+      const matchedCount = normalizeBriefingSearchCount(searchResult);
+      entry.searches.push({
+        type: descriptor.type,
+        query,
+        matchedCount
+      });
+
+      if (
+        matchedCount > MAX_MEETING_BRIEFING_SEARCH_RESULTS ||
+        Boolean(searchResult?.nextPageToken)
+      ) {
+        subset = true;
+      }
+
+      const messages = Array.isArray(searchResult?.messages) ? searchResult.messages : [];
+      for (const messageRef of messages) {
+        if (!messageRef?.id) {
+          continue;
+        }
+
+        const metadata = await fetchBriefingMessageMetadata({
+          gmail,
+          googleSub,
+          messageId: messageRef.id,
+          cache: metadataCache,
+          warnings: eventWarnings
+        });
+
+        if (!metadata) {
+          continue;
+        }
+
+        const normalizedFrom = (metadata.fromEmail || '').toLowerCase();
+        const reasonDetails = determineBriefingReason({
+          descriptor,
+          normalizedFrom,
+          normalizedAttendees
+        });
+
+        recordBriefingMessage(messageSummaries, metadata, reasonDetails);
+      }
+    } catch (error) {
+      eventWarnings.push(`Gmail search failed for ${descriptor.type} "${descriptor.key}": ${error.message}`);
+    }
+  }
+
+  const finalized = finalizeBriefingMessages(messageSummaries);
+  entry.relevantEmails = finalized.relevant;
+  entry.possibleMatches = finalized.possible;
+
+  if (!entry.notes && finalized.relevant.length === 0 && finalized.possible.length === 0) {
+    entry.notes = 'No related emails found within the requested lookback window.';
+  }
+
+  accumulatedWarnings.push(...eventWarnings);
+
+  return { entry, subset, warnings: eventWarnings };
+}
+
+function extractBriefingAttendees(event) {
+  const attendees = [];
+  const seen = new Set();
+
+  const register = (candidate) => {
+    const value = cleanValue(candidate);
+    if (!value || !value.includes('@')) {
+      return;
+    }
+
+    const normalized = value.toLowerCase();
+    if (seen.has(normalized)) {
+      return;
+    }
+
+    seen.add(normalized);
+    attendees.push(value);
+  };
+
+  if (Array.isArray(event?.attendees)) {
+    for (const attendee of event.attendees) {
+      register(attendee?.email || attendee?.address);
+    }
+  }
+
+  if (event?.organizer?.email) {
+    register(event.organizer.email);
+  }
+
+  if (event?.creator?.email) {
+    register(event.creator.email);
+  }
+
+  return attendees.slice(0, 15);
+}
+
+function deriveBriefingAutoKeywords(event) {
+  const keywords = [];
+
+  const append = (value) => {
+    const sanitized = sanitizeBriefingKeywordCandidate(value);
+    if (!sanitized) {
+      return;
+    }
+
+    const normalized = sanitized.toLowerCase();
+    if (keywords.some(existing => existing.toLowerCase() === normalized)) {
+      return;
+    }
+
+    keywords.push(sanitized);
+  };
+
+  append(event?.summary);
+  append(event?.location);
+
+  if (typeof event?.description === 'string') {
+    const lines = event.description
+      .split(/\r?\n/u)
+      .map(line => line.trim())
+      .filter(Boolean);
+
+    for (const line of lines) {
+      append(line);
+      if (keywords.length >= MAX_MEETING_BRIEFING_AUTO_KEYWORDS) {
+        break;
+      }
+    }
+  }
+
+  return keywords.slice(0, MAX_MEETING_BRIEFING_AUTO_KEYWORDS);
+}
+
+function sanitizeBriefingKeywordCandidate(value) {
+  const trimmed = cleanValue(value);
+  if (!trimmed) {
+    return null;
+  }
+
+  const collapsed = trimmed.replace(/\s+/g, ' ');
+  if (collapsed.length < 3) {
+    return null;
+  }
+
+  if (collapsed.length > 80) {
+    return collapsed.slice(0, 80).trim();
+  }
+
+  return collapsed;
+}
+
+function resolveBriefingEventInstant(edge) {
+  if (!edge) {
+    return null;
+  }
+
+  if (edge.dateTime) {
+    return edge.dateTime;
+  }
+
+  if (edge.date) {
+    try {
+      const parts = normalizeBriefingDateParts(edge.date);
+      return getPragueMidnightUtc(parts).toISOString();
+    } catch (error) {
+      return `${edge.date}T00:00:00.000Z`;
+    }
+  }
+
+  return null;
+}
+
+function buildBriefingGmailQuery(timeWindowClause, descriptor) {
+  const parts = [timeWindowClause];
+
+  if (descriptor.type === 'attendee') {
+    parts.push(`from:${descriptor.key}`);
+  } else {
+    const sanitized = descriptor.key.replace(/["']/g, ' ').replace(/\s+/g, ' ').trim();
+    if (!sanitized) {
+      return timeWindowClause;
+    }
+
+    const quoted = `"${sanitized}"`;
+    if (descriptor.type === 'keyword') {
+      parts.push(`(${quoted} OR subject:${quoted})`);
+    } else {
+      parts.push(quoted);
+    }
+  }
+
+  return parts.join(' ').replace(/\s+/g, ' ').trim();
+}
+
+function normalizeBriefingSearchCount(result) {
+  if (Number.isFinite(result?.resultSizeEstimate)) {
+    return result.resultSizeEstimate;
+  }
+
+  if (Array.isArray(result?.messages)) {
+    return result.messages.length;
+  }
+
+  return 0;
+}
+
+async function fetchBriefingMessageMetadata({ gmail, googleSub, messageId, cache, warnings }) {
+  if (cache.has(messageId)) {
+    return cache.get(messageId);
+  }
+
+  try {
+    const metadata = await gmail.readEmail(googleSub, messageId, { format: 'metadata' });
+    cache.set(messageId, metadata);
+    return metadata;
+  } catch (error) {
+    warnings.push(`Failed to load Gmail message ${messageId}: ${error.message}`);
+    cache.set(messageId, null);
+    return null;
+  }
+}
+
+function determineBriefingReason({ descriptor, normalizedFrom, normalizedAttendees }) {
+  if (descriptor.type === 'attendee') {
+    return {
+      bucket: 'relevant',
+      reason: `attendeeMatch:${descriptor.key}`
+    };
+  }
+
+  if (normalizedAttendees.has(normalizedFrom)) {
+    const prefix = descriptor.type === 'hint' ? 'hintKeyword+attendee' : 'keyword+attendee';
+    return {
+      bucket: 'relevant',
+      reason: `${prefix}:${descriptor.key}`
+    };
+  }
+
+  const prefix = descriptor.type === 'hint' ? 'hintKeyword' : 'keyword';
+  return {
+    bucket: 'possible',
+    reason: `${prefix}:${descriptor.key}`
+  };
+}
+
+function recordBriefingMessage(messageSummaries, metadata, { bucket, reason }) {
+  if (!metadata?.id) {
+    return;
+  }
+
+  const existing = messageSummaries.get(metadata.id) || {
+    metadata,
+    reasons: [],
+    bucket: 'possible'
+  };
+
+  if (!existing.metadata && metadata) {
+    existing.metadata = metadata;
+  }
+
+  existing.reasons.push(reason);
+
+  if (bucket === 'relevant') {
+    existing.bucket = 'relevant';
+  }
+
+  messageSummaries.set(metadata.id, existing);
+}
+
+function finalizeBriefingMessages(messageSummaries) {
+  const relevant = [];
+  const possible = [];
+
+  for (const summary of messageSummaries.values()) {
+    if (!summary?.metadata) {
+      continue;
+    }
+
+    const payload = buildBriefingEmailEntry(summary.metadata, summary.reasons);
+    if (summary.bucket === 'relevant') {
+      relevant.push(payload);
+    } else {
+      possible.push(payload);
+    }
+  }
+
+  const sorter = (a, b) => {
+    const aTime = a.sentAt ? Date.parse(a.sentAt) : 0;
+    const bTime = b.sentAt ? Date.parse(b.sentAt) : 0;
+    return bTime - aTime;
+  };
+
+  relevant.sort(sorter);
+  possible.sort(sorter);
+
+  return { relevant, possible };
+}
+
+function buildBriefingEmailEntry(metadata, reasons = []) {
+  const reasonText = reasons.filter(Boolean).join('; ') || null;
+  const fromName = cleanValue(metadata?.fromName) || null;
+  const fromEmail = cleanValue(metadata?.fromEmail || metadata?.from) || null;
+  const links = metadata?.links || { thread: null, message: null };
+
+  return {
+    threadId: metadata?.threadId || null,
+    messageId: metadata?.id || null,
+    sentAt: metadata?.date || null,
+    from: {
+      name: fromName || null,
+      email: fromEmail || null
+    },
+    subject: metadata?.subject || '(No subject)',
+    reason: reasonText,
+    links
+  };
+}
+
+function dedupeWarnings(warnings) {
+  if (!Array.isArray(warnings) || warnings.length === 0) {
+    return [];
+  }
+
+  const seen = new Set();
+  const result = [];
+
+  for (const warning of warnings) {
+    const cleaned = cleanValue(warning);
+    if (!cleaned) {
+      continue;
+    }
+
+    const signature = cleaned.toLowerCase();
+    if (seen.has(signature)) {
+      continue;
+    }
+
+    seen.add(signature);
+    result.push(cleaned);
+  }
+
+  return result;
+}
+
 // ==================== CALENDAR MACROS ====================
 
 /**
@@ -2845,6 +3486,7 @@ const traced = wrapModuleFunctions('services.facadeService', {
   inboxSnippets,
   emailQuickRead,
   inboxUserUnansweredRequests,
+  meetingEmailsToday,
   calendarPlan,
   calendarSchedule,
   completeCalendarScheduleEnrichment,
@@ -2860,6 +3502,7 @@ const {
   inboxSnippets: tracedInboxSnippets,
   emailQuickRead: tracedEmailQuickRead,
   inboxUserUnansweredRequests: tracedInboxUserUnansweredRequests,
+  meetingEmailsToday: tracedMeetingEmailsToday,
   calendarPlan: tracedCalendarPlan,
   calendarSchedule: tracedCalendarSchedule,
   completeCalendarScheduleEnrichment: tracedCompleteCalendarScheduleEnrichment,
@@ -2875,6 +3518,7 @@ export {
   tracedInboxSnippets as inboxSnippets,
   tracedEmailQuickRead as emailQuickRead,
   tracedInboxUserUnansweredRequests as inboxUserUnansweredRequests,
+  tracedMeetingEmailsToday as meetingEmailsToday,
   tracedCalendarPlan as calendarPlan,
   tracedCalendarSchedule as calendarSchedule,
   tracedCompleteCalendarScheduleEnrichment as completeCalendarScheduleEnrichment,

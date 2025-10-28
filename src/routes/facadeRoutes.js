@@ -37,6 +37,12 @@ router.post('/macros/inbox/userunanswered', facadeController.macroInboxUserUnans
 // Email Macros
 router.post('/macros/email/quickRead', facadeController.macroEmailQuickRead);
 
+// Briefing Macros
+router.post(
+  '/macros/briefings/meetingEmailsToday',
+  facadeController.macroBriefingsMeetingEmailsToday
+);
+
 // Calendar Macros
 router.post('/macros/calendar/plan', facadeController.macroCalendarPlan);
 router.post('/macros/calendar/schedule', facadeController.macroCalendarSchedule);
