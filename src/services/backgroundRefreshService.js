@@ -9,8 +9,9 @@ import { wrapModuleFunctions } from '../utils/advancedDebugging.js';
 
 let refreshInterval = null;
 const REFRESH_CONCURRENCY = Math.max(1, parseInt(process.env.TOKEN_REFRESH_CONCURRENCY || '3', 10));
-const STARTUP_REFRESH_THRESHOLD_MS = parseInt(process.env.STARTUP_REFRESH_THRESHOLD_MS || '') || (60 * 60 * 1000);
-const BACKGROUND_REFRESH_THRESHOLD_MS = parseInt(process.env.BACKGROUND_REFRESH_THRESHOLD_MS || '') || (2 * 60 * 60 * 1000);
+const TEN_MINUTES_MS = 10 * 60 * 1000;
+const STARTUP_REFRESH_THRESHOLD_MS = parseInt(process.env.STARTUP_REFRESH_THRESHOLD_MS || '') || TEN_MINUTES_MS;
+const BACKGROUND_REFRESH_THRESHOLD_MS = parseInt(process.env.BACKGROUND_REFRESH_THRESHOLD_MS || '') || TEN_MINUTES_MS;
 
 function determineExpiryDate(newTokens) {
   if (newTokens.expiry_date) {
@@ -93,7 +94,9 @@ async function refreshSingleUser(rawUserDoc, options = {}) {
     await updateTokens(googleSub, {
       accessToken: newTokens.access_token,
       refreshToken: newTokens.refresh_token || userData.refreshToken,
-      expiryDate
+      expiryDate,
+      email,
+      source: reason ? `refresh:${reason}` : 'refresh:background'
     });
 
     await clearRefreshFailure(googleSub);
