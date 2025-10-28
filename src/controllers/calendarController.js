@@ -81,17 +81,17 @@ async function createEvent(req, res) {
 
       if (typeof value === 'string') {
         // Normalize time - will add timeZone field if no timezone specified
-        return normalizeCalendarTime(value);
+        return normalizeCalendarTime(value, fallbackTimeZone);
       }
 
       if (value.dateTime) {
         // Normalize time - will add timeZone field if no timezone specified
-        return normalizeCalendarTime(value.dateTime);
+        return normalizeCalendarTime(value.dateTime, value.timeZone || fallbackTimeZone);
       }
 
       if (value.date) {
         // All-day events
-        return { date: value.date, timeZone: REFERENCE_TIMEZONE };
+        return { date: value.date, timeZone: value.timeZone || fallbackTimeZone };
       }
 
       throw new Error(`Invalid ${label} payload. Expected ISO string or {dateTime/date}`);
@@ -475,18 +475,24 @@ async function updateEvent(req, res) {
     // Normalize time fields if present
     if (updates.start) {
       if (typeof updates.start === 'string') {
-        updates.start = normalizeCalendarTime(updates.start);
+        updates.start = normalizeCalendarTime(updates.start, REFERENCE_TIMEZONE);
       } else if (updates.start.dateTime) {
-        const normalized = normalizeCalendarTime(updates.start.dateTime);
+        const normalized = normalizeCalendarTime(
+          updates.start.dateTime,
+          updates.start.timeZone
+        );
         updates.start = { ...updates.start, ...normalized };
       }
     }
 
     if (updates.end) {
       if (typeof updates.end === 'string') {
-        updates.end = normalizeCalendarTime(updates.end);
+        updates.end = normalizeCalendarTime(updates.end, REFERENCE_TIMEZONE);
       } else if (updates.end.dateTime) {
-        const normalized = normalizeCalendarTime(updates.end.dateTime);
+        const normalized = normalizeCalendarTime(
+          updates.end.dateTime,
+          updates.end.timeZone
+        );
         updates.end = { ...updates.end, ...normalized };
       }
     }

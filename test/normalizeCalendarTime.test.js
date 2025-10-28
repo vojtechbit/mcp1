@@ -12,50 +12,45 @@ process.env.NODE_ENV = 'test';
 
 const { normalizeCalendarTime } = await import('../src/utils/helpers.js');
 
-describe('normalizeCalendarTime - UTC conversion approach', () => {
-  it('converts Prague time to UTC (THE FIX)', () => {
+describe('normalizeCalendarTime - retain wall-clock time', () => {
+  it('keeps Prague local time when no timezone provided', () => {
     // User wants 23:00 Prague time
     const input = '2025-10-28T23:00:00';
     const result = normalizeCalendarTime(input);
 
-    // Should convert to UTC: 23:00 Prague (winter = UTC+1) = 22:00 UTC
     assert.deepEqual(result, {
-      dateTime: '2025-10-28T22:00:00.000Z'
+      dateTime: '2025-10-28T23:00:00',
+      timeZone: 'Europe/Prague'
     });
-
-    console.log('✅ Correct approach: Convert Prague time to UTC');
-    console.log('   Result: 22:00 UTC = 23:00 Prague (winter time)');
   });
 
-  it('normalizes UTC times', () => {
+  it('strips trailing Z suffix and keeps wall time', () => {
     const input = '2025-10-28T22:00:00Z';
     const result = normalizeCalendarTime(input);
 
-    // UTC times are normalized
     assert.deepEqual(result, {
-      dateTime: '2025-10-28T22:00:00.000Z'
+      dateTime: '2025-10-28T22:00:00',
+      timeZone: 'Europe/Prague'
     });
   });
 
-  it('strips offset and converts to UTC (safer approach)', () => {
+  it('strips offset and keeps requested wall time', () => {
     const input = '2025-10-28T23:00:00+01:00';
     const result = normalizeCalendarTime(input);
 
-    // Strip offset, interpret as Prague time, convert to UTC
-    // 23:00 Prague (winter = UTC+1) = 22:00 UTC
     assert.deepEqual(result, {
-      dateTime: '2025-10-28T22:00:00.000Z'
+      dateTime: '2025-10-28T23:00:00',
+      timeZone: 'Europe/Prague'
     });
   });
 
-  it('handles summer time correctly (demonstrates DST awareness)', () => {
-    // July 27 is summer time (CEST = UTC+2)
-    const input = '2025-07-27T23:00:00';
+  it('preserves fractional seconds when present', () => {
+    const input = '2025-07-27T23:00:00.250';
     const result = normalizeCalendarTime(input);
 
-    // Convert to UTC: 23:00 Prague (summer = UTC+2) = 21:00 UTC
     assert.deepEqual(result, {
-      dateTime: '2025-07-27T21:00:00.000Z'
+      dateTime: '2025-07-27T23:00:00.250',
+      timeZone: 'Europe/Prague'
     });
   });
 });
