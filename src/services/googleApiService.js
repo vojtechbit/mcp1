@@ -6,6 +6,7 @@ import { isBlocked } from '../utils/attachmentSecurity.js';
 import { getPragueOffsetHours } from '../utils/helpers.js';
 import { REFERENCE_TIMEZONE } from '../config/limits.js';
 import { debugStep, wrapModuleFunctions } from '../utils/advancedDebugging.js';
+import { logDuration, startTimer } from '../utils/performanceLogger.js';
 import dotenv from 'dotenv';
 import {
   UNREPLIED_LABEL_NAME,
@@ -61,13 +62,25 @@ async function getAuthenticatedClient(googleSub, forceRefresh = false) {
  */
 async function handleGoogleApiCall(googleSub, apiCall, retryCount = 0) {
   const MAX_RETRIES = 2;
-  
+  const callTimer = startTimer();
+
   try {
-    return await apiCall();
+    const result = await apiCall();
+    logDuration('google.apiCall', callTimer, {
+      googleSub,
+      retry: retryCount
+    });
+    return result;
   } catch (error) {
-    const is401 = error.code === 401 || 
-                  error.response?.status === 401 || 
-                  error.message?.includes('Login Required') || 
+    logDuration('google.apiCall', callTimer, {
+      googleSub,
+      retry: retryCount,
+      status: 'error',
+      error: error?.code || error?.response?.status || error?.message?.slice(0, 120) || 'unknown'
+    });
+    const is401 = error.code === 401 ||
+                  error.response?.status === 401 ||
+                  error.message?.includes('Login Required') ||
                   error.message?.includes('Invalid Credentials') ||
                   error.message?.includes('invalid_grant');
     
@@ -105,6 +118,11 @@ async function handleGoogleApiCall(googleSub, apiCall, retryCount = 0) {
  * Get valid access token (auto-refresh if expired)
  */
 async function getValidAccessToken(googleSub, forceRefresh = false) {
+  const overallTimer = startTimer();
+  let refreshed = false;
+  let status = 'success';
+  let lastError;
+
   try {
     debugStep('Resolving valid access token', { googleSub, forceRefresh });
     const user = await getUserByGoogleSub(googleSub);
@@ -114,7 +132,7 @@ async function getValidAccessToken(googleSub, forceRefresh = false) {
       throw new Error('User not found in database');
     }
 
-    updateLastUsed(googleSub).catch(err => 
+    updateLastUsed(googleSub).catch(err =>
       console.error('Failed to update last_used:', err.message)
     );
 
@@ -130,7 +148,10 @@ async function getValidAccessToken(googleSub, forceRefresh = false) {
         expiry: user.tokenExpiry
       });
       if (activeRefreshes.has(googleSub)) {
+        const waitTimer = startTimer();
         await activeRefreshes.get(googleSub);
+        logDuration('google.tokenRefresh.waitForExisting', waitTimer, { googleSub });
+        refreshed = true;
         const updatedUser = await getUserByGoogleSub(googleSub);
         debugStep('Awaited existing refresh promise', { googleSub });
         return updatedUser.accessToken;
@@ -139,8 +160,10 @@ async function getValidAccessToken(googleSub, forceRefresh = false) {
       const refreshPromise = (async () => {
         try {
           debugStep('Refreshing access token with Google', { googleSub });
+          const refreshTimer = startTimer();
           const newTokens = await refreshAccessToken(user.refreshToken);
-          
+          logDuration('google.refreshAccessToken', refreshTimer, { googleSub });
+
           let expiryDate;
           const expiryValue = newTokens.expiry_date || 3600;
           if (expiryValue > 86400) {
@@ -148,7 +171,7 @@ async function getValidAccessToken(googleSub, forceRefresh = false) {
           } else {
             expiryDate = new Date(Date.now() + (expiryValue * 1000));
           }
-          
+
           await updateTokens(googleSub, {
             accessToken: newTokens.access_token,
             refreshToken: newTokens.refresh_token || user.refreshToken,
@@ -157,6 +180,7 @@ async function getValidAccessToken(googleSub, forceRefresh = false) {
 
           console.log('✅ Access token refreshed successfully');
           debugStep('Stored refreshed tokens', { googleSub, expiryDate });
+          refreshed = true;
           return newTokens.access_token;
         } catch (refreshError) {
           debugStep('Refresh token request failed', {
@@ -181,7 +205,17 @@ async function getValidAccessToken(googleSub, forceRefresh = false) {
     return user.accessToken;
   } catch (error) {
     console.error('❌ [TOKEN_ERROR] Failed to get valid access token:', error.message);
+    status = 'error';
+    lastError = error;
     throw error;
+  } finally {
+    logDuration('google.getValidAccessToken', overallTimer, {
+      googleSub,
+      forceRefresh,
+      refreshed,
+      status,
+      error: lastError?.message?.slice(0, 120)
+    });
   }
 }
 
