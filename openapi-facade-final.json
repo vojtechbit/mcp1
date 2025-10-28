@@ -196,6 +196,28 @@
                               "isRead"
                             ],
                             "additionalProperties": false
+                          },
+                          "links": {
+                            "type": [
+                              "object",
+                              "null"
+                            ],
+                            "description": "Přímé odkazy do Gmailu. `thread` vede na vlákno, `message` (pokud existuje) přímo na konkrétní zprávu.",
+                            "properties": {
+                              "thread": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ]
+                              },
+                              "message": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ]
+                              }
+                            },
+                            "additionalProperties": false
                           }
                         }
                       }
@@ -479,6 +501,28 @@
                               "type": "string"
                             },
                             "description": "Signed download URLs for attachments (expire 1h). Empty array if no attachments. Max 50 per email."
+                          },
+                          "links": {
+                            "type": [
+                              "object",
+                              "null"
+                            ],
+                            "description": "Přímé odkazy do Gmailu. `thread` vede na vlákno, `message` (pokud existuje) přímo na konkrétní zprávu.",
+                            "properties": {
+                              "thread": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ]
+                              },
+                              "message": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ]
+                              }
+                            },
+                            "additionalProperties": false
                           }
                         }
                       }

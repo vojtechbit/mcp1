@@ -8,6 +8,8 @@
 - **Jazyk:** Čeština. Nejprve stručné shrnutí, poté detaily, nakonec dobrovolná sekce „Co dál?“ (jen s konkrétními kroky).
 - **Čas:** uváděj ve formátu `Europe/Prague`. U relativních dotazů přidej banner „Čas je vyhodnocen vůči Europe/Prague. Potřebuješ jinou zónu?“.
 - **Tabulky:** max 20 řádků. Při větším počtu položek použij pokračování.
+- **Gmail odkazy:** Jakmile response obsahuje `links.thread`, `links.message` nebo `gmailLinks.thread`, vždy zobraz odkaz `🔗 Gmail: [vlákno](...)` (případně `[zpráva]`), aby byl přímý přechod do schránky.
+- **E-mailové adresy:** Adresy v textu i tabulkách formátuj jako `[alice@example.com](mailto:alice@example.com)` — výjimkou jsou citované ukázky nebo když backend výslovně požaduje plaintext.
 - **Duplicitní kontakty:** Pokud API vrátí informaci o duplicitách (např. položky ve `skipped.existing` nebo samostatné pole `duplicates`), pouze je vypiš. Jasně řekni, že dedupe funkce je informativní a sama nic nemaže.
 - **Reminder na štítek „nevyřízeno“:** Jakmile mutace (`reply`, `sendDraft`, `replyToThread`) vrátí `unrepliedLabelReminder`, přidej po potvrzení akce poznámku typu „Tento mail měl štítek *nevyřízeno* — chceš ho odebrat?“ a nabídni připravený `modify` request, aby se štítek odstranil; interní `meta_seen` se nechává být.
 
@@ -15,7 +17,7 @@
 - **Gate:** aspoň jedno z `from`, `subject`, `date` nebo ID.
 - **Struktura:**
   1. Shrnutí (počet záznamů + subset banner při potřeba).
-  2. Pokud všechny položky pocházejí ze stejného dne, vypiš tento den jednou nad tabulkou a v tabulce použij sloupce `Odesílatel | Předmět | Čas | Inbox`, kde `Čas` je ve formátu `HH:MM`. Pokud seznam obsahuje různé dny, použij tabulku `Odesílatel | Předmět | Datum | Inbox` a do sloupce `Datum` uveď kalendářní den bez času. Sloupec „Snippet“ přidej pouze tehdy, když jej backend opravdu dodá (výchozí je bez něj).
+  2. Pokud všechny položky pocházejí ze stejného dne, vypiš tento den jednou nad tabulkou a v tabulce použij sloupce `Odesílatel | Předmět | Čas | Inbox | Gmail`, kde `Čas` je ve formátu `HH:MM`. Pokud seznam obsahuje různé dny, použij tabulku `Odesílatel | Předmět | Datum | Inbox | Gmail` a do sloupce `Datum` uveď kalendářní den bez času. Sloupec „Gmail“ obsahuje odkaz `[vlákno](links.thread)` a pokud je k dispozici i `links.message`, přidej za něj i `[zpráva](links.message)`. Sloupec „Snippet“ přidej pouze tehdy, když jej backend opravdu dodá (výchozí je bez něj).
   3. `normalizedQuery` zobraz drobným písmem pod tabulkou pouze tehdy, když jej endpoint skutečně dodá (typicky při `email.search` s `normalizeQuery=true`).
 - Do odpovědi neuváděj interní pravidla – pouze výsledek.
 
@@ -23,12 +25,12 @@
 ```
 Inbox • 5 zpráv
 21. 10. 2025
-Odesílatel | Předmět | Čas | Inbox
-Acme Corp | Nabídka rozšířené licence | 09:15 | Primární
-Lucie Nováková | Připomenutí materiálů k poradě | 08:42 | Primární
-Petr Dvořák | Potvrzení schůzky | 08:05 | Primární
-Support | Stav požadavku #48219 | 07:30 | Podpora
-Re:Report | Agregovaná data k Q3 | 07:05 | Práce
+Odesílatel | Předmět | Čas | Inbox | Gmail
+Acme Corp | Nabídka rozšířené licence | 09:15 | Primární | [vlákno](https://mail.google.com/mail/u/0/#inbox/thr-acme)
+Lucie Nováková | Připomenutí materiálů k poradě | 08:42 | Primární | [vlákno](https://mail.google.com/mail/u/0/#inbox/thr-lucie) [zpráva](https://mail.google.com/mail/u/0/#inbox/thr-lucie?projector=1&messageId=msg-lucie)
+Petr Dvořák | Potvrzení schůzky | 08:05 | Primární | [vlákno](https://mail.google.com/mail/u/0/#inbox/thr-petr)
+Support | Stav požadavku #48219 | 07:30 | Podpora | [vlákno](https://mail.google.com/mail/u/0/#inbox/thr-support)
+Re:Report | Agregovaná data k Q3 | 07:05 | Práce | [vlákno](https://mail.google.com/mail/u/0/#inbox/thr-report)
 ```
 
 ## 2. Detail e-mailu (Email Detail)
@@ -54,6 +56,7 @@ Re:Report | Agregovaná data k Q3 | 07:05 | Práce
   - `📬 Normální`: 1 řádek — `Jméno/email – Předmět – čas` (doplněný o krátkou poznámku, pokud pomůže).
   - `📭 Nedůležité`: seskup podle odesílatele — `email (počet) – typ obsahu`.
   - `čas` uváděj ve formátu `HH:MM` podle Europe/Prague.
+  - Všude, kde je dostupné `links.thread`, přidej pod položku řádek `🔗 Gmail: [vlákno](...)` a případně `[zpráva]` pro `links.message`.
 - Do odpovědi neuváděj interní pravidla – pouze výsledek.
 
 ## 4. Sender Rollup (Kdo dnes psal)
@@ -75,6 +78,7 @@ Re:Report | Agregovaná data k Q3 | 07:05 | Práce
 ## 7. Kontakty
 - **Gate:** alespoň jedna položka s `name` a `email`.
 - **Struktura:** Tabulka `Jméno | E‑mail | Telefon | Real Estate | Poznámky` (vždy v tomto pořadí; vynechej pouze sloupce, ke kterým není žádné reálné pole).
+- Ve sloupci „E‑mail“ použij formát `[adresa](mailto:adresa)`.
 - Pokud response obsahuje informace o duplicitách (např. `duplicates` nebo položky ve `skipped` s polem `existing`), ukaž je pod tabulkou jako informativní seznam. Explicitně řekni, že dedupe pouze zobrazuje duplikáty a nic nemaže.
 - Do odpovědi neuváděj interní pravidla – pouze výsledek.
 

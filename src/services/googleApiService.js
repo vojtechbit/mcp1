@@ -1086,7 +1086,8 @@ async function getEmailPreview(googleSub, messageId, options = {}) {
       labelIds: data.labelIds || [],
       snippet: data.snippet || '',
       internalDate: data.internalDate,
-      payload
+      payload,
+      links: generateGmailLinks(data.threadId, messageId)
     };
   });
 }

@@ -60,7 +60,8 @@ describe('inboxSnippets attachment handling', () => {
       subject: 'Mixed attachments',
       date: '2024-01-01T00:00:00Z',
       labelIds: ['INBOX'],
-      snippet: 'metadata snippet'
+      snippet: 'metadata snippet',
+      threadId: 'thr-1'
     }));
 
     getEmailPreviewMock.mock.mockImplementation(async () => ({
@@ -91,6 +92,11 @@ describe('inboxSnippets attachment handling', () => {
     assert.deepEqual(item.attachmentUrls.length, 1);
     assert.match(item.attachmentUrls[0], /\/msg-1\/att-1\/download/);
 
+    assert.deepEqual(item.links, {
+      thread: 'https://mail.google.com/mail/u/0/#inbox/thr-1',
+      message: 'https://mail.google.com/mail/u/0/#inbox/thr-1?projector=1&messageId=msg-1'
+    });
+
     assert.ok(Array.isArray(item.attachmentSecurityWarnings));
     assert.equal(item.attachmentSecurityWarnings.length, 2);
     assert.match(item.attachmentSecurityWarnings[0], /does not guarantee file safety/);
@@ -112,7 +118,8 @@ describe('inboxSnippets attachment handling', () => {
       subject: 'Dangerous attachment',
       date: '2024-01-02T00:00:00Z',
       labelIds: ['INBOX'],
-      snippet: 'metadata snippet'
+      snippet: 'metadata snippet',
+      threadId: 'thr-danger'
     }));
 
     getEmailPreviewMock.mock.mockImplementation(async () => ({
