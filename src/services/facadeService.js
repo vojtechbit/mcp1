@@ -998,6 +998,7 @@ async function calendarSchedule(googleSub, params) {
       title: event.summary,
       start: event.start.dateTime || event.start.date,
       end: event.end.dateTime || event.end.date,
+      htmlLink: event.htmlLink || null,
       status: 'upcoming',
       locationText: event.location || null,
       mapUrl: event.location ? generateMapsUrl(event.location) : null,
@@ -1094,6 +1095,7 @@ async function completeCalendarScheduleEnrichment(
       title: event.summary,
       start: event.start.dateTime || event.start.date,
       end: event.end.dateTime || event.end.date,
+      htmlLink: event.htmlLink || null,
       status: 'upcoming',
       attendees: (event.attendees || []).map(a => ({
         name: a.displayName || null,
