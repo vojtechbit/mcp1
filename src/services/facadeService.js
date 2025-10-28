@@ -662,6 +662,7 @@ async function inboxUserUnansweredRequests(googleSub, params = {}) {
       googleSub,
       gmail,
       targetLabel: labelRecommendation.existingLabel,
+      trackingLabel: trackingLabelRecommendation.existingLabel,
       unreadBucket: unreadResult,
       readBucket: readResult
     });
@@ -2111,7 +2112,7 @@ async function collectUnansweredThreads({
   };
 }
 
-async function autoApplyWatchlistLabels({ googleSub, gmail, targetLabel, unreadBucket, readBucket }) {
+async function autoApplyWatchlistLabels({ googleSub, gmail, targetLabel, trackingLabel, unreadBucket, readBucket }) {
   if (!targetLabel?.id || !gmail?.modifyMessageLabels) {
     return;
   }
@@ -2143,10 +2144,15 @@ async function autoApplyWatchlistLabels({ googleSub, gmail, targetLabel, unreadB
 
       let applied = false;
 
+      const addIds = [targetLabel.id];
+      if (trackingLabel?.id && !addIds.includes(trackingLabel.id)) {
+        addIds.push(trackingLabel.id);
+      }
+
       for (const messageId of uniqueIds) {
         try {
           await gmail.modifyMessageLabels(googleSub, messageId, {
-            add: [targetLabel.id],
+            add: addIds,
             remove: []
           });
           processedIds.add(messageId);
@@ -2158,7 +2164,9 @@ async function autoApplyWatchlistLabels({ googleSub, gmail, targetLabel, unreadB
 
       if (applied) {
         item.labelApplied = true;
-        item.trackingLabelApplied = true;
+        if (trackingLabel?.id) {
+          item.trackingLabelApplied = true;
+        }
         if (item.label) {
           item.label.alreadyApplied = true;
           item.label.suggestedId ||= targetLabel.id;
