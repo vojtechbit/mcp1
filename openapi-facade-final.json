@@ -602,15 +602,15 @@
     "/macros/inbox/userunanswered": {
       "post": {
         "operationId": "macroInboxUserUnanswered",
-        "summary": "Find conversations awaiting your reply",
-        "description": "Lists inbox threads where the other participant replied last so you can follow up. Scans today's Primary inbox by default, grouping unread and read conversations, and highlights the 'nevyřízeno' follow-up label plus the internal 'meta_seen' tracker.",
+        "summary": "Find inbox conversations awaiting your reply",
+        "description": "Lists inbox threads awaiting your reply. Defaults to today's Primary inbox with unread/read buckets, auto-applies the 'nevyřízeno' plus internal 'meta_seen' labels, and exposes candidateMessageIds for checks. Use timeRange/timeWindow for longer spans or autoAddLabels=false for a read-only view.",
         "requestBody": {
           "required": false,
           "content": {
             "application/json": {
               "schema": {
                 "type": "object",
-                "description": "Adjust includeUnread/includeRead to control which buckets appear. Default strictNoReply=true limits the report to threads without any reply from you; set false if the user wants to review conversations they have replied to before but where the other side has the latest word. Unless overridden the macro scans today's Primary inbox only (primaryOnly=true, implicit timeRange=today).",
+                "description": "Adjust includeUnread/includeRead to control which buckets appear. Default strictNoReply=true limits the report to threads without any reply from you; set false if the user wants to review conversations they have replied to before but where the other side has the latest word. Unless overridden the macro scans today's Primary inbox (primaryOnly=true with an implicit timeRange=today) and automatically labels passing conversations; set autoAddLabels=false to return a read-only list.",
                 "properties": {
                   "includeUnread": {
                     "type": "boolean",
@@ -629,9 +629,16 @@
                     "default": 20,
                     "description": "Maximum threads to return per bucket (unread/read). Increase if user wants a longer watchlist."
                   },
+                  "timeWindow": {
+                    "type": "string",
+                    "enum": [
+                      "today"
+                    ],
+                    "description": "Shortcut for the default same-day view. Pass 'today' to explicitly clamp the search to the current day (equivalent to timeRange.relative='today'). When omitted, the macro behaves as if 'today' was requested but you can still expand the window via timeRange."
+                  },
                   "timeRange": {
                     "type": "object",
-                    "description": "Optional Gmail time filter. Use relative keywords for quick ranges (today, last7d, etc.).",
+                    "description": "Optional Gmail time filter. Use relative keywords for quick ranges (today, last7d, etc.). Provide this to review older unanswered inbound conversations or future custom spans.",
                     "properties": {
                       "relative": {
                         "type": "string",
@@ -679,11 +686,16 @@
                   "labelName": {
                     "type": "string",
                     "default": "nevyřízeno",
-                    "description": "Preferred label name GPT should suggest for follow-ups. Defaults to 'nevyřízeno'."
+                    "description": "Preferred label name GPT should suggest for the unanswered watchlist. Defaults to 'nevyřízeno'."
                   },
                   "labelColor": {
                     "type": "string",
-                    "description": "Optional hex color (e.g. '#d93025') to suggest when creating the follow-up label."
+                    "description": "Optional hex color (e.g. '#d93025') to suggest when creating the unanswered watchlist label."
+                  },
+                  "autoAddLabels": {
+                    "type": "boolean",
+                    "default": true,
+                    "description": "true (default)=auto-create and apply the watchlist labels ('nevyřízeno' + 'meta_seen') to each returned conversation. false=skip auto labeling and only return the report."
                   },
                   "query": {
                     "type": "string",
@@ -693,7 +705,7 @@
               },
               "examples": {
                 "defaultWatch": {
-                  "summary": "Default follow-up watchlist",
+                  "summary": "Default unanswered watchlist (today)",
                   "value": {
                     "strictNoReply": true
                   }
@@ -729,7 +741,7 @@
                         "readCount": { "type": "integer" },
                         "strictMode": { "type": "boolean" },
                         "timeRangeApplied": { "type": "boolean", "description": "true when any time filter (including the default 'today') was applied." },
-                        "timeRangeSource": { "type": ["string", "null"], "description": "'default_today' when the macro auto-limited to today; otherwise null or custom hint." },
+                        "timeRangeSource": { "type": ["string", "null"], "description": "'default_today' when the macro auto-limited to today; 'timeWindow_today' if the client explicitly passed timeWindow='today'; otherwise null or a custom hint." },
                         "timeWindow": {
                           "type": ["object", "null"],
                           "description": "Resolved time window expressed in Europe/Prague timezone.",
@@ -758,7 +770,7 @@
                     },
                     "labelRecommendation": {
                       "type": "object",
-                      "description": "Suggested label metadata to help GPT offer follow-up tagging (user-facing 'nevyřízeno').",
+                      "description": "Suggested label metadata to help GPT offer unanswered-watchlist tagging (user-facing 'nevyřízeno').",
                       "properties": {
                         "suggestedName": { "type": "string" },
                         "suggestedColor": { "type": "string" },
@@ -2661,6 +2673,13 @@
                           "lastMessageId": {
                             "type": "string"
                           },
+                          "candidateMessageIds": {
+                            "type": "array",
+                            "description": "All Gmail message IDs in the thread that are safe to label for follow-up tracking.",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
                           "recipients": {
                             "type": "object",
                             "properties": {
@@ -2866,6 +2885,40 @@
                               "thread": { "type": ["string", "null"] },
                               "message": { "type": ["string", "null"] }
                             }
+                          }
+                        }
+                      }
+                    },
+                    "labelRecommendation": {
+                      "type": "object",
+                      "description": "Suggested label metadata to help GPT mark sent follow-up threads (default name 'followup').",
+                      "properties": {
+                        "suggestedName": { "type": "string" },
+                        "suggestedColor": { "type": "string" },
+                        "textColor": { "type": "string" },
+                        "existingLabel": {
+                          "type": ["object", "null"],
+                          "properties": {
+                            "id": { "type": "string" },
+                            "name": { "type": "string" },
+                            "color": { "type": ["string", "null"] }
+                          }
+                        },
+                        "canCreate": { "type": "boolean" },
+                        "createRequest": {
+                          "type": ["object", "null"],
+                          "description": "Pre-filled request body to create the follow-up label if it doesn't exist.",
+                          "properties": {
+                            "op": { "type": "string" },
+                            "params": { "type": "object" }
+                          }
+                        },
+                        "applyRequestTemplate": {
+                          "type": ["object", "null"],
+                          "description": "Template for applying the label to a specific Gmail message. Replace <messageId> before calling /rpc/gmail.",
+                          "properties": {
+                            "op": { "type": "string" },
+                            "params": { "type": "object" }
                           }
                         }
                       }
@@ -4184,6 +4237,11 @@
               "properties": {
                 "threadId": { "type": "string" },
                 "messageId": { "type": "string" },
+                "candidateMessageIds": {
+                  "type": "array",
+                  "description": "All Gmail message IDs within the thread that appear in the watchlist label diagnostics (latest incoming message plus related drafts), useful for confirming which messages already carry or need the suggested tag.",
+                  "items": { "type": "string" }
+                },
                 "subject": { "type": "string" },
                 "sender": {
                   "type": "object",

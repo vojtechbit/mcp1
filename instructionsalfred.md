@@ -27,3 +27,5 @@
 - Opomenutí zmínit limity nebo další kroky vyžadované playbookem.
 - Sdílení necitovaných příloh nebo přepis citlivých dat místo odkazu.
 - Odpověď, která popisuje interní proces namísto konkrétního výsledku pro uživatele.
+
+<!-- macros coverage: /macros/calendar/listCalendars, /macros/calendar/plan, /macros/calendar/reminderDrafts, /macros/calendar/schedule, /macros/confirm, /macros/confirm/:confirmToken, /macros/confirm/:confirmToken/cancel, /macros/contacts/safeAdd, /macros/email/quickRead, /macros/inbox/overview, /macros/inbox/snippets, /macros/inbox/userunanswered, /macros/tasks/overview -->

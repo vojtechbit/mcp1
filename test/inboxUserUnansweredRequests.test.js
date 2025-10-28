@@ -13,15 +13,21 @@ process.env.NODE_ENV = 'test';
 const { inboxUserUnansweredRequests } = await import('../src/services/facadeService.js');
 
 describe('inboxUserUnansweredRequests', () => {
-  it('applies default filters and aggregates summary based on collect stubs', async () => {
+  it('auto-creates missing labels and applies them by default', async () => {
     const labels = [
-      { id: 'Label_tracking', name: 'meta_seen', type: 'user', color: null },
-      { id: 'Label_misc', name: 'Random label', type: 'user', color: null }
+      { id: 'Label_tracking', name: 'meta_seen', type: 'user', color: null }
     ];
 
     const gmailMocks = {
       listLabels: mock.fn(async () => labels),
-      getUserAddresses: mock.fn(async () => ['user@example.com'])
+      getUserAddresses: mock.fn(async () => ['user@example.com']),
+      createLabel: mock.fn(async () => ({
+        id: 'Label_unreplied',
+        name: 'nevyřízeno',
+        color: '#d93025',
+        textColor: '#ffffff'
+      })),
+      modifyMessageLabels: mock.fn(async () => ({ success: true }))
     };
 
     const databaseMocks = {
@@ -30,30 +36,28 @@ describe('inboxUserUnansweredRequests', () => {
 
     const unreadBucket = {
       items: [
-        { threadId: 't-unread-1', labelApplied: true, trackingLabelApplied: false },
-        { threadId: 't-unread-2', labelApplied: false, trackingLabelApplied: true }
-      ],
-      subset: false,
-      nextPageToken: null,
-      scanned: 4,
-      overflowCount: 1,
-      skippedReasons: {
-        userReplyPresent: 1,
-        trackingLabelPresent: 2
-      }
-    };
-
-    const readBucket = {
-      items: [
-        { threadId: 't-read-1', labelApplied: false, trackingLabelApplied: false }
+        {
+          threadId: 't-unread-1',
+          messageId: 'm-last',
+          candidateMessageIds: ['m-last', 'm-draft'],
+          labelApplied: false,
+          trackingLabelApplied: false
+        }
       ],
       subset: false,
       nextPageToken: null,
       scanned: 2,
       overflowCount: 0,
-      skippedReasons: {
-        trackingLabelPresent: 1
-      }
+      skippedReasons: {}
+    };
+
+    const readBucket = {
+      items: [],
+      subset: false,
+      nextPageToken: null,
+      scanned: 0,
+      overflowCount: 0,
+      skippedReasons: {}
     };
 
     const collectStub = mock.fn(async (options) => {
@@ -79,13 +83,16 @@ describe('inboxUserUnansweredRequests', () => {
       collectStub.mock.calls[0].arguments[0].baseQuery.includes('category:primary'),
       'baseQuery should constrain to Primary category by default'
     );
-    assert.equal(result.summary.unreadCount, unreadBucket.items.length);
+    assert.equal(gmailMocks.createLabel.mock.calls.length, 1);
+    assert.equal(gmailMocks.modifyMessageLabels.mock.calls.length, 2);
     assert.equal(result.summary.labelAlreadyApplied, 1);
-    assert.equal(result.summary.trackingLabelMissing, false);
-    assert.equal(result.labelRecommendation.missingLabel, true);
+    assert.equal(result.summary.trackingLabelAlreadyApplied, 1);
+    assert.equal(result.summary.missingLabel, false);
+    assert.equal(result.unread.items[0].labelApplied, true);
+    assert.equal(result.unread.items[0].trackingLabelApplied, true);
   });
 
-  it('respects provided labelName when evaluating missingLabel state', async () => {
+  it('respects autoAddLabels=false and custom label names', async () => {
     const labels = [
       {
         id: 'Label_custom',
@@ -98,7 +105,8 @@ describe('inboxUserUnansweredRequests', () => {
 
     const gmailMocks = {
       listLabels: mock.fn(async () => labels),
-      getUserAddresses: mock.fn(async () => [])
+      getUserAddresses: mock.fn(async () => []),
+      modifyMessageLabels: mock.fn(async () => ({ success: true }))
     };
 
     const databaseMocks = {
@@ -107,16 +115,22 @@ describe('inboxUserUnansweredRequests', () => {
 
     const bucket = {
       items: [
-        { threadId: 't-single', labelApplied: false, trackingLabelApplied: false }
+        {
+          threadId: 't-single',
+          messageId: 'm-single',
+          candidateMessageIds: ['m-single'],
+          labelApplied: false,
+          trackingLabelApplied: false
+        }
       ],
       subset: false,
       nextPageToken: null,
       scanned: 1,
       overflowCount: 0,
-      skippedReasons: {}
+      skippedReasons: { userReplyPresent: 1 }
     };
 
-    const collectStub = mock.fn(async (options) => bucket);
+    const collectStub = mock.fn(async () => bucket);
 
     globalThis.__facadeMocks = {
       gmailService: gmailMocks,
@@ -125,11 +139,14 @@ describe('inboxUserUnansweredRequests', () => {
     };
 
     const result = await inboxUserUnansweredRequests('test-google-sub', {
-      labelName: 'Team Follow Up'
+      labelName: 'Team Follow Up',
+      autoAddLabels: false
     });
 
+    assert.equal(gmailMocks.modifyMessageLabels.mock.calls.length, 0);
     assert.equal(result.labelRecommendation.missingLabel, false);
     assert.ok(result.labelRecommendation.existingLabel, 'existing label metadata should be present');
     assert.equal(result.summary.missingLabel, false);
+    assert.equal(result.unread.items[0].labelApplied, false);
   });
 });

@@ -470,13 +470,15 @@ async function inboxUserUnansweredRequests(googleSub, params = {}) {
     includeRead = true,
     maxItems = 20,
     timeRange = null,
+    timeWindow: timeWindowParam = null,
     strictNoReply = true,
     unreadPageToken,
     readPageToken,
     labelName = UNREPLIED_LABEL_NAME,
     labelColor,
     query: additionalQuery,
-    primaryOnly = true
+    primaryOnly = true,
+    autoAddLabels = true
   } = params;
 
   const includeUnreadFinal = includeUnread !== false;
@@ -489,13 +491,18 @@ async function inboxUserUnansweredRequests(googleSub, params = {}) {
 
   let effectiveTimeRange = timeRange;
   let usingDefaultTimeRange = false;
+  let explicitTimeWindowSource = null;
+  if (timeWindowParam === 'today') {
+    effectiveTimeRange = { relative: 'today' };
+    explicitTimeWindowSource = 'timeWindow_today';
+  }
   if (!effectiveTimeRange) {
     effectiveTimeRange = { relative: 'today' };
     usingDefaultTimeRange = true;
   }
 
   const timeFilters = buildTimeFilterClauses(effectiveTimeRange);
-  const timeWindow = describeTimeFilters(timeFilters);
+  const timeWindowResolved = describeTimeFilters(timeFilters);
   const primaryOnlyFinal = primaryOnly !== false;
 
   const baseQueryParts = ['in:inbox', '-from:me'];
@@ -529,10 +536,12 @@ async function inboxUserUnansweredRequests(googleSub, params = {}) {
     TRACKING_LABEL_DEFAULTS.color
   );
 
-  const baseLabelRecommendation = buildLabelRecommendation(
+  const watchlistLabelColor = normalizeWatchlistLabelColor(labelColor);
+
+  let baseLabelRecommendation = buildLabelRecommendation(
     labels,
     normalizedLabelName,
-    labelColor || UNREPLIED_LABEL_DEFAULTS.color,
+    watchlistLabelColor,
     {
       extraLabelIds: trackingLabelRecommendation.existingLabel
         ? [trackingLabelRecommendation.existingLabel.id]
@@ -540,12 +549,79 @@ async function inboxUserUnansweredRequests(googleSub, params = {}) {
     }
   );
 
-  const labelRecommendation = {
+  let labelRecommendation = {
     ...baseLabelRecommendation,
     missingLabel: !baseLabelRecommendation.existingLabel
   };
 
-  const labelMatch = labelRecommendation.existingLabel
+  if (autoAddLabels !== false && !labelRecommendation.existingLabel) {
+    try {
+      const createdLabel = await gmail.createLabel(googleSub, {
+        name: normalizedLabelName,
+        color: watchlistLabelColor,
+        labelListVisibility: 'labelShow',
+        messageListVisibility: 'show'
+      });
+
+      if (createdLabel?.id) {
+        const appliedIds = [createdLabel.id];
+        if (trackingLabelRecommendation.existingLabel?.id) {
+          appliedIds.push(trackingLabelRecommendation.existingLabel.id);
+        }
+
+        const createdLabelMetadata = {
+          id: createdLabel.id,
+          name: createdLabel.name,
+          color: createdLabel.color
+            ? {
+                backgroundColor: createdLabel.color,
+                textColor: createdLabel.textColor || null
+              }
+            : null
+        };
+
+        labels.push({
+          id: createdLabel.id,
+          name: createdLabel.name,
+          type: 'user',
+          color: createdLabelMetadata.color
+        });
+
+        baseLabelRecommendation = buildLabelRecommendation(
+          labels,
+          normalizedLabelName,
+          watchlistLabelColor,
+          {
+            extraLabelIds: trackingLabelRecommendation.existingLabel
+              ? [trackingLabelRecommendation.existingLabel.id]
+              : []
+          }
+        );
+
+        labelRecommendation = {
+          ...baseLabelRecommendation,
+          existingLabel: createdLabelMetadata,
+          canCreate: false,
+          createRequest: null,
+          applyRequestTemplate: {
+            op: 'labels',
+            params: {
+              modify: {
+                messageId: '<messageId>',
+                add: appliedIds,
+                remove: []
+              }
+            }
+          },
+          missingLabel: false
+        };
+      }
+    } catch (creationError) {
+      console.warn('⚠️ Unable to auto-create watchlist label:', creationError.message);
+    }
+  }
+
+  let labelMatch = labelRecommendation.existingLabel
     ? labels.find(label => label.id === labelRecommendation.existingLabel.id)
     : null;
 
@@ -581,6 +657,24 @@ async function inboxUserUnansweredRequests(googleSub, params = {}) {
     ? await collectThreads({ ...searchOptions, querySuffix: '-is:unread', pageToken: readPageToken })
     : createEmptyUnansweredBucket();
 
+  if (autoAddLabels !== false) {
+    await autoApplyWatchlistLabels({
+      googleSub,
+      gmail,
+      targetLabel: labelRecommendation.existingLabel,
+      unreadBucket: unreadResult,
+      readBucket: readResult
+    });
+
+    // Refresh label match reference if it was missing earlier but now created.
+    if (!labelMatch && labelRecommendation.existingLabel) {
+      labelMatch = {
+        id: labelRecommendation.existingLabel.id,
+        name: labelRecommendation.existingLabel.name
+      };
+    }
+  }
+
   const labelAppliedCount = unreadResult.items.filter(item => item.labelApplied).length
     + readResult.items.filter(item => item.labelApplied).length;
   const trackingLabelAppliedCount = unreadResult.items.filter(item => item.trackingLabelApplied).length
@@ -594,8 +688,8 @@ async function inboxUserUnansweredRequests(googleSub, params = {}) {
     readCount: readResult.items.length,
     strictMode: strictNoReply !== false,
     timeRangeApplied: Boolean(timeFilters.after || timeFilters.before),
-    timeRangeSource: usingDefaultTimeRange ? 'default_today' : null,
-    timeWindow,
+    timeRangeSource: explicitTimeWindowSource || (usingDefaultTimeRange ? 'default_today' : null),
+    timeWindow: timeWindowResolved,
     primaryOnly: primaryOnlyFinal,
     scannedMessages: unreadResult.scanned + readResult.scanned,
     overflowCount: unreadResult.overflowCount + readResult.overflowCount,
@@ -1861,6 +1955,8 @@ function createEmptyUnansweredBucket() {
   };
 }
 
+const TRACKED_WATCHLIST_SKIP_REASONS = new Set(['userReplyPresent', 'trackingLabelPresent']);
+
 function buildTimeFilterClauses(timeRange) {
   if (!timeRange) {
     return {};
@@ -1971,7 +2067,7 @@ async function collectUnansweredThreads({
       });
 
       if (!evaluation.awaiting) {
-        if (evaluation.reason) {
+        if (evaluation.reason && TRACKED_WATCHLIST_SKIP_REASONS.has(evaluation.reason)) {
           skippedReasons[evaluation.reason] = (skippedReasons[evaluation.reason] || 0) + 1;
         }
         continue;
@@ -2013,6 +2109,70 @@ async function collectUnansweredThreads({
     overflowCount,
     skippedReasons
   };
+}
+
+async function autoApplyWatchlistLabels({ googleSub, gmail, targetLabel, unreadBucket, readBucket }) {
+  if (!targetLabel?.id || !gmail?.modifyMessageLabels) {
+    return;
+  }
+
+  const processedIds = new Set();
+  const buckets = [unreadBucket, readBucket].filter(Boolean);
+
+  for (const bucket of buckets) {
+    if (!bucket || !Array.isArray(bucket.items)) {
+      continue;
+    }
+
+    for (const item of bucket.items) {
+      if (!item || item.labelApplied) {
+        continue;
+      }
+
+      const candidateIds = Array.isArray(item.candidateMessageIds) && item.candidateMessageIds.length > 0
+        ? item.candidateMessageIds
+        : (item.messageId ? [item.messageId] : []);
+
+      const uniqueIds = candidateIds
+        .map(value => (typeof value === 'string' ? value.trim() : ''))
+        .filter(value => value.length > 0 && !processedIds.has(value));
+
+      if (uniqueIds.length === 0) {
+        continue;
+      }
+
+      let applied = false;
+
+      for (const messageId of uniqueIds) {
+        try {
+          await gmail.modifyMessageLabels(googleSub, messageId, {
+            add: [targetLabel.id],
+            remove: []
+          });
+          processedIds.add(messageId);
+          applied = true;
+        } catch (modError) {
+          console.warn(`⚠️ Unable to auto-apply watchlist label on message ${messageId}:`, modError.message);
+        }
+      }
+
+      if (applied) {
+        item.labelApplied = true;
+        item.trackingLabelApplied = true;
+        if (item.label) {
+          item.label.alreadyApplied = true;
+          item.label.suggestedId ||= targetLabel.id;
+          item.label.suggestedName ||= targetLabel.name;
+        } else {
+          item.label = {
+            suggestedId: targetLabel.id,
+            suggestedName: targetLabel.name,
+            alreadyApplied: true
+          };
+        }
+      }
+    }
+  }
 }
 
 function evaluateThreadForUnanswered(thread, { normalizedAddresses, strictNoReply, labelMatch, trackingLabelMatch }) {
@@ -2084,9 +2244,16 @@ function evaluateThreadForUnanswered(thread, { normalizedAddresses, strictNoRepl
   const readSourceLabels = lastIncoming.raw.labelIds?.length ? lastIncoming.raw.labelIds : thread.labelIds || [];
   const readState = buildReadStateFromLabels(readSourceLabels);
 
+  const candidateMessageIds = Array.from(new Set(
+    messages
+      .map(msg => (typeof msg.id === 'string' ? msg.id : null))
+      .filter(id => typeof id === 'string' && id.length > 0)
+  ));
+
   const item = {
     threadId: thread.threadId,
     messageId: lastIncoming.raw.id,
+    candidateMessageIds,
     subject: lastIncoming.raw.subject || '(bez předmětu)',
     sender: {
       name: lastIncoming.raw.from?.name || null,
@@ -2221,6 +2388,33 @@ function buildLabelRecommendation(labels = [], targetName, preferredColor, optio
           }
         }
       : null
+  };
+}
+
+function normalizeWatchlistLabelColor(preference) {
+  const fallback = UNREPLIED_LABEL_DEFAULTS.color || { backgroundColor: '#d93025', textColor: '#ffffff' };
+
+  if (typeof preference === 'string' && preference.trim().startsWith('#')) {
+    return {
+      backgroundColor: preference.trim(),
+      textColor: fallback.textColor || '#ffffff'
+    };
+  }
+
+  if (preference && typeof preference === 'object') {
+    const backgroundColor = typeof preference.backgroundColor === 'string' && preference.backgroundColor.trim().startsWith('#')
+      ? preference.backgroundColor.trim()
+      : fallback.backgroundColor || '#d93025';
+    const textColor = typeof preference.textColor === 'string' && preference.textColor.trim().length > 0
+      ? preference.textColor.trim()
+      : fallback.textColor || '#ffffff';
+
+    return { backgroundColor, textColor };
+  }
+
+  return {
+    backgroundColor: fallback.backgroundColor || '#d93025',
+    textColor: fallback.textColor || '#ffffff'
   };
 }
 
