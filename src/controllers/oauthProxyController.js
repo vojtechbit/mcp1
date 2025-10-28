@@ -299,14 +299,35 @@ async function token(req, res) {
       });
     }
 
-    // Validate and consume authorization code
-    const googleSub = await validateAndConsumeAuthCode(code);
+    if (!redirect_uri) {
+      console.error('❌ Missing redirect_uri in token request');
+      return res.status(400).json({
+        error: 'invalid_request',
+        error_description: 'Missing redirect_uri'
+      });
+    }
 
-    if (!googleSub) {
+    // Validate and consume authorization code
+    const authFlow = await validateAndConsumeAuthCode(code);
+
+    if (!authFlow) {
       console.error('❌ Invalid or expired authorization code');
       return res.status(400).json({
         error: 'invalid_grant',
         error_description: 'Invalid, expired, or already used authorization code'
+      });
+    }
+
+    const { googleSub, chatgptRedirectUri } = authFlow;
+
+    if (chatgptRedirectUri !== redirect_uri) {
+      console.error('❌ redirect_uri mismatch for authorization code', {
+        expectedRedirectUri: chatgptRedirectUri,
+        providedRedirectUri: redirect_uri
+      });
+      return res.status(400).json({
+        error: 'invalid_grant',
+        error_description: 'redirect_uri does not match original authorization request'
       });
     }
 
