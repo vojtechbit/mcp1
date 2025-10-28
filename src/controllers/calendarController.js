@@ -261,6 +261,7 @@ async function listEvents(req, res) {
         let pagesConsumed = 0;
         let hasMore = false;
         let partial = false;
+        let truncated = false;
 
         while (true) {
           const result = await calendarService.listCalendarEvents(req.user.googleSub, {
@@ -274,28 +275,41 @@ async function listEvents(req, res) {
           const items = result.items || [];
           allItems = allItems.concat(items);
           pagesConsumed++;
+          const nextPageToken = result.nextPageToken;
+          const hasNextPage = Boolean(nextPageToken);
+          const exceededCap = allItems.length > AGGREGATE_CAP_CAL;
+          const reachedCap = allItems.length >= AGGREGATE_CAP_CAL;
           debugStep('Fetched aggregate page', {
             pagesConsumed,
             itemsFetched: items.length,
             totalAccumulated: allItems.length,
-            hasNextPage: Boolean(result.nextPageToken)
+            hasNextPage
           });
 
           // Check if we hit the cap
-          if (allItems.length >= AGGREGATE_CAP_CAL) {
-            hasMore = true;
-            partial = true;
-            allItems = allItems.slice(0, AGGREGATE_CAP_CAL);
+          if (reachedCap) {
+            const hasAdditionalResults = hasNextPage;
+            if (exceededCap) {
+              allItems = allItems.slice(0, AGGREGATE_CAP_CAL);
+              truncated = true;
+            }
+            hasMore = hasAdditionalResults;
+            partial = hasAdditionalResults;
+            truncated = truncated || hasAdditionalResults;
             debugStep('Aggregate cap reached', {
               cap: AGGREGATE_CAP_CAL,
-              trimmedTo: allItems.length
+              trimmedTo: allItems.length,
+              exceededCap,
+              hasNextPage,
+              truncated,
+              canContinue: hasAdditionalResults
             });
             break;
           }
 
           // Check if there are more pages
-          if (result.nextPageToken) {
-            currentPageToken = result.nextPageToken;
+          if (hasNextPage) {
+            currentPageToken = nextPageToken;
           } else {
             hasMore = false;
             debugStep('No additional pages available', { pagesConsumed });
@@ -313,7 +327,8 @@ async function listEvents(req, res) {
           totalItems: allItems.length,
           pagesConsumed,
           hasMore,
-          partial
+          partial,
+          truncated
         });
 
         const response = {
@@ -323,6 +338,7 @@ async function listEvents(req, res) {
           pagesConsumed,
           hasMore,
           partial,
+          truncated,
           snapshotToken: newSnapshotToken
         };
 
