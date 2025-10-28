@@ -933,8 +933,18 @@ async function calendarSchedule(googleSub, params) {
     ? timeSlot.timeZone.trim()
     : REFERENCE_TIMEZONE;
 
-  const normalizedStart = normalizeCalendarTime(timeSlot.start, slotTimeZone);
-  const normalizedEnd = normalizeCalendarTime(timeSlot.end, slotTimeZone);
+  let normalizedStart;
+  let normalizedEnd;
+
+  try {
+    normalizedStart = normalizeCalendarTime(timeSlot.start, slotTimeZone);
+    normalizedEnd = normalizeCalendarTime(timeSlot.end, slotTimeZone);
+  } catch (error) {
+    const invalidTimeError = new Error('Invalid time slot provided');
+    invalidTimeError.statusCode = 400;
+    invalidTimeError.cause = error;
+    throw invalidTimeError;
+  }
 
   if (!normalizedStart || !normalizedEnd) {
     const invalidTimeError = new Error('Invalid time slot provided');
@@ -1069,8 +1079,18 @@ async function completeCalendarScheduleEnrichment(
       ? updatedEventData.when.timeZone.trim()
       : REFERENCE_TIMEZONE;
 
-  const normalizedStart = normalizeCalendarTime(updatedEventData.when.start, confirmTimeZone);
-  const normalizedEnd = normalizeCalendarTime(updatedEventData.when.end, confirmTimeZone);
+  let normalizedStart;
+  let normalizedEnd;
+
+  try {
+    normalizedStart = normalizeCalendarTime(updatedEventData.when.start, confirmTimeZone);
+    normalizedEnd = normalizeCalendarTime(updatedEventData.when.end, confirmTimeZone);
+  } catch (error) {
+    const invalidTimeError = new Error('Invalid time slot provided');
+    invalidTimeError.statusCode = 400;
+    invalidTimeError.cause = error;
+    throw invalidTimeError;
+  }
 
   if (!normalizedStart || !normalizedEnd) {
     const invalidTimeError = new Error('Invalid time slot provided');
