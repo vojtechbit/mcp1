@@ -18,7 +18,8 @@ import {
   getPragueOffsetHours,
   getPragueMidnightUtc,
   addPragueDays,
-  getPragueDateParts
+  getPragueDateParts,
+  normalizeCalendarTime
 } from '../utils/helpers.js';
 import { REFERENCE_TIMEZONE } from '../config/limits.js';
 import { processAttachments } from '../utils/attachmentSecurity.js';
@@ -928,16 +929,23 @@ async function calendarSchedule(googleSub, params) {
 
   // ========== STEP 4: Create event (with or without enrichment) ==========
 
+  const slotTimeZone = typeof timeSlot.timeZone === 'string' && timeSlot.timeZone.trim()
+    ? timeSlot.timeZone.trim()
+    : REFERENCE_TIMEZONE;
+
+  const normalizedStart = normalizeCalendarTime(timeSlot.start, slotTimeZone);
+  const normalizedEnd = normalizeCalendarTime(timeSlot.end, slotTimeZone);
+
+  if (!normalizedStart || !normalizedEnd) {
+    const invalidTimeError = new Error('Invalid time slot provided');
+    invalidTimeError.statusCode = 400;
+    throw invalidTimeError;
+  }
+
   const eventData = {
     summary: title,
-    start: {
-      dateTime: timeSlot.start,
-      timeZone: 'Europe/Prague'
-    },
-    end: {
-      dateTime: timeSlot.end,
-      timeZone: 'Europe/Prague'
-    },
+    start: normalizedStart,
+    end: normalizedEnd,
     attendees: attendees.map(a => {
       const attendeeObj = { email: a.email };
       if (a.name) attendeeObj.displayName = a.name;
@@ -1056,16 +1064,24 @@ async function completeCalendarScheduleEnrichment(
   }
 
   // Create event
+  const confirmTimeZone = typeof updatedEventData.when?.timeZone === 'string'
+    && updatedEventData.when.timeZone.trim().length > 0
+      ? updatedEventData.when.timeZone.trim()
+      : REFERENCE_TIMEZONE;
+
+  const normalizedStart = normalizeCalendarTime(updatedEventData.when.start, confirmTimeZone);
+  const normalizedEnd = normalizeCalendarTime(updatedEventData.when.end, confirmTimeZone);
+
+  if (!normalizedStart || !normalizedEnd) {
+    const invalidTimeError = new Error('Invalid time slot provided');
+    invalidTimeError.statusCode = 400;
+    throw invalidTimeError;
+  }
+
   const event = await calendarService.createCalendarEvent(googleSub, {
     summary: updatedEventData.title,
-    start: {
-      dateTime: updatedEventData.when.start,
-      timeZone: 'Europe/Prague'
-    },
-    end: {
-      dateTime: updatedEventData.when.end,
-      timeZone: 'Europe/Prague'
-    },
+    start: normalizedStart,
+    end: normalizedEnd,
     attendees: (updatedEventData.attendees || []).map(a => ({
       email: a.email,
       displayName: a.name

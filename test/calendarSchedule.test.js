@@ -119,8 +119,8 @@ describe('calendarSchedule macro', () => {
       return {
         id: 'evt-789',
         summary: 'Team Sync',
-        start: { dateTime: proposals[0].start },
-        end: { dateTime: proposals[0].end },
+        start: { dateTime: '2025-05-01T15:00:00+02:00' },
+        end: { dateTime: '2025-05-01T16:00:00+02:00' },
         attendees: [
           { email: 'alice@example.com', displayName: 'Alice' },
           { email: 'bob@example.com' }
@@ -150,6 +150,16 @@ describe('calendarSchedule macro', () => {
 
     assert.ok(capturedEventData, 'event payload should be provided');
     assert.deepEqual(
+      capturedEventData.start,
+      { dateTime: '2025-05-01T13:00:00', timeZone: 'Europe/Prague' },
+      'start time normalized to Prague wall clock'
+    );
+    assert.deepEqual(
+      capturedEventData.end,
+      { dateTime: '2025-05-01T14:00:00', timeZone: 'Europe/Prague' },
+      'end time normalized to Prague wall clock'
+    );
+    assert.deepEqual(
       capturedEventData.attendees,
       [
         { email: 'alice@example.com', displayName: 'Alice' },
@@ -171,8 +181,16 @@ describe('calendarSchedule macro', () => {
 
     assert.equal(result.event.eventId, 'evt-789', 'event identifier should match stubbed response');
     assert.equal(result.event.title, 'Team Sync', 'title should bubble through');
-    assert.equal(result.event.start, proposals[0].start, 'start time preserved');
-    assert.equal(result.event.end, proposals[0].end, 'end time preserved');
+    assert.equal(
+      result.event.start,
+      '2025-05-01T15:00:00+02:00',
+      'start time sourced from Google response'
+    );
+    assert.equal(
+      result.event.end,
+      '2025-05-01T16:00:00+02:00',
+      'end time sourced from Google response'
+    );
     assert.equal(result.event.status, 'upcoming', 'status normalized');
     assert.equal(result.event.locationText, 'HQ Meeting Room', 'location propagated');
     assert.ok(
@@ -190,5 +208,49 @@ describe('calendarSchedule macro', () => {
     );
     assert.equal(result.confirmToken, null, 'no confirmation necessary');
     assert.deepEqual(result.warnings, [], 'no enrichment warnings expected');
+  });
+
+  it('normalizes GPT-provided DST offsets before creating the event', async () => {
+    const createCalendarEvent = mock.fn(async () => ({
+      id: 'evt-dst-fix',
+      summary: 'DST Check',
+      start: { dateTime: '2025-10-28T13:00:00+01:00' },
+      end: { dateTime: '2025-10-28T13:30:00+01:00' },
+      attendees: []
+    }));
+
+    globalThis.__facadeMocks = {
+      calendarService: {
+        checkConflicts: mock.fn(async () => []),
+        createCalendarEvent
+      }
+    };
+
+    await calendarSchedule('user-sub', {
+      title: 'DST Fix',
+      when: {
+        fixed: {
+          start: '2025-10-28T13:00:00+02:00',
+          end: '2025-10-28T13:30:00+02:00'
+        }
+      },
+      attendees: [],
+      reminders: [],
+      enrichFromContacts: 'off'
+    });
+
+    assert.equal(createCalendarEvent.mock.callCount(), 1, 'event should be created once');
+    const [, eventData] = createCalendarEvent.mock.calls[0].arguments;
+
+    assert.deepEqual(
+      eventData.start,
+      { dateTime: '2025-10-28T13:00:00', timeZone: 'Europe/Prague' },
+      'start time should keep Prague wall clock regardless of provided offset'
+    );
+    assert.deepEqual(
+      eventData.end,
+      { dateTime: '2025-10-28T13:30:00', timeZone: 'Europe/Prague' },
+      'end time should keep Prague wall clock regardless of provided offset'
+    );
   });
 });
