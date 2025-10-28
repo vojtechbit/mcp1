@@ -13,6 +13,7 @@ import oauthProxyRoutes from './routes/oauthProxyRoutes.js';
 import privacyRoutes from './routes/privacyRoutes.js';
 import debugRoutes from './routes/debugRoutes.js';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler.js';
+import { initializeIdempotencyIndexes } from './middleware/idempotencyMiddleware.js';
 
 // Load environment variables FIRST (before importing limits)
 dotenv.config();
@@ -175,6 +176,13 @@ async function startServer() {
     console.log('🔄 Connecting to MongoDB...');
     await connectToDatabase();
     console.log('✅ MongoDB connected successfully');
+
+    try {
+      await initializeIdempotencyIndexes();
+      console.log('✅ Idempotency indexes initialized');
+    } catch (indexError) {
+      console.error('⚠️  Failed to initialize idempotency indexes:', indexError.message);
+    }
 
     // Refresh all tokens on startup to avoid serving expired credentials
     try {
