@@ -276,6 +276,7 @@ async function inboxOverview(googleSub, params = {}) {
     const fromEmail = extractEmail(fromHeader);
     const fromName = extractSenderName(fromHeader);
     const readState = buildReadStateFromLabels(msg.labelIds);
+    const links = msg.links || buildGmailLinks(msg.threadId, msg.id);
 
     return {
       messageId: msg.id,
@@ -285,7 +286,8 @@ async function inboxOverview(googleSub, params = {}) {
       receivedAt: msg.date || null,
       inboxCategory: classifyEmailCategory(msg),
       snippet: msg.snippet || '',
-      readState
+      readState,
+      links
     };
   });
   

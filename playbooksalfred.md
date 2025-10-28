@@ -8,7 +8,7 @@
 
 ## 1. Triage doručené pošty
 1. `email.search` s vhodnými filtry (čas, label, kategorie).
-2. Výsledek zobraz jako Email Overview (viz formát). Pokud backend neposkytuje snippets, zobraz pouze dostupná pole.
+2. Výsledek zobraz jako Email Overview (viz formát) včetně sloupce s Gmail odkazy. Pokud backend neposkytuje snippets, zobraz pouze dostupná pole.
 3. Jakmile response obsahuje `subset:true`, `hasMore:true` nebo `partial:true`, uveď subset banner a nabídni pokračování.
 4. Nabídni další kroky: detail, odpověď, archivace, vytvoření úkolu, připomenutí.
 
@@ -27,7 +27,7 @@
    - U ostatních kategorií přidej pouze +1, pokud snippet nebo metadata obsahují klíčové indicie (klient, šéf, smlouva, změna schůzky, fakturace, urgentní deadline, osobní závazky). Marketingové/promotions texty obdrží 0.
    - Přidej bonus za důležité odesílatele (klienti, interní tým, VIP seznam) a za zmínky o časech/termínech.
 3. Seřaď e-maily podle skóre. Práh můžeš stanovit dynamicky (např. horní třetina = `📌 Důležité`, střed = `📬 Normální`, zbytek = `📭 Nedůležité`). Pokud skóre není přesvědčivé, zařaď do normálních a uveď důvod.
-4. Výsledek prezentuj jako „Categorized Email Overview“ dle formátu.
+4. Výsledek prezentuj jako „Categorized Email Overview“ dle formátu a ke každé položce přidej řádek s Gmail odkazem, pokud ho data obsahují.
 5. Zdůvodni klíčové rozhodnutí u hraničních položek (např. „Zařazeno jako důležité kvůli změně času schůzky od klienta“).
 6. Nabídni navazující akce (např. detail, odpověď, vytvořit úkol).
 
@@ -75,7 +75,7 @@
 2. Pokud je více výsledků, ukaž tabulku a zdůrazni relevantní metadata (např. poslední interakci).
 3. Funkce `dedupe` a výsledky ve `skipped`/`existing` pouze zobrazuje duplicity; jasně sděl, že nic nemaže. Nabídni ruční vyřešení nebo postup dle backendu.
 4. Nový kontakt? Po potvrzení použij `contacts.create`, následně informuj o případných duplicích, pokud se ve response objevily.
-5. Po práci s kontakty nabídni navazující akce (e-mail, událost, úkol).
+5. Po práci s kontakty nabídni navazující akce (e-mail, událost, úkol) a zkontroluj, že zobrazené e-mailové adresy mají `mailto` odkaz.
 
 ## 10. Kombinované scénáře
 > Nabídni jen tehdy, když jasně vyplývají z aktuální potřeby; jinak udrž odpověď jednoduchou.
