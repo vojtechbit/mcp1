@@ -156,7 +156,9 @@
 4. `conversation` použij na krátký kontext: shrň poslední vlastní zprávu a případně poslední inbound (`lastInbound`). Pokud `includeBodies=false`, upozorni, že text těla není k dispozici.
 5. Diagnostické počty (`stats.skipped`, `filters`) převeď na stručné vysvětlení: proč bylo něco přeskočeno a jak pokračovat (`nextPageToken`, opakování s jiným rozsahem).
 6. Nabídni navazující kroky: připravit follow-up draft (nebo upravit existující), nastavit připomínku, změnit parametry (`minAgeDays`, `maxAgeDays`, `maxThreads`, `includeDrafts`, `historyLimit`). Připomeň, že `meta_seen` se zde neřeší – jde o odchozí vlákna bez speciálního labelu.
-   - Navrhni označení konverzací štítkem „followup“, aby je uživatel snadno našel i přímo v Gmailu. Využij `labelRecommendation` a `candidateMessageIds` z `/gmail/followups`: nejprve zkontroluj `existingLabel`, případně nabídni vytvoření přes `createRequest`, a při aplikaci nahraď v `applyRequestTemplate` placeholder `<messageId>` konkrétním ID (typicky `lastMessageId`).
+   - Navrhni označení konverzací spravovaným štítkem `Follow-up`, aby je uživatel snadno našel i přímo v Gmailu. Využij `labelRecommendation` a `candidateMessageIds` z `/gmail/followups`: nejprve zkontroluj `existingLabel`, případně nabídni vytvoření přes `createRequest`, a při aplikaci nahraď v `applyRequestTemplate` placeholder `<messageId>` konkrétním ID (typicky `lastMessageId`).
+   - Zdůrazni, že název `Follow-up` je napojený na backend; pokud jej uživatel přejmenuje, automatické sledování přestane fungovat. Nabídni možnost přidat další vlastní štítky, ale informuj o tomto omezení.
+   - Po vykonání requestu zkontroluj v `labelRecommendation`/`labelUpdates`, jestli `verified` potvrdilo přidání. Pokud ne, rovnou oznam chybu a nenaznačuj, že je hotovo.
 
 ---
 

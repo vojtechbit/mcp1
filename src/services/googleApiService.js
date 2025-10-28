@@ -2706,36 +2706,172 @@ async function createLabel(googleSub, options = {}) {
 /**
  * Modify labels on a message
  */
+function normalizeLabelIdArray(ids = []) {
+  return Array.isArray(ids)
+    ? ids
+        .map(id => (typeof id === 'string' ? id.trim() : ''))
+        .filter(id => id.length > 0)
+    : [];
+}
+
+function evaluateLabelMutationSnapshot(snapshotLabelIds, { addIds = [], removeIds = [] } = {}) {
+  const normalizedAdd = normalizeLabelIdArray(addIds);
+  const normalizedRemove = normalizeLabelIdArray(removeIds);
+  const normalizedSnapshot = Array.isArray(snapshotLabelIds)
+    ? snapshotLabelIds.filter(id => typeof id === 'string' && id.length > 0)
+    : null;
+
+  if (!normalizedSnapshot) {
+    return {
+      ok: normalizedAdd.length === 0 && normalizedRemove.length === 0,
+      verified: false,
+      labelIds: null,
+      missingAdd: normalizedAdd,
+      remainingRemove: normalizedRemove
+    };
+  }
+
+  const snapshotSet = new Set(normalizedSnapshot);
+  const missingAdd = normalizedAdd.filter(id => !snapshotSet.has(id));
+  const remainingRemove = normalizedRemove.filter(id => snapshotSet.has(id));
+
+  return {
+    ok: missingAdd.length === 0 && remainingRemove.length === 0,
+    verified: true,
+    labelIds: normalizedSnapshot,
+    missingAdd,
+    remainingRemove
+  };
+}
+
+function extractLabelIdsFromThreadSnapshot(threadData) {
+  if (!threadData) {
+    return null;
+  }
+
+  if (Array.isArray(threadData.messages) && threadData.messages.length > 0) {
+    const aggregated = new Set();
+
+    for (const message of threadData.messages) {
+      if (!message || !Array.isArray(message.labelIds)) {
+        continue;
+      }
+
+      for (const labelId of message.labelIds) {
+        if (typeof labelId === 'string' && labelId.length > 0) {
+          aggregated.add(labelId);
+        }
+      }
+    }
+
+    return Array.from(aggregated);
+  }
+
+  if (Array.isArray(threadData.labelIds) && threadData.labelIds.length > 0) {
+    return threadData.labelIds.filter(id => typeof id === 'string' && id.length > 0);
+  }
+
+  return null;
+}
+
 async function modifyMessageLabels(googleSub, messageId, { add = [], remove = [] }) {
   const { addLabelIds, removeLabelIds, details } = await prepareLabelModificationRequest(googleSub, { add, remove });
   const finalAdd = await ensureTrackingLabelIncluded(googleSub, addLabelIds);
 
-  if (finalAdd.length > 0 || removeLabelIds.length > 0) {
+  const expectedAdd = Array.from(new Set(normalizeLabelIdArray(finalAdd)));
+  const expectedRemove = Array.from(new Set(normalizeLabelIdArray(removeLabelIds)));
+
+  const hasMutation = expectedAdd.length > 0 || expectedRemove.length > 0;
+  const verificationSnapshot = {
+    source: hasMutation ? 'modify_response' : 'not_requested',
+    labelIds: null,
+    error: null
+  };
+
+  if (hasMutation) {
     await handleGoogleApiCall(googleSub, async () => {
       const authClient = await getAuthenticatedClient(googleSub);
       const gmail = google.gmail({ version: 'v1', auth: authClient });
 
-      await gmail.users.messages.modify({
+      const response = await gmail.users.messages.modify({
         userId: 'me',
         id: messageId,
         requestBody: {
-          addLabelIds: finalAdd,
-          removeLabelIds: removeLabelIds
+          addLabelIds: expectedAdd,
+          removeLabelIds: expectedRemove
         }
       });
+
+      const responseData = response?.data || response || null;
+      if (Array.isArray(responseData?.labelIds)) {
+        verificationSnapshot.labelIds = responseData.labelIds;
+      } else {
+        verificationSnapshot.source = 'followup_fetch';
+        try {
+          const followUp = await gmail.users.messages.get({
+            userId: 'me',
+            id: messageId,
+            format: 'metadata',
+            fields: 'id,labelIds'
+          });
+          if (Array.isArray(followUp?.data?.labelIds)) {
+            verificationSnapshot.labelIds = followUp.data.labelIds;
+          } else {
+            verificationSnapshot.source = 'unverified_snapshot';
+          }
+        } catch (snapshotError) {
+          verificationSnapshot.source = 'snapshot_fetch_failed';
+          verificationSnapshot.error = snapshotError.message || 'Unknown verification failure';
+        }
+      }
     });
 
+    const evaluation = evaluateLabelMutationSnapshot(verificationSnapshot.labelIds, {
+      addIds: expectedAdd,
+      removeIds: expectedRemove
+    });
+
+    if (!evaluation.ok) {
+      const verificationError = new Error('Label mutation verification failed');
+      verificationError.code = 'LABEL_MUTATION_VERIFICATION_FAILED';
+      verificationError.statusCode = 502;
+      verificationError.details = {
+        attemptedAdd: expectedAdd,
+        attemptedRemove: expectedRemove,
+        snapshotSource: verificationSnapshot.source,
+        snapshotError: verificationSnapshot.error,
+        missingAdd: evaluation.missingAdd,
+        remainingRemove: evaluation.remainingRemove
+      };
+      throw verificationError;
+    }
+
     console.log(`✅ Labels modified on message ${messageId}`);
+
+    details.verification = {
+      source: verificationSnapshot.source,
+      labelIds: evaluation.labelIds,
+      missingAdd: evaluation.missingAdd,
+      remainingRemove: evaluation.remainingRemove,
+      verified: evaluation.verified
+    };
   } else {
     console.log(`ℹ️ No label changes requested for message ${messageId}`);
+    details.verification = {
+      source: 'not_requested',
+      labelIds: [],
+      missingAdd: [],
+      remainingRemove: [],
+      verified: true
+    };
   }
 
   return {
     success: true,
     labelUpdates: {
       ...details,
-      appliedAddLabelIds: finalAdd,
-      appliedRemoveLabelIds: removeLabelIds
+      appliedAddLabelIds: expectedAdd,
+      appliedRemoveLabelIds: expectedRemove
     }
   };
 }
@@ -2747,32 +2883,105 @@ async function modifyThreadLabels(googleSub, threadId, { add = [], remove = [] }
   const { addLabelIds, removeLabelIds, details } = await prepareLabelModificationRequest(googleSub, { add, remove });
   const finalAdd = await ensureTrackingLabelIncluded(googleSub, addLabelIds);
 
-  if (finalAdd.length > 0 || removeLabelIds.length > 0) {
+  const expectedAdd = Array.from(new Set(normalizeLabelIdArray(finalAdd)));
+  const expectedRemove = Array.from(new Set(normalizeLabelIdArray(removeLabelIds)));
+
+  const hasMutation = expectedAdd.length > 0 || expectedRemove.length > 0;
+  const verificationSnapshot = {
+    source: hasMutation ? 'modify_response' : 'not_requested',
+    labelIds: null,
+    error: null
+  };
+
+  if (hasMutation) {
     await handleGoogleApiCall(googleSub, async () => {
       const authClient = await getAuthenticatedClient(googleSub);
       const gmail = google.gmail({ version: 'v1', auth: authClient });
 
-      await gmail.users.threads.modify({
+      const response = await gmail.users.threads.modify({
         userId: 'me',
         id: threadId,
         requestBody: {
-          addLabelIds: finalAdd,
-          removeLabelIds: removeLabelIds
+          addLabelIds: expectedAdd,
+          removeLabelIds: expectedRemove
         }
       });
+
+      const responseData = response?.data || response || null;
+      const responseLabels = extractLabelIdsFromThreadSnapshot(responseData);
+
+      if (Array.isArray(responseLabels)) {
+        verificationSnapshot.labelIds = responseLabels;
+      } else {
+        verificationSnapshot.source = 'followup_fetch';
+
+        try {
+          const followUp = await gmail.users.threads.get({
+            userId: 'me',
+            id: threadId,
+            format: 'minimal',
+            fields: 'messages(id,labelIds)'
+          });
+
+          const followUpLabels = extractLabelIdsFromThreadSnapshot(followUp?.data);
+          if (Array.isArray(followUpLabels)) {
+            verificationSnapshot.labelIds = followUpLabels;
+          } else {
+            verificationSnapshot.source = 'unverified_snapshot';
+          }
+        } catch (snapshotError) {
+          verificationSnapshot.source = 'snapshot_fetch_failed';
+          verificationSnapshot.error = snapshotError.message || 'Unknown verification failure';
+        }
+      }
     });
 
+    const evaluation = evaluateLabelMutationSnapshot(verificationSnapshot.labelIds, {
+      addIds: expectedAdd,
+      removeIds: expectedRemove
+    });
+
+    if (!evaluation.ok) {
+      const verificationError = new Error('Label mutation verification failed');
+      verificationError.code = 'LABEL_MUTATION_VERIFICATION_FAILED';
+      verificationError.statusCode = 502;
+      verificationError.details = {
+        attemptedAdd: expectedAdd,
+        attemptedRemove: expectedRemove,
+        snapshotSource: verificationSnapshot.source,
+        snapshotError: verificationSnapshot.error,
+        missingAdd: evaluation.missingAdd,
+        remainingRemove: evaluation.remainingRemove
+      };
+      throw verificationError;
+    }
+
     console.log(`✅ Labels modified on thread ${threadId}`);
+
+    details.verification = {
+      source: verificationSnapshot.source,
+      labelIds: evaluation.labelIds,
+      missingAdd: evaluation.missingAdd,
+      remainingRemove: evaluation.remainingRemove,
+      verified: evaluation.verified
+    };
   } else {
     console.log(`ℹ️ No label changes requested for thread ${threadId}`);
+    details.verification = {
+      source: 'not_requested',
+      labelIds: [],
+      missingAdd: [],
+      remainingRemove: [],
+      verified: true
+    };
   }
 
   return {
     success: true,
     labelUpdates: {
       ...details,
-      appliedAddLabelIds: finalAdd,
-      appliedRemoveLabelIds: removeLabelIds
+      appliedAddLabelIds: expectedAdd,
+      appliedRemoveLabelIds: expectedRemove
     }
   };
 }

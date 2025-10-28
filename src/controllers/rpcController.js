@@ -419,28 +419,21 @@ async function mailRpc(req, res) {
     
   } catch (error) {
     console.error('❌ Mail RPC failed:', error.message);
-    
-    if (error.statusCode === 401) {
-      return res.status(401).json({
-        error: 'Authentication required',
-        message: error.message,
-        code: 'REAUTH_REQUIRED'
-      });
-    }
-    
-    if (error.statusCode === 451) {
-      return res.status(451).json({
-        error: 'Attachment blocked',
-        message: error.message,
-        code: 'ATTACHMENT_BLOCKED'
-      });
-    }
-    
-    res.status(500).json({
+
+    const status = typeof error.statusCode === 'number' ? error.statusCode : 500;
+    const code = error.code || (status === 401 ? 'REAUTH_REQUIRED' : status === 451 ? 'ATTACHMENT_BLOCKED' : 'SERVER_ERROR');
+
+    const payload = {
       ok: false,
       error: error.message,
-      code: 'SERVER_ERROR'
-    });
+      code
+    };
+
+    if (error.details) {
+      payload.details = error.details;
+    }
+
+    res.status(status).json(payload);
   }
 }
 
