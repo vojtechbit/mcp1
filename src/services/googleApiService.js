@@ -10,6 +10,7 @@ import { logDuration, startTimer } from '../utils/performanceLogger.js';
 import dotenv from 'dotenv';
 import {
   UNREPLIED_LABEL_NAME,
+  UNREPLIED_LABEL_DEFAULTS,
   TRACKING_LABEL_NAME,
   TRACKING_LABEL_DEFAULTS,
   FOLLOWUP_LABEL_NAME,
@@ -2265,6 +2266,277 @@ async function ensureTrackingLabelIncluded(googleSub, addIds = []) {
   return Array.from(addSet);
 }
 
+function normalizeLabelInputArray(values) {
+  return Array.isArray(values)
+    ? values
+        .map(value => (typeof value === 'string' ? value.trim() : ''))
+        .filter(value => value.length > 0)
+    : [];
+}
+
+function normalizeLabelAlias(value) {
+  if (typeof value !== 'string') {
+    return '';
+  }
+
+  return value
+    .trim()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[\s/_-]+/g, '');
+}
+
+const MANAGED_LABEL_DEFINITIONS = [
+  {
+    key: 'unreplied',
+    alias: normalizeLabelAlias(UNREPLIED_LABEL_NAME),
+    defaults: UNREPLIED_LABEL_DEFAULTS,
+    fallbackName: UNREPLIED_LABEL_NAME
+  },
+  {
+    key: 'tracking',
+    alias: normalizeLabelAlias(TRACKING_LABEL_NAME),
+    defaults: TRACKING_LABEL_DEFAULTS,
+    fallbackName: TRACKING_LABEL_NAME
+  },
+  {
+    key: 'followup',
+    alias: normalizeLabelAlias(FOLLOWUP_LABEL_NAME),
+    defaults: FOLLOWUP_LABEL_DEFAULTS,
+    fallbackName: FOLLOWUP_LABEL_NAME
+  }
+];
+
+function getManagedLabelDefinition(input) {
+  const alias = normalizeLabelAlias(input);
+  if (!alias) {
+    return null;
+  }
+
+  return MANAGED_LABEL_DEFINITIONS.find(definition => definition.alias === alias) || null;
+}
+
+async function prepareLabelModificationRequest(googleSub, { add = [], remove = [] } = {}) {
+  const requestedAdd = normalizeLabelInputArray(add);
+  const requestedRemove = normalizeLabelInputArray(remove);
+
+  const details = {
+    requested: {
+      add: requestedAdd,
+      remove: requestedRemove
+    },
+    resolved: {
+      add: [],
+      remove: []
+    },
+    createdLabels: [],
+    unmatched: {
+      add: [],
+      remove: []
+    },
+    availableLabels: []
+  };
+
+  if (requestedAdd.length === 0 && requestedRemove.length === 0) {
+    return {
+      addLabelIds: [],
+      removeLabelIds: [],
+      details
+    };
+  }
+
+  const labels = await getLabelDirectory(googleSub, {});
+  const labelById = new Map();
+  const labelByName = new Map();
+  const labelByAlias = new Map();
+  const availableLabels = [];
+
+  for (const label of labels) {
+    if (!label) continue;
+
+    if (typeof label.id === 'string' && label.id.length > 0) {
+      labelById.set(label.id.toLowerCase(), label);
+    }
+
+    if (typeof label.name === 'string' && label.name.trim().length > 0) {
+      const lowerName = label.name.toLowerCase();
+      labelByName.set(lowerName, label);
+
+      const alias = normalizeLabelAlias(label.name);
+      if (alias.length > 0 && !labelByAlias.has(alias)) {
+        labelByAlias.set(alias, label);
+      }
+
+      availableLabels.push({
+        id: label.id || null,
+        name: label.name,
+        managed: getManagedLabelDefinition(label.name)?.key || null
+      });
+    }
+  }
+
+  const seenAddInputs = new Set();
+  const seenRemoveInputs = new Set();
+  const addLabelIds = [];
+  const removeLabelIds = [];
+  const seenAddIds = new Set();
+  const seenRemoveIds = new Set();
+  const createdLabelIds = new Set();
+
+  function registerManagedLabel(label, definition) {
+    if (!label) {
+      return;
+    }
+
+    if (typeof label.id === 'string' && label.id.length > 0) {
+      labelById.set(label.id.toLowerCase(), label);
+      createdLabelIds.add(label.id);
+    }
+
+    if (typeof label.name === 'string' && label.name.trim().length > 0) {
+      const lowerName = label.name.toLowerCase();
+      labelByName.set(lowerName, label);
+      const alias = normalizeLabelAlias(label.name);
+      if (alias.length > 0) {
+        labelByAlias.set(alias, label);
+      }
+
+      availableLabels.push({
+        id: label.id || null,
+        name: label.name,
+        managed: definition?.key || null
+      });
+    }
+  }
+
+  function resolveExistingLabel(input) {
+    const lower = input.toLowerCase();
+    return (
+      labelById.get(lower)
+      || labelByName.get(lower)
+      || labelByAlias.get(normalizeLabelAlias(input))
+    );
+  }
+
+  for (const input of requestedAdd) {
+    const key = normalizeLabelAlias(input) || input.toLowerCase();
+    if (seenAddInputs.has(key)) {
+      continue;
+    }
+    seenAddInputs.add(key);
+
+    let targetLabel = resolveExistingLabel(input);
+
+    if (!targetLabel) {
+      const managedDefinition = getManagedLabelDefinition(input);
+
+      if (managedDefinition) {
+        const defaults = managedDefinition.defaults || {};
+        const labelName = defaults.name || managedDefinition.fallbackName || input;
+
+        try {
+          targetLabel = await createLabel(googleSub, {
+            name: labelName,
+            color: defaults.color,
+            labelListVisibility: 'labelShow',
+            messageListVisibility: 'show'
+          });
+
+          details.createdLabels.push({
+            id: targetLabel?.id || null,
+            name: targetLabel?.name || labelName,
+            color: targetLabel?.color || defaults.color?.backgroundColor || null,
+            textColor: targetLabel?.textColor || defaults.color?.textColor || null,
+            managed: managedDefinition.key,
+            requestedBy: input
+          });
+
+          registerManagedLabel(targetLabel, managedDefinition);
+        } catch (creationError) {
+          console.warn(
+            `⚠️ Unable to auto-create managed label ${managedDefinition.fallbackName}:`,
+            creationError.message
+          );
+          details.unmatched.add.push(input);
+          continue;
+        }
+      }
+    }
+
+    if (!targetLabel || typeof targetLabel.id !== 'string') {
+      details.unmatched.add.push(input);
+      continue;
+    }
+
+    if (!seenAddIds.has(targetLabel.id)) {
+      addLabelIds.push(targetLabel.id);
+      seenAddIds.add(targetLabel.id);
+    }
+
+    details.resolved.add.push({
+      input,
+      labelId: targetLabel.id,
+      labelName: targetLabel.name || null,
+      created: createdLabelIds.has(targetLabel.id)
+    });
+  }
+
+  for (const input of requestedRemove) {
+    const key = normalizeLabelAlias(input) || input.toLowerCase();
+    if (seenRemoveInputs.has(key)) {
+      continue;
+    }
+    seenRemoveInputs.add(key);
+
+    const targetLabel = resolveExistingLabel(input);
+
+    if (targetLabel && typeof targetLabel.id === 'string') {
+      if (!seenRemoveIds.has(targetLabel.id)) {
+        removeLabelIds.push(targetLabel.id);
+        seenRemoveIds.add(targetLabel.id);
+      }
+
+      details.resolved.remove.push({
+        input,
+        labelId: targetLabel.id,
+        labelName: targetLabel.name || null,
+        created: createdLabelIds.has(targetLabel.id)
+      });
+    } else {
+      details.unmatched.remove.push(input);
+    }
+  }
+
+  details.availableLabels = availableLabels;
+
+  if (details.unmatched.add.length > 0 || details.unmatched.remove.length > 0) {
+    const unmatchedMessages = [];
+    if (details.unmatched.add.length > 0) {
+      unmatchedMessages.push(`add [${details.unmatched.add.join(', ')}]`);
+    }
+    if (details.unmatched.remove.length > 0) {
+      unmatchedMessages.push(`remove [${details.unmatched.remove.join(', ')}]`);
+    }
+
+    const resolutionError = new Error(
+      unmatchedMessages.length > 0
+        ? `Unable to resolve some labels: ${unmatchedMessages.join('; ')}`
+        : 'Some labels could not be resolved'
+    );
+    resolutionError.code = 'LABEL_RESOLUTION_FAILED';
+    resolutionError.statusCode = 400;
+    resolutionError.details = details;
+    throw resolutionError;
+  }
+
+  return {
+    addLabelIds,
+    removeLabelIds,
+    details
+  };
+}
+
 async function createLabel(googleSub, options = {}) {
   const { name, color, labelListVisibility, messageListVisibility } = options;
 
@@ -2297,6 +2569,8 @@ async function createLabel(googleSub, options = {}) {
     });
 
     const created = result.data || {};
+    const cacheKey = googleSub || '__anon__';
+    labelDirectoryCache.delete(cacheKey);
     return {
       id: created.id,
       name: created.name,
@@ -2312,48 +2586,74 @@ async function createLabel(googleSub, options = {}) {
  * Modify labels on a message
  */
 async function modifyMessageLabels(googleSub, messageId, { add = [], remove = [] }) {
-  return await handleGoogleApiCall(googleSub, async () => {
-    const authClient = await getAuthenticatedClient(googleSub);
-    const gmail = google.gmail({ version: 'v1', auth: authClient });
+  const { addLabelIds, removeLabelIds, details } = await prepareLabelModificationRequest(googleSub, { add, remove });
+  const finalAdd = await ensureTrackingLabelIncluded(googleSub, addLabelIds);
 
-    const finalAdd = await ensureTrackingLabelIncluded(googleSub, add);
+  if (finalAdd.length > 0 || removeLabelIds.length > 0) {
+    await handleGoogleApiCall(googleSub, async () => {
+      const authClient = await getAuthenticatedClient(googleSub);
+      const gmail = google.gmail({ version: 'v1', auth: authClient });
 
-    await gmail.users.messages.modify({
-      userId: 'me',
-      id: messageId,
-      requestBody: {
-        addLabelIds: finalAdd,
-        removeLabelIds: remove
-      }
+      await gmail.users.messages.modify({
+        userId: 'me',
+        id: messageId,
+        requestBody: {
+          addLabelIds: finalAdd,
+          removeLabelIds: removeLabelIds
+        }
+      });
     });
 
     console.log(`✅ Labels modified on message ${messageId}`);
-    return { success: true };
-  });
+  } else {
+    console.log(`ℹ️ No label changes requested for message ${messageId}`);
+  }
+
+  return {
+    success: true,
+    labelUpdates: {
+      ...details,
+      appliedAddLabelIds: finalAdd,
+      appliedRemoveLabelIds: removeLabelIds
+    }
+  };
 }
 
 /**
  * Modify labels on all messages in a thread
  */
 async function modifyThreadLabels(googleSub, threadId, { add = [], remove = [] }) {
-  return await handleGoogleApiCall(googleSub, async () => {
-    const authClient = await getAuthenticatedClient(googleSub);
-    const gmail = google.gmail({ version: 'v1', auth: authClient });
+  const { addLabelIds, removeLabelIds, details } = await prepareLabelModificationRequest(googleSub, { add, remove });
+  const finalAdd = await ensureTrackingLabelIncluded(googleSub, addLabelIds);
 
-    const finalAdd = await ensureTrackingLabelIncluded(googleSub, add);
+  if (finalAdd.length > 0 || removeLabelIds.length > 0) {
+    await handleGoogleApiCall(googleSub, async () => {
+      const authClient = await getAuthenticatedClient(googleSub);
+      const gmail = google.gmail({ version: 'v1', auth: authClient });
 
-    await gmail.users.threads.modify({
-      userId: 'me',
-      id: threadId,
-      requestBody: {
-        addLabelIds: finalAdd,
-        removeLabelIds: remove
-      }
+      await gmail.users.threads.modify({
+        userId: 'me',
+        id: threadId,
+        requestBody: {
+          addLabelIds: finalAdd,
+          removeLabelIds: removeLabelIds
+        }
+      });
     });
 
     console.log(`✅ Labels modified on thread ${threadId}`);
-    return { success: true };
-  });
+  } else {
+    console.log(`ℹ️ No label changes requested for thread ${threadId}`);
+  }
+
+  return {
+    success: true,
+    labelUpdates: {
+      ...details,
+      appliedAddLabelIds: finalAdd,
+      appliedRemoveLabelIds: removeLabelIds
+    }
+  };
 }
 
 async function fetchUserAddressDirectory(googleSub) {

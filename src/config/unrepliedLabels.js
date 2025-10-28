@@ -6,9 +6,9 @@ export const TRACKING_LABEL_NAME = 'meta_seen';
 export const TRACKING_LABEL_COLOR = '#5f6368';
 export const TRACKING_LABEL_TEXT_COLOR = '#ffffff';
 
-export const FOLLOWUP_LABEL_NAME = 'followup';
-export const FOLLOWUP_LABEL_COLOR = '#42a5f5';
-export const FOLLOWUP_LABEL_TEXT_COLOR = '#ffffff';
+export const FOLLOWUP_LABEL_NAME = 'Follow-up';
+export const FOLLOWUP_LABEL_COLOR = '#fbbc05';
+export const FOLLOWUP_LABEL_TEXT_COLOR = '#202124';
 
 export const UNREPLIED_LABEL_DEFAULTS = {
   name: UNREPLIED_LABEL_NAME,

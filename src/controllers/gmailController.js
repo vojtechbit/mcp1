@@ -720,11 +720,9 @@ async function modifyMessageLabels(req, res) {
     const { messageId } = req.params;
     const { add = [], remove = [] } = req.body;
 
-    await gmailService.modifyMessageLabels(req.user.googleSub, messageId, { add, remove });
+    const result = await gmailService.modifyMessageLabels(req.user.googleSub, messageId, { add, remove });
 
-    res.json({
-      success: true
-    });
+    res.json(result);
   } catch (error) {
     return handleControllerError(res, error, {
       context: 'gmail.modifyMessageLabels',
@@ -739,11 +737,9 @@ async function modifyThreadLabels(req, res) {
     const { threadId } = req.params;
     const { add = [], remove = [] } = req.body;
 
-    await gmailService.modifyThreadLabels(req.user.googleSub, threadId, { add, remove });
+    const result = await gmailService.modifyThreadLabels(req.user.googleSub, threadId, { add, remove });
 
-    res.json({
-      success: true
-    });
+    res.json(result);
   } catch (error) {
     return handleControllerError(res, error, {
       context: 'gmail.modifyThreadLabels',
