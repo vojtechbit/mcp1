@@ -8,6 +8,8 @@ import { REFERENCE_TIMEZONE } from '../config/limits.js';
 const MS_IN_HOUR = 60 * 60 * 1000;
 const ISO_LOCAL_DATE_TIME = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2})(?:\.(\d{1,3}))?)?$/;
 
+const pad = (value, length = 2) => String(value).padStart(length, '0');
+
 function parseIsoDate(value) {
   const date = new Date(value);
 
@@ -45,6 +47,24 @@ function parseLocalDateTimeParts(value) {
     second: Number(second),
     millisecond: Number((millisecond + '00').slice(0, 3))
   };
+}
+
+function formatLocalDateTimeParts({
+  year,
+  month,
+  day,
+  hour,
+  minute,
+  second,
+  millisecond
+}) {
+  let formatted = `${pad(year, 4)}-${pad(month)}-${pad(day)}T${pad(hour)}:${pad(minute)}:${pad(second)}`;
+
+  if (millisecond) {
+    formatted += `.${pad(millisecond, 3)}`;
+  }
+
+  return formatted;
 }
 
 function pragueLocalPartsToUtc(parts) {
@@ -387,52 +407,47 @@ export function convertToUtcIfNeeded(dateTimeString) {
 
 /**
  * Normalize a datetime string for Google Calendar API.
- * Converts to UTC, interpreting times without timezone as Prague local time.
+ * Ensures the requested wall-clock time is kept while tagging it with a timezone.
  *
- * Strategy: Add correct Prague offset, then parse to UTC
- * 1. Strip any wrong offset from GPT (e.g., +02:00 for winter dates)
- * 2. Determine if date is in DST (summer) or not (winter)
- * 3. Add correct Prague offset (+01:00 for winter, +02:00 for summer)
- * 4. Let parseISO convert to UTC
- *
- * Why this works:
- * - parseISO on UTC server treats "07:00:00" as UTC, not local
- * - We must add explicit offset before parsing
- * - getPragueOffsetHours determines correct offset for the date
+ * Strategy:
+ * 1. Remove any trailing timezone info (offset or Z suffix).
+ * 2. Parse the remaining value as Prague local date-time parts.
+ * 3. Return the formatted local timestamp together with the effective timezone.
  *
  * Examples:
- * - "2025-10-28T07:00:00+02:00" (wrong) → "2025-10-28T07:00:00+01:00" → "2025-10-28T06:00:00.000Z"
- * - "2025-10-28T07:00:00" → "2025-10-28T07:00:00+01:00" → "2025-10-28T06:00:00.000Z"
- * - "2025-07-28T07:00:00" → "2025-07-28T07:00:00+02:00" → "2025-07-28T05:00:00.000Z"
+ * - "2025-10-28T07:00:00+02:00" → { dateTime: "2025-10-28T07:00:00", timeZone: "Europe/Prague" }
+ * - "2025-10-28T07:00:00" → { dateTime: "2025-10-28T07:00:00", timeZone: "Europe/Prague" }
+ * - "2025-07-28T07:00:00Z" → { dateTime: "2025-07-28T07:00:00", timeZone: "Europe/Prague" }
  *
  * @param {string} dateTimeString - ISO 8601 datetime string
- * @returns {object} Object with dateTime in UTC
+ * @param {string} [timeZone=REFERENCE_TIMEZONE] - timezone identifier to attach
+ * @returns {object} Object with local dateTime and timezone metadata
  */
-export function normalizeCalendarTime(dateTimeString) {
+export function normalizeCalendarTime(dateTimeString, timeZone = REFERENCE_TIMEZONE) {
   if (!dateTimeString) {
     return null;
   }
 
-  // If already UTC (ends with Z), normalize and return
-  if (dateTimeString.endsWith('Z')) {
-    return { dateTime: parseIsoDate(dateTimeString).toISOString() };
+  const effectiveTimeZone = timeZone || REFERENCE_TIMEZONE;
+  let localDateTime = dateTimeString.trim();
+
+  if (!localDateTime) {
+    return null;
   }
 
-  // Strip any timezone offset (e.g., +02:00, +01:00, -05:00)
-  const withoutOffset = dateTimeString.replace(/[+-]\d{2}:\d{2}$/, '');
+  if (localDateTime.endsWith('Z')) {
+    localDateTime = localDateTime.slice(0, -1);
+  } else {
+    localDateTime = localDateTime.replace(/[+-]\d{2}:\d{2}$/u, '');
+  }
 
-  // Parse the date to determine DST status (use a rough Date for offset calculation)
-  const roughDate = parseIsoDate(withoutOffset);
-  const pragueOffset = getPragueOffsetHours(roughDate);
+  const parts = parseLocalDateTimeParts(localDateTime);
+  const formatted = formatLocalDateTimeParts(parts);
 
-  // Add correct Prague offset
-  const offsetString = pragueOffset > 0
-    ? `+${String(pragueOffset).padStart(2, '0')}:00`
-    : `-${String(Math.abs(pragueOffset)).padStart(2, '0')}:00`;
-
-  const withCorrectOffset = withoutOffset + offsetString;
-
-  return { dateTime: parseIsoDate(withCorrectOffset).toISOString() };
+  return {
+    dateTime: formatted,
+    timeZone: effectiveTimeZone
+  };
 }
 
 /**
