@@ -316,6 +316,8 @@ async function getValidAccessToken(googleSub, forceRefresh = false) {
       forceRefresh,
       refreshed,
       status,
+      verificationMethod: 'google',
+      publicFields: ['verificationMethod'],
       error: lastError?.message?.slice(0, 120)
     });
   }

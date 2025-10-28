@@ -7,6 +7,7 @@ import {
   invalidateCachedIdentity
 } from '../services/tokenIdentityService.js';
 import { wrapModuleFunctions } from '../utils/advancedDebugging.js';
+import { logDuration, startTimer } from '../utils/performanceLogger.js';
 
 dotenv.config();
 
@@ -21,11 +22,22 @@ dotenv.config();
  * 5. Continue to next middleware/controller
  */
 async function verifyToken(req, res, next) {
+  const overallTimer = startTimer();
+  let verificationMethod = 'unverified';
+  let status = 'success';
+  let errorCode;
+  let errorMessage;
+  const logMetadata = {};
+
   try {
     // Extract token from Authorization header
     const authHeader = req.headers.authorization;
-    
+
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      status = 'error';
+      verificationMethod = 'none';
+      errorCode = 'missing-authorization-header';
+      errorMessage = 'Missing or invalid Authorization header';
       console.error('❌ [AUTH_ERROR] Missing or invalid Authorization header');
       return res.status(401).json({
         error: 'Unauthorized',
@@ -36,6 +48,10 @@ async function verifyToken(req, res, next) {
     const token = authHeader.split(' ')[1];
 
     if (!token) {
+      status = 'error';
+      verificationMethod = 'none';
+      errorCode = 'missing-token';
+      errorMessage = 'Token not found in Authorization header';
       console.error('❌ [AUTH_ERROR] Token not found in Authorization header');
       return res.status(401).json({
         error: 'Unauthorized',
@@ -44,17 +60,20 @@ async function verifyToken(req, res, next) {
     }
 
     // STRATEGY 1: Try to find user by proxy token (ChatGPT flow)
-    console.log('🔐 Checking if token is a proxy token...');
     const googleSubFromProxy = await findUserByProxyToken(token);
-    
+
     if (googleSubFromProxy) {
       // Token is a valid proxy token - get user info from database
-      console.log('✅ Valid proxy token found');
-      
+      verificationMethod = 'proxy';
+      logMetadata.proxyGoogleSub = googleSubFromProxy;
+
       const { getUserByGoogleSub } = await import('../services/databaseService.js');
       const user = await getUserByGoogleSub(googleSubFromProxy);
-      
+
       if (!user) {
+        status = 'error';
+        errorCode = 'proxy-user-missing';
+        errorMessage = 'User not found in database for proxy token';
         console.error('❌ [AUTH_ERROR] User not found in database for proxy token');
         return res.status(401).json({
           error: 'Unauthorized',
@@ -72,16 +91,19 @@ async function verifyToken(req, res, next) {
         refreshToken: user.refreshToken,
         tokenType: 'proxy'
       };
-      
-      console.log(`✅ User authenticated via proxy token: ${user.email}`);
+
+      logMetadata.userEmail = user.email;
+      logMetadata.googleSub = user.googleSub;
       return next();
     }
-    
+
     // STRATEGY 2: Try cached access token identity (non-proxy flow)
     const cachedIdentity = await getCachedIdentityForAccessToken(token);
 
     if (cachedIdentity) {
-      console.log('✅ Reused cached access token identity');
+      verificationMethod = 'google-cache';
+      logMetadata.cacheSource = cachedIdentity.source || 'memory';
+      logMetadata.googleSub = cachedIdentity.googleSub;
 
       let email = cachedIdentity.email;
       let dbUser = null;
@@ -105,12 +127,16 @@ async function verifyToken(req, res, next) {
         req.user.refreshToken = dbUser.refreshToken;
       }
 
+      if (!logMetadata.userEmail && email) {
+        logMetadata.userEmail = email;
+      }
+
       return next();
     }
 
     // STRATEGY 3: Fallback to Google token validation (direct access flow)
-    console.log('🔐 Token is not a proxy token, validating with Google...');
-    
+    verificationMethod = 'google';
+
     // Create OAuth2 client with the access token
     const { OAuth2 } = google.auth;
     const oauth2Client = new OAuth2(
@@ -129,6 +155,9 @@ async function verifyToken(req, res, next) {
       const response = await oauth2.userinfo.get();
       userInfo = response.data;
     } catch (error) {
+      status = 'error';
+      errorCode = error.response?.status === 401 ? 'google-token-expired' : 'google-token-validation-failed';
+      errorMessage = error.message;
       console.error('❌ [AUTH_ERROR] Token validation failed');
       console.error('Details:', {
         errorMessage: error.message,
@@ -175,7 +204,8 @@ async function verifyToken(req, res, next) {
       tokenType: 'google'
     };
 
-    console.log(`✅ User authenticated via Google token: ${email} (${googleSub})`)
+    logMetadata.googleSub = googleSub;
+    logMetadata.userEmail = email;
 
     await cacheAccessTokenIdentity({
       accessToken: token,
@@ -190,6 +220,10 @@ async function verifyToken(req, res, next) {
     next();
 
   } catch (error) {
+    status = 'error';
+    verificationMethod = verificationMethod === 'unverified' ? 'unknown' : verificationMethod;
+    errorCode = errorCode || error.code || error.statusCode || 'unexpected-error';
+    errorMessage = errorMessage || error.message;
     console.error('❌ [AUTH_ERROR] Unexpected error in authentication');
     console.error('Details:', {
       errorMessage: error.message,
@@ -200,6 +234,26 @@ async function verifyToken(req, res, next) {
     return res.status(500).json({
       error: 'Internal server error',
       message: 'Authentication failed'
+    });
+  } finally {
+    if (!logMetadata.googleSub && req.user?.googleSub) {
+      logMetadata.googleSub = req.user.googleSub;
+    }
+
+    if (!logMetadata.userEmail && req.user?.email) {
+      logMetadata.userEmail = req.user.email;
+    }
+
+    if (status === 'error' && errorMessage) {
+      logMetadata.errorDetail = errorMessage;
+    }
+
+    logDuration('auth.verifyToken', overallTimer, {
+      status,
+      verificationMethod,
+      publicFields: ['verificationMethod'],
+      error: errorCode || errorMessage,
+      ...logMetadata
     });
   }
 }

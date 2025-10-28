@@ -20,13 +20,67 @@ function formatMetadata(metadata = {}) {
     .join(' ');
 }
 
+function resolveLogMode(metadataMode) {
+  const envMode = process.env.PERF_LOG_MODE?.toLowerCase();
+  const mode = metadataMode?.toLowerCase() || envMode || 'summary';
+
+  if (['verbose', 'summary', 'silent'].includes(mode)) {
+    return mode;
+  }
+
+  return 'summary';
+}
+
 function logDuration(metricName, startTime, metadata = {}) {
   const durationMs = Math.round((performance.now() - startTime) * 100) / 100;
-  const normalizedMetadata = { status: metadata.status || 'success', ...metadata };
-  if (!normalizedMetadata.status) {
-    normalizedMetadata.status = 'success';
+  const { logMode, publicFields, ...restMetadata } = metadata;
+  const mode = resolveLogMode(logMode);
+
+  if (mode === 'silent') {
+    return durationMs;
   }
-  const metadataString = formatMetadata({ ...normalizedMetadata, durationMs });
+
+  const status = restMetadata.status || 'success';
+  const verificationMethod = restMetadata.verificationMethod;
+  const errorInfo = restMetadata.error;
+
+  const restWithStatus = { ...restMetadata, status };
+
+  const summaryFields = Array.isArray(publicFields) ? publicFields : [];
+  const summary = { status, durationMs };
+
+  const shouldAliasMethod = verificationMethod && !summaryFields.includes('verificationMethod');
+
+  if (shouldAliasMethod) {
+    summary.method = verificationMethod;
+  }
+
+  for (const field of summaryFields) {
+    if (Object.prototype.hasOwnProperty.call(restWithStatus, field)) {
+      summary[field] = restWithStatus[field];
+    }
+  }
+
+  if (status === 'error' && errorInfo) {
+    summary.error = errorInfo;
+  }
+
+  const hiddenKeys = Object.keys(restWithStatus).filter(key => {
+    if (key === 'status' || key === 'verificationMethod' || key === 'error') {
+      return false;
+    }
+    return !summaryFields.includes(key);
+  });
+
+  if (mode !== 'verbose' && hiddenKeys.length > 0) {
+    summary.details = 'hidden';
+  }
+
+  const payload = mode === 'verbose'
+    ? { ...restWithStatus, durationMs }
+    : summary;
+
+  const metadataString = formatMetadata(payload);
   console.log(`⏱️  ${metricName} ${metadataString}`);
   return durationMs;
 }
