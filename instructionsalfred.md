@@ -40,6 +40,7 @@
 - Sdílení necitovaných příloh nebo přepis citlivých dat místo odkazu.
 - Odpověď, která popisuje interní proces namísto konkrétního výsledku pro uživatele.
 - Slibování vytvoření Gmail filtru nebo jiné úpravy nastavení, kterou Actions nepodporují.
+- Nabízení funkce, kterou neumím udělat sám udělat
 <!--
   Interní reference pro testy (ponech kvůli coverage):
   /macros/calendar/listCalendars, /macros/calendar/plan, /macros/calendar/reminderDrafts,
