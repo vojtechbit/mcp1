@@ -379,6 +379,108 @@ function generateGmailLinks(threadId, messageId) {
   };
 }
 
+function decorateMessageWithLinks(message, fallbackThreadId) {
+  if (!message || typeof message !== 'object') {
+    return message;
+  }
+
+  if (message.links && typeof message.links === 'object') {
+    return message;
+  }
+
+  const resolvedThreadId = typeof message.threadId === 'string' && message.threadId.length > 0
+    ? message.threadId
+    : (typeof fallbackThreadId === 'string' && fallbackThreadId.length > 0
+        ? fallbackThreadId
+        : (typeof message.thread?.id === 'string' && message.thread.id.length > 0
+            ? message.thread.id
+            : (typeof message.id === 'string' && message.id.length > 0 ? message.id : null)));
+
+  const resolvedMessageId = typeof message.id === 'string' && message.id.length > 0
+    ? message.id
+    : (typeof message.messageId === 'string' && message.messageId.length > 0 ? message.messageId : null);
+
+  const links = generateGmailLinks(resolvedThreadId, resolvedMessageId);
+  if (!links) {
+    return message;
+  }
+
+  return {
+    ...message,
+    links
+  };
+}
+
+function decorateMessagesWithLinks(messages, { fallbackThreadId } = {}) {
+  if (!Array.isArray(messages)) {
+    return messages;
+  }
+
+  let mutated = false;
+  const decorated = messages.map(message => {
+    const decoratedMessage = decorateMessageWithLinks(message, fallbackThreadId);
+    if (decoratedMessage !== message) {
+      mutated = true;
+    }
+    return decoratedMessage;
+  });
+
+  return mutated ? decorated : messages;
+}
+
+function decorateThreadsWithLinks(threads) {
+  if (!Array.isArray(threads)) {
+    return threads;
+  }
+
+  let mutated = false;
+
+  const decorated = threads.map(thread => {
+    if (!thread || typeof thread !== 'object') {
+      return thread;
+    }
+
+    let updated = thread;
+    const threadId = typeof thread.threadId === 'string' && thread.threadId.length > 0
+      ? thread.threadId
+      : (typeof thread.id === 'string' && thread.id.length > 0 ? thread.id : null);
+
+    if (!thread.links) {
+      const representativeMessageId = typeof thread.lastMessageId === 'string' && thread.lastMessageId.length > 0
+        ? thread.lastMessageId
+        : (Array.isArray(thread.messages) && thread.messages.length > 0
+            ? thread.messages[thread.messages.length - 1]?.id ?? null
+            : null);
+
+      const threadLinks = generateGmailLinks(threadId, representativeMessageId);
+      if (threadLinks) {
+        updated = {
+          ...updated,
+          links: threadLinks
+        };
+      }
+    }
+
+    if (Array.isArray(thread.messages)) {
+      const decoratedMessages = decorateMessagesWithLinks(thread.messages, { fallbackThreadId: threadId });
+      if (decoratedMessages !== thread.messages) {
+        if (updated === thread) {
+          updated = { ...thread };
+        }
+        updated.messages = decoratedMessages;
+      }
+    }
+
+    if (updated !== thread) {
+      mutated = true;
+    }
+
+    return updated;
+  });
+
+  return mutated ? decorated : threads;
+}
+
 function getHeaderValue(headers = [], name) {
   const lower = name.toLowerCase();
   return headers.find(header => header.name?.toLowerCase() === lower)?.value || '';
@@ -1019,7 +1121,23 @@ async function searchEmails(googleSub, { query, q, maxResults = 10, pageToken, l
     }
 
     const result = await gmail.users.messages.list(params);
-    return result.data;
+    const data = result.data || {};
+
+    const decoratedMessages = decorateMessagesWithLinks(data.messages);
+    const decoratedThreads = decorateThreadsWithLinks(data.threads);
+
+    if (decoratedMessages !== data.messages || decoratedThreads !== data.threads) {
+      const response = { ...data };
+      if (decoratedMessages !== data.messages) {
+        response.messages = decoratedMessages;
+      }
+      if (decoratedThreads !== data.threads) {
+        response.threads = decoratedThreads;
+      }
+      return response;
+    }
+
+    return data;
   });
 }
 
@@ -2724,7 +2842,7 @@ async function getThread(googleSub, threadId) {
 
     const messages = result.data.messages || [];
 
-    const normalizedMessages = messages.map(msg => {
+    const normalizedMessages = decorateMessagesWithLinks(messages.map(msg => {
       const headers = msg.payload?.headers || [];
       const fromHeader = headers.find(h => h.name.toLowerCase() === 'from')?.value || '';
       const subjectHeader = headers.find(h => h.name.toLowerCase() === 'subject')?.value || '';
@@ -2754,7 +2872,7 @@ async function getThread(googleSub, threadId) {
         internalDate: internalDateMs,
         receivedAt: internalIso
       };
-    });
+    }), { fallbackThreadId: threadId });
 
     const lastMessage = normalizedMessages[normalizedMessages.length - 1] || null;
 
@@ -2801,7 +2919,8 @@ async function getThread(googleSub, threadId) {
             from: lastMessage.from,
             subject: lastMessage.subject,
             date: lastMessage.receivedAt,
-            snippet: lastMessage.snippet
+            snippet: lastMessage.snippet,
+            links: lastMessage.links || null
           }
         : null
     };

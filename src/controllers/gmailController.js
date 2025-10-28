@@ -21,6 +21,27 @@ import { wrapModuleFunctions } from '../utils/advancedDebugging.js';
 
 // ==================== EMAIL OPERATIONS ====================
 
+function cloneSearchMessage(message) {
+  if (!message || typeof message !== 'object') {
+    return message;
+  }
+
+  const clone = { ...message };
+  if (!('links' in clone) || typeof clone.links === 'undefined') {
+    clone.links = null;
+  }
+
+  return clone;
+}
+
+function cloneSearchMessages(messages) {
+  if (!Array.isArray(messages)) {
+    return [];
+  }
+
+  return messages.map(item => cloneSearchMessage(item));
+}
+
 async function sendEmail(req, res) {
   try {
     let { to, subject, body, cc, bcc, toSelf, confirmSelfSend } = req.body;
@@ -387,7 +408,7 @@ async function searchEmails(req, res) {
             pageToken: currentPageToken
           });
 
-          const items = result.messages || [];
+          const items = cloneSearchMessages(result.messages || []);
           allItems = allItems.concat(items);
           pagesConsumed++;
 
@@ -479,7 +500,7 @@ async function searchEmails(req, res) {
           pageToken
         });
 
-        const items = result.messages || [];
+        const items = cloneSearchMessages(result.messages || []);
         const hasMore = !!result.nextPageToken;
         const nextPageToken = result.nextPageToken;
 

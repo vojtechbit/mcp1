@@ -14,9 +14,31 @@ const createDraftCalls = [];
 const updateDraftCalls = [];
 const listDraftCalls = [];
 const getDraftCalls = [];
+const searchEmailCalls = [];
 
 globalThis.__RPC_TEST_OVERRIDES = {
   gmailService: {
+    searchEmails: async (sub, params) => {
+      searchEmailCalls.push({ sub, params });
+      return {
+        messages: [
+          {
+            id: 'msg-123',
+            threadId: 'thr-789',
+            links: {
+              thread: 'https://mail.google.com/mail/u/0/#inbox/thr-789',
+              message: 'https://mail.google.com/mail/u/0/#inbox/thr-789?projector=1&messageId=msg-123'
+            }
+          },
+          {
+            id: 'msg-456',
+            threadId: 'thr-000'
+          }
+        ],
+        nextPageToken: 'next-token',
+        resultSizeEstimate: 2
+      };
+    },
     createDraft: async (sub, payload) => {
       createDraftCalls.push({ sub, payload });
       return { id: 'draft-123', message: { id: 'msg-456' } };
@@ -210,6 +232,37 @@ test('mailRpc createDraft creates draft via Gmail service', async () => {
         cc: ' cc@example.com ',
         bcc: 'bcc@example.com'
       }
+    }
+  ]);
+});
+
+test('mailRpc search normalizes Gmail links', async () => {
+  searchEmailCalls.length = 0;
+  const request = {
+    body: {
+      op: 'search',
+      params: { query: 'from:boss@example.com' }
+    },
+    user: { googleSub: 'user-search' }
+  };
+  const response = new MockResponse();
+
+  await mailRpc(request, response);
+
+  assert.equal(response.statusCode, 200);
+  assert.equal(response.body.ok, true);
+  assert.equal(Array.isArray(response.body.data.messages), true);
+  assert.equal(response.body.data.messages.length, 2);
+  assert.deepEqual(response.body.data.messages[0].links, {
+    thread: 'https://mail.google.com/mail/u/0/#inbox/thr-789',
+    message: 'https://mail.google.com/mail/u/0/#inbox/thr-789?projector=1&messageId=msg-123'
+  });
+  assert.equal(response.body.data.messages[1].links, null);
+  assert.equal(response.body.data.nextPageToken, 'next-token');
+  assert.deepEqual(searchEmailCalls, [
+    {
+      sub: 'user-search',
+      params: { query: 'from:boss@example.com' }
     }
   ]);
 });

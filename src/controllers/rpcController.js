@@ -18,6 +18,66 @@ const gmailSvc = rpcTestOverrides.gmailService || gmailService;
 const contactsSvc = rpcTestOverrides.contactsService || contactsService;
 const tasksSvc = rpcTestOverrides.tasksService || tasksService;
 
+function cloneMessageWithLinks(message) {
+  if (!message || typeof message !== 'object') {
+    return message;
+  }
+
+  const clone = { ...message };
+  if (!('links' in clone) || typeof clone.links === 'undefined') {
+    clone.links = null;
+  }
+
+  if (Array.isArray(clone.messages)) {
+    clone.messages = clone.messages.map(item => cloneMessageWithLinks(item));
+  }
+
+  return clone;
+}
+
+function cloneMessagesWithLinks(messages) {
+  if (!Array.isArray(messages)) {
+    return [];
+  }
+
+  return messages.map(message => cloneMessageWithLinks(message));
+}
+
+function cloneThreadsWithLinks(threads) {
+  if (!Array.isArray(threads)) {
+    return threads;
+  }
+
+  return threads.map(thread => {
+    if (!thread || typeof thread !== 'object') {
+      return thread;
+    }
+
+    const clone = { ...thread };
+    if (!('links' in clone) || typeof clone.links === 'undefined') {
+      clone.links = null;
+    }
+
+    if (Array.isArray(clone.messages)) {
+      clone.messages = clone.messages.map(message => cloneMessageWithLinks(message));
+    }
+
+    return clone;
+  });
+}
+
+function normalizeSearchResult(result) {
+  const payload = result && typeof result === 'object' ? { ...result } : {};
+  const rawMessages = Array.isArray(result?.messages) ? result.messages : [];
+  payload.messages = cloneMessagesWithLinks(rawMessages);
+
+  if (Array.isArray(result?.threads)) {
+    payload.threads = cloneThreadsWithLinks(result.threads);
+  }
+
+  return payload;
+}
+
 // ==================== MAIL RPC ====================
 
 async function mailRpc(req, res) {
@@ -35,9 +95,11 @@ async function mailRpc(req, res) {
     let result;
 
     switch (op) {
-      case 'search':
-        result = await gmailSvc.searchEmails(req.user.googleSub, params);
+      case 'search': {
+        const searchResult = await gmailSvc.searchEmails(req.user.googleSub, params);
+        result = normalizeSearchResult(searchResult);
         break;
+      }
         
       case 'preview':
         result = await Promise.all(
