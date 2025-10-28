@@ -1,5 +1,9 @@
 import { getDatabase } from '../config/database.js';
 import { encryptToken, decryptToken } from './tokenService.js';
+import {
+  cacheAccessTokenIdentity,
+  purgeIdentitiesForGoogleSub
+} from './tokenIdentityService.js';
 import { wrapModuleFunctions } from '../utils/advancedDebugging.js';
 
 /**
@@ -74,6 +78,18 @@ async function saveUser(userData) {
         { upsert: true }
       );
     }, 'saveUser');
+
+    try {
+      await cacheAccessTokenIdentity({
+        accessToken,
+        googleSub,
+        email,
+        expiryDate,
+        source: 'saveUser'
+      });
+    } catch (cacheError) {
+      console.warn('⚠️  Failed to cache initial access token identity:', cacheError.message);
+    }
 
     console.log('✅ User saved to database:', userData.email);
     return result;
@@ -179,6 +195,33 @@ async function updateTokens(googleSub, tokens) {
       );
     }, 'updateTokens');
 
+    let cacheEmail = tokens.email || null;
+
+    if (!cacheEmail) {
+      try {
+        const db = await getDatabase();
+        const userDoc = await db.collection('users').findOne(
+          { google_sub: googleSub },
+          { projection: { email: 1 } }
+        );
+        cacheEmail = userDoc?.email || null;
+      } catch (lookupError) {
+        console.warn('⚠️  Failed to resolve email for cached identity:', lookupError.message);
+      }
+    }
+
+    try {
+      await cacheAccessTokenIdentity({
+        accessToken: tokens.accessToken,
+        googleSub,
+        email: cacheEmail,
+        expiryDate: tokens.expiryDate,
+        source: tokens.source || 'updateTokens'
+      });
+    } catch (cacheError) {
+      console.warn('⚠️  Failed to cache refreshed access token identity:', cacheError.message);
+    }
+
     console.log('✅ Tokens updated for user:', googleSub);
   } catch (error) {
     console.error('❌ [DATABASE_ERROR] Failed to update tokens');
@@ -201,6 +244,12 @@ async function deleteUser(googleSub) {
       const users = db.collection('users');
       return await users.deleteOne({ google_sub: googleSub });
     }, 'deleteUser');
+
+    try {
+      await purgeIdentitiesForGoogleSub(googleSub);
+    } catch (purgeError) {
+      console.warn('⚠️  Failed to purge cached token identities for user:', purgeError.message);
+    }
 
     if (result.deletedCount > 0) {
       console.log('✅ User deleted:', googleSub);

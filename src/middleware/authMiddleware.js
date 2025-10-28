@@ -1,6 +1,11 @@
 import { google } from 'googleapis';
 import dotenv from 'dotenv';
 import { findUserByProxyToken } from '../services/proxyTokenService.js';
+import {
+  cacheAccessTokenIdentity,
+  getCachedIdentityForAccessToken,
+  invalidateCachedIdentity
+} from '../services/tokenIdentityService.js';
 import { wrapModuleFunctions } from '../utils/advancedDebugging.js';
 
 dotenv.config();
@@ -72,7 +77,38 @@ async function verifyToken(req, res, next) {
       return next();
     }
     
-    // STRATEGY 2: Fallback to Google token validation (direct access flow)
+    // STRATEGY 2: Try cached access token identity (non-proxy flow)
+    const cachedIdentity = await getCachedIdentityForAccessToken(token);
+
+    if (cachedIdentity) {
+      console.log('✅ Reused cached access token identity');
+
+      let email = cachedIdentity.email;
+      let dbUser = null;
+
+      if (!email) {
+        const { getUserByGoogleSub } = await import('../services/databaseService.js');
+        dbUser = await getUserByGoogleSub(cachedIdentity.googleSub);
+        email = dbUser?.email || null;
+      }
+
+      req.user = {
+        googleSub: cachedIdentity.googleSub,
+        email,
+        name: email ? email.split('@')[0] : cachedIdentity.googleSub,
+        picture: null,
+        accessToken: token,
+        tokenType: 'google-cache'
+      };
+
+      if (dbUser?.refreshToken) {
+        req.user.refreshToken = dbUser.refreshToken;
+      }
+
+      return next();
+    }
+
+    // STRATEGY 3: Fallback to Google token validation (direct access flow)
     console.log('🔐 Token is not a proxy token, validating with Google...');
     
     // Create OAuth2 client with the access token
@@ -102,6 +138,9 @@ async function verifyToken(req, res, next) {
 
       // Check for specific error types
       if (error.response?.status === 401) {
+        await invalidateCachedIdentity(token).catch(cacheError =>
+          console.warn('⚠️  Failed to invalidate cached identity after 401:', cacheError.message)
+        );
         return res.status(401).json({
           error: 'Unauthorized',
           message: 'Invalid or expired token'
@@ -137,6 +176,15 @@ async function verifyToken(req, res, next) {
     };
 
     console.log(`✅ User authenticated via Google token: ${email} (${googleSub})`)
+
+    await cacheAccessTokenIdentity({
+      accessToken: token,
+      googleSub,
+      email,
+      source: 'google-userinfo'
+    }).catch(cacheError =>
+      console.warn('⚠️  Failed to cache access token identity:', cacheError.message)
+    );
     
     // Continue to next middleware/controller
     next();

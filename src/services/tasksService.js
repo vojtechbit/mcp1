@@ -40,7 +40,9 @@ async function getValidAccessToken(googleSub) {
         await updateTokens(googleSub, {
           accessToken: newTokens.access_token,
           refreshToken: newTokens.refresh_token || user.refreshToken,
-          expiryDate
+          expiryDate,
+          email: user.email,
+          source: 'refresh:tasksService'
         });
 
         console.log('✅ Access token refreshed successfully');
