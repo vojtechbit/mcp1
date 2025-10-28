@@ -3438,7 +3438,38 @@
         },
         "responses": {
           "200": {
-            "description": "Operation completed"
+            "description": "Operation completed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    },
+                    "data": {
+                      "anyOf": [
+                        { "$ref": "#/components/schemas/MailRpcSearchResult" },
+                        { "$ref": "#/components/schemas/MailRpcReadItem" },
+                        {
+                          "type": "array",
+                          "items": { "$ref": "#/components/schemas/MailRpcReadItem" }
+                        },
+                        { "$ref": "#/components/schemas/MailRpcBatchReadResult" },
+                        { "type": "object" },
+                        { "type": "array" },
+                        { "type": "string" },
+                        { "type": "null" }
+                      ],
+                      "description": "Operation result. Search returns MailRpcSearchResult (messages[] with Gmail web links). Read returns MailRpcReadItem for a single email or an array of MailRpcReadItems. Other operations return their documented payloads."
+                    }
+                  },
+                  "required": [
+                    "ok"
+                  ]
+                }
+              }
+            }
           },
           "400": {
             "description": "Invalid request format - detailed error with expected format",
@@ -4224,6 +4255,153 @@
             }
           }
         }
+      },
+      "GmailWebLinks": {
+        "type": "object",
+        "description": "Direct Gmail web links for manual review.",
+        "properties": {
+          "thread": {
+            "type": "string",
+            "description": "Link to open the Gmail thread."
+          },
+          "message": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Link to the individual message view when available."
+          }
+        },
+        "required": [
+          "thread"
+        ],
+        "additionalProperties": false
+      },
+      "MailRpcSearchMessage": {
+        "type": "object",
+        "description": "Minimal Gmail message reference returned by /rpc/mail op=search.",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Gmail message ID."
+          },
+          "threadId": {
+            "type": "string",
+            "description": "Gmail thread ID containing the message."
+          },
+          "links": {
+            "oneOf": [
+              { "$ref": "#/components/schemas/GmailWebLinks" },
+              { "type": "null" }
+            ],
+            "description": "Direct Gmail web links for this search hit."
+          }
+        },
+        "required": [
+          "id",
+          "threadId"
+        ],
+        "additionalProperties": true
+      },
+      "MailRpcSearchResult": {
+        "type": "object",
+        "description": "Payload returned by /rpc/mail op=search including Gmail web links for each message.",
+        "properties": {
+          "messages": {
+            "type": "array",
+            "description": "Array of Gmail search results.",
+            "items": { "$ref": "#/components/schemas/MailRpcSearchMessage" }
+          },
+          "nextPageToken": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Token for fetching the next Gmail page."
+          },
+          "resultSizeEstimate": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "description": "Gmail-estimated number of matches."
+          },
+          "threads": {
+            "type": "array",
+            "description": "Thread-level aggregates when the backend groups search results.",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": { "type": "string" },
+                "threadId": { "type": "string" },
+                "links": {
+                  "oneOf": [
+                    { "$ref": "#/components/schemas/GmailWebLinks" },
+                    { "type": "null" }
+                  ],
+                  "description": "Thread link along with the newest message pointer."
+                },
+                "messages": {
+                  "type": "array",
+                  "items": { "$ref": "#/components/schemas/MailRpcSearchMessage" }
+                }
+              },
+              "additionalProperties": true
+            }
+          }
+        },
+        "required": [
+          "messages"
+        ],
+        "additionalProperties": true
+      },
+      "MailRpcReadItem": {
+        "type": "object",
+        "description": "Email payload returned by /rpc/mail op=read and /mail/batchRead. Includes Gmail metadata and Gmail web links.",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Gmail message ID."
+          },
+          "threadId": {
+            "type": "string",
+            "description": "Thread containing the message."
+          },
+          "links": {
+            "oneOf": [
+              { "$ref": "#/components/schemas/GmailWebLinks" },
+              { "type": "null" }
+            ],
+            "description": "Direct Gmail web links for this email."
+          }
+        },
+        "required": [
+          "id",
+          "threadId",
+          "links"
+        ],
+        "additionalProperties": true
+      },
+      "MailRpcBatchReadResult": {
+        "type": "object",
+        "description": "REST batch read response. Mirrors /mail/batchRead with Gmail links included on each item.",
+        "properties": {
+          "success": { "type": "boolean" },
+          "idsRequested": { "type": "integer" },
+          "idsReturned": { "type": "integer" },
+          "items": {
+            "type": "array",
+            "description": "Emails returned in this batch.",
+            "items": { "$ref": "#/components/schemas/MailRpcReadItem" }
+          },
+          "note": { "type": "string" }
+        },
+        "required": [
+          "success",
+          "idsReturned",
+          "items"
+        ],
+        "additionalProperties": true
       },
       "UnansweredBucket": {
         "type": "object",
