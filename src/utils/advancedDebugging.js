@@ -40,6 +40,32 @@ function isAdvancedDebugEnabled() {
   return false;
 }
 
+function getAdvancedDebugState() {
+  const rawValue = typeof process.env.ADVANCED_DEBUG === 'string'
+    ? process.env.ADVANCED_DEBUG
+    : null;
+  const explicitSetting = resolveBooleanFromEnv(process.env.ADVANCED_DEBUG);
+  const nodeEnv = process.env.NODE_ENV || 'development';
+  const enabled = isAdvancedDebugEnabled();
+
+  let source;
+  if (explicitSetting !== null) {
+    source = explicitSetting ? 'explicit-enable' : 'explicit-disable';
+  } else if (nodeEnv === 'test') {
+    source = 'test-default';
+  } else {
+    source = 'default-off';
+  }
+
+  return {
+    enabled,
+    nodeEnv,
+    rawValue,
+    explicitSetting,
+    source
+  };
+}
+
 function maskValue(value) {
   if (value === null || value === undefined) {
     return value;
@@ -361,5 +387,6 @@ export {
   annotateTrace,
   createNamespaceTracer,
   wrapModuleFunctions,
-  isAdvancedDebugEnabled
+  isAdvancedDebugEnabled,
+  getAdvancedDebugState
 };
