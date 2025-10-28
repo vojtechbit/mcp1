@@ -65,5 +65,36 @@ export function cleanupExpiredSnapshots() {
   }
 }
 
+const SNAPSHOT_DEBUG_ENTRY_LIMIT = 20;
+
+export function getSnapshotDiagnostics() {
+  const now = Date.now();
+  const entries = [];
+
+  for (const [token, snapshot] of snapshotStore.entries()) {
+    const ageMs = now - snapshot.timestamp;
+    entries.push({
+      tokenPreview: token.slice(0, 8),
+      ageMs,
+      expiresInMs: Math.max(0, SNAPSHOT_TTL_MS - ageMs),
+      hasData: snapshot && Object.keys(snapshot.data || {}).length > 0
+    });
+  }
+
+  entries.sort((a, b) => (b.ageMs ?? 0) - (a.ageMs ?? 0));
+
+  return {
+    active: snapshotStore.size,
+    ttlMs: SNAPSHOT_TTL_MS,
+    entries: entries.slice(0, SNAPSHOT_DEBUG_ENTRY_LIMIT)
+  };
+}
+
+export function clearSnapshots() {
+  const removed = snapshotStore.size;
+  snapshotStore.clear();
+  return removed;
+}
+
 // Run cleanup every minute
 setInterval(cleanupExpiredSnapshots, 60000);

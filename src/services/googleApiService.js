@@ -41,6 +41,104 @@ const labelDirectoryCache = new Map();
 const USER_ADDRESS_CACHE_TTL_MS = 5 * 60 * 1000;
 const userAddressCache = new Map();
 
+const DEBUG_CACHE_ENTRY_LIMIT = 20;
+
+function maskDebugKey(key) {
+  if (typeof key !== 'string') {
+    return typeof key;
+  }
+
+  if (key.length <= 6) {
+    return key;
+  }
+
+  return `${key.slice(0, 3)}…${key.slice(-2)}`;
+}
+
+function summarizeCacheEntries(cache, { ttlMs, valueSummary } = {}) {
+  const now = Date.now();
+  const entries = [];
+
+  for (const [key, value] of cache.entries()) {
+    const timestamp = typeof value?.timestamp === 'number' ? value.timestamp : null;
+    const ageMs = timestamp ? now - timestamp : null;
+    const summary = typeof valueSummary === 'function' ? valueSummary(value) : {};
+
+    entries.push({
+      key: maskDebugKey(key),
+      cachedAt: timestamp ? new Date(timestamp).toISOString() : null,
+      ageMs,
+      expiresInMs: timestamp && typeof ttlMs === 'number'
+        ? Math.max(0, ttlMs - ageMs)
+        : null,
+      ...summary
+    });
+  }
+
+  entries.sort((a, b) => (b.ageMs ?? 0) - (a.ageMs ?? 0));
+
+  return {
+    size: cache.size,
+    ttlMs: ttlMs ?? null,
+    entries: entries.slice(0, DEBUG_CACHE_ENTRY_LIMIT)
+  };
+}
+
+function getDebugDiagnostics() {
+  return {
+    activeRefreshes: {
+      count: activeRefreshes.size,
+      users: Array.from(activeRefreshes.keys()).map(maskDebugKey)
+    },
+    labelDirectoryCache: summarizeCacheEntries(labelDirectoryCache, {
+      ttlMs: LABEL_CACHE_TTL_MS,
+      valueSummary: value => ({
+        labelCount: Array.isArray(value?.labels) ? value.labels.length : 0
+      })
+    }),
+    userAddressCache: summarizeCacheEntries(userAddressCache, {
+      ttlMs: USER_ADDRESS_CACHE_TTL_MS,
+      valueSummary: value => ({
+        addressCount: Array.isArray(value?.addresses) ? value.addresses.length : 0
+      })
+    })
+  };
+}
+
+function flushDebugCaches({ targets = [] } = {}) {
+  const normalizedTargets = Array.isArray(targets)
+    ? targets.map(target => String(target).toLowerCase())
+    : [];
+
+  const targetSet = new Set(
+    normalizedTargets.filter(target => target === 'labels' || target === 'addresses')
+  );
+
+  if (targetSet.size === 0) {
+    targetSet.add('labels');
+    targetSet.add('addresses');
+  }
+
+  const cleared = {};
+
+  if (targetSet.has('labels')) {
+    const removed = labelDirectoryCache.size;
+    labelDirectoryCache.clear();
+    cleared.labels = removed;
+  }
+
+  if (targetSet.has('addresses')) {
+    const removed = userAddressCache.size;
+    userAddressCache.clear();
+    cleared.addresses = removed;
+  }
+
+  return {
+    cleared,
+    targets: Array.from(targetSet)
+  };
+}
+
 /**
  * Create authenticated Google API client
  */
@@ -3212,7 +3310,9 @@ const traced = wrapModuleFunctions('services.googleApiService', {
   updateCalendarEvent,
   deleteCalendarEvent,
   checkConflicts,
-  listCalendars
+  listCalendars,
+  getDebugDiagnostics,
+  flushDebugCaches
 });
 
 const {
@@ -3252,7 +3352,9 @@ const {
   updateCalendarEvent: tracedUpdateCalendarEvent,
   deleteCalendarEvent: tracedDeleteCalendarEvent,
   checkConflicts: tracedCheckConflicts,
-  listCalendars: tracedListCalendars
+  listCalendars: tracedListCalendars,
+  getDebugDiagnostics: tracedGetDebugDiagnostics,
+  flushDebugCaches: tracedFlushDebugCaches
 } = traced;
 
 export {
@@ -3292,5 +3394,7 @@ export {
   tracedUpdateCalendarEvent as updateCalendarEvent,
   tracedDeleteCalendarEvent as deleteCalendarEvent,
   tracedCheckConflicts as checkConflicts,
-  tracedListCalendars as listCalendars
+  tracedListCalendars as listCalendars,
+  tracedGetDebugDiagnostics as getDebugDiagnostics,
+  tracedFlushDebugCaches as flushDebugCaches
 };
