@@ -6,7 +6,7 @@ const router = express.Router();
  * Privacy Policy endpoint (GDPR compliant - CZ + EN)
  * GET /privacy-policy
  * 
- * Updated: October 12, 2025
+ * Updated: October 26, 2025
  * Complete coverage: Gmail, Calendar, Tasks, Contacts (Sheets), Drive
  */
 router.get('/privacy-policy', (req, res) => {
@@ -136,11 +136,12 @@ router.get('/privacy-policy', (req, res) => {
     <!-- ============================================ -->
     
     <h1>🔐 Zásady ochrany osobních údajů</h1>
-    <p class="last-updated">Poslední aktualizace: 12. října 2025</p>
+    <p class="last-updated">Poslední aktualizace: 26. října 2025</p>
 
     <div class="highlight">
-      <strong>Stručně:</strong> Přistupujeme k vašim datům Gmail, Google Kalendář, Google Tasks a Google Sheets pouze když to explicitně požadujete. 
-      Všechny tokeny šifrujeme pomocí AES-256-GCM. Vaše data nikdy neprodáváme ani nepoužíváme pro jiné účely než poskytování služby. 
+      <strong>Stručně:</strong> Přistupujeme k vašim datům Gmail, Google Kalendář, Google Tasks a Google Sheets pouze když to explicitně požadujete.
+      Přílohy zpracováváme jen v paměti a stahování probíhá přes HMAC podepsané URL s expirací do 60 minut.
+      Všechny tokeny šifrujeme pomocí AES-256-GCM a nikdy je neprodáváme ani nepoužíváme pro jiné účely.
       Přístup můžete kdykoliv zrušit přes nastavení Google účtu.
     </div>
 
@@ -192,6 +193,7 @@ router.get('/privacy-policy', (req, res) => {
         <li>API Request Logs (časové razítko, endpoint, user ID)</li>
         <li>Token Usage Logs (časová razítka použití a obnovení tokenů)</li>
         <li>Error Logs (pro debugging, neobsahují citlivý obsah)</li>
+        <li>Security Event Logs (HTTP status, kód chyby; bez obsahu emailů)</li>
         <li>Last Used Timestamp (pro automatické čištění neaktivních účtů)</li>
         <li>Authorization Code (dočasný kód, 10 minut)</li>
         <li>Proxy Tokens (dočasné tokeny, 30 dní)</li>
@@ -221,6 +223,10 @@ router.get('/privacy-policy', (req, res) => {
           <li>Mazání emailů (přesun do koše)</li>
           <li>Označování emailů hvězdičkou (star/unstar)</li>
           <li>Označování jako přečtené/nepřečtené (read/unread)</li>
+          <li>Správa štítků u zpráv i vláken (přidání/odebrání labelů)</li>
+          <li>Správa celých vláken (mark thread read/unread, reply-to-thread)</li>
+          <li>Získání kandidátů na follow-up (neodpovězené nebo stárnoucí vlákna)</li>
+          <li>Bezpečné zpracování příloh: metadata, textové/CSV/XLSX preview a podepsané download URL</li>
         </ul>
       </div>
 
@@ -259,12 +265,13 @@ router.get('/privacy-policy', (req, res) => {
       </div>
 
       <h3>4.5 Co NIKDY nesbíráme</h3>
-      <ul>
-        <li>❌ Obsah emailů bez vašeho explicitního požadavku</li>
-        <li>❌ Přílohy emailů bez vašeho explicitního požadavku</li>
-        <li>❌ Detaily kalendářových událostí bez vašeho explicitního požadavku</li>
-        <li>❌ Obsah úkolů bez vašeho explicitního požadavku</li>
-        <li>❌ Obsah Google Sheets bez vašeho explicitního požadavku</li>
+        <ul>
+          <li>❌ Obsah emailů bez vašeho explicitního požadavku</li>
+          <li>❌ Přílohy emailů bez vašeho explicitního požadavku</li>
+          <li>❌ Trvalé ukládání příloh (po doručení je neuchováváme v databázi)</li>
+          <li>❌ Detaily kalendářových událostí bez vašeho explicitního požadavku</li>
+          <li>❌ Obsah úkolů bez vašeho explicitního požadavku</li>
+          <li>❌ Obsah Google Sheets bez vašeho explicitního požadavku</li>
         <li>❌ Soubory z Google Drive (kromě Sheets pro kontakty)</li>
         <li>❌ Historii prohlížení nebo cookies</li>
         <li>❌ Citlivé údaje podle GDPR Article 9 (zdravotní stav, náboženství atd.)</li>
@@ -286,11 +293,12 @@ router.get('/privacy-policy', (req, res) => {
       </ul>
 
       <h3>5.2 Technické účely</h3>
-      <ul>
-        <li>✅ Debugging problémů pro zlepšování služby</li>
-        <li>✅ Vynucování rate limitů (max. 100 požadavků/hodinu)</li>
-        <li>✅ Zabezpečení proti neautorizovanému přístupu</li>
-      </ul>
+        <ul>
+          <li>✅ Debugging problémů pro zlepšování služby</li>
+          <li>✅ Vynucování rate limitů (max. 100 požadavků/hodinu)</li>
+          <li>✅ Zabezpečení proti neautorizovanému přístupu</li>
+          <li>✅ Kontrolu bezpečnosti příloh a blokaci nebezpečných typů (HTTP 451)</li>
+        </ul>
       
       <div class="important">
         <strong>Důležité - NIKDY NEpoužíváme vaše data pro:</strong>
@@ -332,6 +340,13 @@ router.get('/privacy-policy', (req, res) => {
         <li>✅ Žádný manuální přístup administrátorů k šifrovaným tokenům</li>
         <li>✅ Logging všech přístupů k databázi pro audit</li>
         <li>✅ Automatické čištění expirovaných tokenů</li>
+      </ul>
+
+      <h3>6.4 Zpracování e-mailových příloh</h3>
+      <ul>
+        <li>📎 Přílohy stahujeme z Gmail API pouze na vyžádání a v databázi je neukládáme.</li>
+        <li>🔐 Download odkazy jsou podepsané HMAC klíčem a platí maximálně 60 minut.</li>
+        <li>🛡️ Nebezpečné typy souborů blokujeme a vracíme HTTP 451 včetně záznamu v logu.</li>
       </ul>
     </div>
 
@@ -378,6 +393,11 @@ router.get('/privacy-policy', (req, res) => {
           <td>Proxy Token</td>
           <td>30 dní</td>
           <td>ChatGPT session management</td>
+        </tr>
+        <tr>
+          <td>Podpis podepsané URL</td>
+          <td>Max. 60 minut (generujeme dynamicky, neukládáme)</td>
+          <td>Bezpečné stahování příloh</td>
         </tr>
         <tr>
           <td>API Request Logs</td>
@@ -540,11 +560,12 @@ router.get('/privacy-policy', (req, res) => {
 
     <div class="lang-divider">
       <h1>🔐 Privacy Policy</h1>
-      <p class="last-updated">Last Updated: October 12, 2025</p>
+      <p class="last-updated">Last Updated: October 26, 2025</p>
 
       <div class="highlight">
-        <strong>TL;DR:</strong> We only access your Gmail, Calendar, Tasks, and Sheets data when you explicitly request it. 
-        We encrypt all tokens with AES-256-GCM. We never sell your data. You can revoke access anytime.
+        <strong>TL;DR:</strong> We only access your Gmail, Calendar, Tasks, and Sheets data when you explicitly request it.
+        Attachments are processed in-memory and downloads use HMAC signed URLs that expire within 60 minutes.
+        We encrypt all tokens with AES-256-GCM, never sell your data, and you can revoke access anytime.
       </div>
 
       <div class="section">
@@ -590,6 +611,7 @@ router.get('/privacy-policy', (req, res) => {
           <li>API Request Logs (timestamp, endpoint, user ID)</li>
           <li>Token usage timestamps</li>
           <li>Error logs (for debugging)</li>
+          <li>Security event logs (HTTP status & codes; no email content)</li>
           <li>Last used timestamp</li>
         </ul>
 
@@ -616,6 +638,10 @@ router.get('/privacy-policy', (req, res) => {
             <li>Delete emails</li>
             <li>Star/unstar emails</li>
             <li>Mark as read/unread</li>
+            <li>Manage labels on messages and threads (add/remove)</li>
+            <li>Manage threads (mark thread read/unread, reply-to-thread)</li>
+            <li>Fetch follow-up candidates (unanswered or aging threads)</li>
+            <li>Secure attachment handling: metadata, text/CSV/XLSX previews, and signed download URLs</li>
           </ul>
         </div>
 
@@ -657,6 +683,7 @@ router.get('/privacy-policy', (req, res) => {
         <ul>
           <li>❌ Email content without your explicit request</li>
           <li>❌ Email attachments without your explicit request</li>
+          <li>❌ Persistent storage of attachments (we don't keep them after download)</li>
           <li>❌ Calendar event details without your explicit request</li>
           <li>❌ Task content without your explicit request</li>
           <li>❌ Sheets content without your explicit request</li>
@@ -685,6 +712,7 @@ router.get('/privacy-policy', (req, res) => {
           <li>✅ Debug issues and improve reliability</li>
           <li>✅ Enforce rate limits (max. 100 requests/hour)</li>
           <li>✅ Security against unauthorized access</li>
+          <li>✅ Attachment safety controls and blocking dangerous types (HTTP 451)</li>
         </ul>
         
         <div class="important">
@@ -718,8 +746,15 @@ router.get('/privacy-policy', (req, res) => {
           <li><strong>Backup:</strong> Automatic backups every 24 hours, retained 30 days</li>
         </ul>
         
-        <p><strong>Important:</strong> Your actual Gmail/Calendar data never leaves Google servers. 
+        <p><strong>Important:</strong> Your actual Gmail/Calendar data never leaves Google servers.
         We only store authentication tokens, not the actual content.</p>
+
+        <h3>6.4 Email Attachment Handling</h3>
+        <ul>
+          <li>📎 Attachments are fetched from the Gmail API on demand and never stored in our database.</li>
+          <li>🔐 Download links are HMAC-signed and remain valid for at most 60 minutes.</li>
+          <li>🛡️ Dangerous file types are blocked with HTTP 451 and logged for review.</li>
+        </ul>
       </div>
 
       <div class="section">
@@ -765,6 +800,11 @@ router.get('/privacy-policy', (req, res) => {
             <td>Proxy Token</td>
             <td>30 days</td>
             <td>ChatGPT session management</td>
+          </tr>
+          <tr>
+            <td>Signed URL signatures</td>
+            <td>Up to 60 minutes (generated on the fly, not stored)</td>
+            <td>Secure attachment downloads</td>
           </tr>
           <tr>
             <td>API Logs</td>

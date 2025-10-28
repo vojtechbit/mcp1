@@ -8,10 +8,13 @@
 - Posílat, číst, hledat emaily
 - Odpovídat, vytvářet drafty
 - Mazat, označovat hvězdičkou, mark as read
+- Správa štítků a vláken (mark thread read/unread, label sync)
 - Batch operace (preview, read)
 - Aggregate mode pro velké dotazy
 - Mail summaries
 - Normalizace dotazů a relativní čas
+- Bezpečná práce s přílohami (metadata, textové/CSV/XLSX preview, podepsané download URL)
+- Follow-up kandidáti s detekcí nevyřešených vláken
 
 ### Calendar:
 - Vytvářet, upravovat, mazat události
@@ -25,6 +28,12 @@
 - Bulk operace (upsert, delete)
 - Fuzzy adresní návrhy
 - Google Sheets integrace
+
+### Tasks:
+- Listovat úkoly napříč seznamy
+- Přidávat, upravovat a mazat úkoly
+- Označovat úkoly jako dokončené / vracet zpět
+- Pracovat s due date a poznámkami přímo z GPT
 
 ## Quick Start
 
@@ -61,6 +70,13 @@ git push origin main
 - **Instructions:** Uprav přímo v GPT editoru (soubor `GPT_CONFIG.md` jsme odstranili, aby nemátl). Využij aktuální produktové podklady nebo poslední export z GPT editoru.
 - **OAuth:** Viz `CUSTOM_GPT_SETUP.md`
 - **Privacy:** `https://mcp1-oauth-server.onrender.com/privacy-policy`
+
+## Development & Testing
+
+- Lokální vývoj se zapnutým watch režimem: `npm run dev`
+- Produkční start (např. Render): `npm start`
+- Integrované Node testy s izolací mocků: `npm test`
+- Ruční ověření privacy endpointu: `curl https://mcp1-oauth-server.onrender.com/privacy-policy`
 
 ## Testování
 
@@ -100,6 +116,7 @@ neví.
 ✅ TLS 1.3
 ✅ Audit logs (90 dní)
 ✅ Sanitizované logování OAuth flow (opt-in)
+✅ Podepsané URL pro přílohy (HMAC + expirace do 60 minut)
 
 ## Architektura a efektivita serveru
 
@@ -128,6 +145,14 @@ neví.
 | `STARTUP_REFRESH_THRESHOLD_MS` | (volitelné) Jak daleko před expirací se během startu refreshe spustí (default 1h). |
 | `BACKGROUND_REFRESH_THRESHOLD_MS` | (volitelné) Buffer pro background refresh (default 2h). |
 | `OAUTH_REQUEST_LOGGING` | Zapni jen při ladění (`true`); výstup je redigovaný. |
+| `REQUEST_BUDGET_15M` | Sdílený základ pro všechny limity (výchozí 600). Změna škáluje celý throttling. |
+
+## Monitoring & Audit
+
+- `ADVANCED_DEBUG=true` zapne detailní trace logy s časováním makro volání.
+- Redigované OAuth logování (`OAUTH_REQUEST_LOGGING=true`) umožní vyšetřit incidenty bez leaků obsahu.
+- Centrální handler chyb vypisuje status, kód a typ chyby (včetně 451 u příloh) do Render/console logů pro auditní stopu.
+- Detekce podezřelých příloh vrací HTTP 451 a díky `handleControllerError` je zanesena v konzolovém logu.
 
 ## Soubory
 
