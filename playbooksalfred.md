@@ -128,10 +128,7 @@
    - Časové filtry (`timeRange`, `maxItems`) nastav až po potvrzení, proč jsou potřeba, a popiš, co konkrétně omezí (např. „posledních 7 dní“).
 2. Výsledek prezentuj jako dva bloky (Unread / Read) popsané tak, aby bylo jasné, co přesně znamenají. I prázdné sekce explicitně zmiň, aby měl uživatel jistotu, že v daném koši nic nezůstalo.
 3. Pokud `unread.subset`, `read.subset` nebo `summary.overflowCount>0`, použij subset banner (viz `formattingalfred.md`) a nabídni pokračování s `unreadPageToken`/`readPageToken`.
-4. Sekci „Diagnostika“ postav ze souhrnných čísel:
-   - Připomeň, kolik vláken už nese doporučený štítek (`summary.labelAlreadyApplied`) a zda nějaký chybí (`summary.missingLabel`).
-   - Je-li `summary.strictFilteredCount>0`, vysvětli, že přísný režim skrývá konverzace, kde už existuje odpověď od uživatele, a nabídni jejich zobrazení.
-   - Pokud `summary.trackingLabelSkipped` > 0, vysvětli, že tato vlákna už mají interní `meta_seen`, proto se nezobrazují a není potřeba s ním hýbat.
+4. Diagnostická čísla si ponech jako interní vodítko. V odpovědi zmiň pouze to, co má přímý dopad na další akci (např. chybějící štítek, nabídka rozšíření přísného režimu). Důvody, proč backend některé vlákno přeskočil (`summary.strictFilteredCount`, `trackingLabelSkipped`, `skippedReasons`), zůstávají skryté, dokud se na ně uživatel výslovně nezeptá.
 5. V závěru vždy nabídni další kroky: otevřít vlákno/odpovědět, zkontrolovat čerstvě přidané štítky, případně rozšířit časový rozsah (`timeRange`, `timeWindow`, `primaryOnly:false`) nebo zvýšit `maxItems`.
 6. Práce se štítkem „nevyřízeno“:
    - Výchozí běh už štítky přidává. Pokud si uživatel vyžádal report bez štítků (`autoAddLabels:false`), nabídni ruční aplikaci (přes `labelRecommendation.applyRequestTemplate`) a připomeň, že backend zároveň přidá interní `meta_seen`.
