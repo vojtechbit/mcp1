@@ -4,10 +4,90 @@
 
 import crypto from 'crypto';
 import { REFERENCE_TIMEZONE } from '../config/limits.js';
-import { toZonedTime, fromZonedTime } from 'date-fns-tz';
-import { parseISO } from 'date-fns';
 
 const MS_IN_HOUR = 60 * 60 * 1000;
+const ISO_LOCAL_DATE_TIME = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2})(?:\.(\d{1,3}))?)?$/;
+
+function parseIsoDate(value) {
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    throw new Error(`Invalid ISO date: ${value}`);
+  }
+
+  return date;
+}
+
+function parseLocalDateTimeParts(value) {
+  const match = ISO_LOCAL_DATE_TIME.exec(value);
+
+  if (!match) {
+    throw new Error(`Invalid Prague local datetime: ${value}`);
+  }
+
+  const [
+    ,
+    year,
+    month,
+    day,
+    hour,
+    minute,
+    second = '00',
+    millisecond = '0'
+  ] = match;
+
+  return {
+    year: Number(year),
+    month: Number(month),
+    day: Number(day),
+    hour: Number(hour),
+    minute: Number(minute),
+    second: Number(second),
+    millisecond: Number((millisecond + '00').slice(0, 3))
+  };
+}
+
+function pragueLocalPartsToUtc(parts) {
+  let guess = getPragueOffsetHours(
+    new Date(Date.UTC(parts.year, parts.month - 1, parts.day, 12, 0, 0, 0))
+  );
+
+  if (!Number.isFinite(guess)) {
+    guess = 1;
+  }
+
+  let utcMs = Date.UTC(
+    parts.year,
+    parts.month - 1,
+    parts.day,
+    parts.hour,
+    parts.minute,
+    parts.second,
+    parts.millisecond
+  );
+
+  for (let i = 0; i < 3; i += 1) {
+    utcMs = Date.UTC(
+      parts.year,
+      parts.month - 1,
+      parts.day,
+      parts.hour,
+      parts.minute,
+      parts.second,
+      parts.millisecond
+    ) - guess * MS_IN_HOUR;
+
+    const actual = getPragueOffsetHours(new Date(utcMs));
+
+    if (!Number.isFinite(actual) || actual === guess) {
+      break;
+    }
+
+    guess = actual;
+  }
+
+  return new Date(utcMs);
+}
 
 function resolveDateParts({ year, month, day }) {
   const normalized = new Date(Date.UTC(year, month - 1, day, 12, 0, 0, 0));
@@ -62,24 +142,61 @@ function getPragueDateTimeParts(date) {
  * @returns {number} Offset in hours (e.g., 1 or 2)
  */
 export function getPragueOffsetHours(date) {
+  if (!(date instanceof Date) || Number.isNaN(date.getTime())) {
+    return 1;
+  }
+
+  try {
+    // Use Prague-local date parts to derive the precise offset (handles DST automatically)
+    const {
+      year,
+      month,
+      day,
+      hour,
+      minute,
+      second
+    } = getPragueDateTimeParts(date);
+
+    const pragueAsUtcMs = Date.UTC(year, month - 1, day, hour, minute, second);
+    const offsetHours = (pragueAsUtcMs - date.getTime()) / MS_IN_HOUR;
+
+    if (Number.isFinite(offsetHours)) {
+      // Round to the nearest whole hour to avoid floating point drift (e.g., 1.999999 → 2)
+      return Math.round(offsetHours);
+    }
+  } catch (error) {
+    console.warn('Failed to derive Prague offset from date parts, falling back to name parsing:', error);
+  }
+
+  // Fallback: use timezone name (e.g., GMT+1, CET, CEST)
   const formatter = new Intl.DateTimeFormat('en-US', {
     timeZone: REFERENCE_TIMEZONE,
     timeZoneName: 'short'
   });
 
-  const parts = formatter.formatToParts(date);
-  const tzName = parts.find(p => p.type === 'timeZoneName')?.value || '';
-
-  // Extract offset from timezone name (e.g., "GMT+1" or "GMT+2")
-  if (tzName.includes('+')) {
-    return parseInt(tzName.split('+')[1]);
-  } else if (tzName.includes('-')) {
-    return -parseInt(tzName.split('-')[1]);
+  let tzName = '';
+  try {
+    const parts = formatter.formatToParts(date);
+    tzName = parts.find(p => p.type === 'timeZoneName')?.value || '';
+  } catch (error) {
+    console.warn('Intl DateTimeFormat failed to provide timeZoneName, using DST heuristics:', error);
   }
 
-  // Fallback when Intl API cannot provide timezone information
-  // Compute DST start/end manually: Europe/Prague switches at 01:00 UTC
-  // on the last Sunday in March (to UTC+2) and the last Sunday in October (back to UTC+1)
+  const gmtMatch = tzName.match(/GMT([+-])(\d{1,2})(?::(\d{2}))?/i);
+  if (gmtMatch) {
+    const sign = gmtMatch[1] === '-' ? -1 : 1;
+    const hours = parseInt(gmtMatch[2], 10);
+    return sign * hours;
+  }
+
+  if (/CEST/i.test(tzName)) {
+    return 2;
+  }
+  if (/CET/i.test(tzName)) {
+    return 1;
+  }
+
+  // Final fallback: compute DST transitions manually (last Sunday in March/October)
   const year = date.getUTCFullYear();
 
   const getDstTransitionUtc = (monthIndex) => {
@@ -260,15 +377,12 @@ export function convertToUtcIfNeeded(dateTimeString) {
 
   // If it already has timezone (ends with Z or has +/- offset), parse and convert to UTC
   if (dateTimeString.endsWith('Z') || /[+-]\d{2}:\d{2}$/.test(dateTimeString)) {
-    const date = parseISO(dateTimeString);
-    return date.toISOString();
+    return parseIsoDate(dateTimeString).toISOString();
   }
 
   // No timezone specified - interpret as Prague time and convert to UTC
-  // fromZonedTime takes a date in the specified timezone and converts it to UTC
-  const pragueDate = parseISO(dateTimeString);
-  const utcDate = fromZonedTime(pragueDate, REFERENCE_TIMEZONE);
-  return utcDate.toISOString();
+  const parts = parseLocalDateTimeParts(dateTimeString);
+  return pragueLocalPartsToUtc(parts).toISOString();
 }
 
 /**
@@ -301,14 +415,14 @@ export function normalizeCalendarTime(dateTimeString) {
 
   // If already UTC (ends with Z), normalize and return
   if (dateTimeString.endsWith('Z')) {
-    return { dateTime: parseISO(dateTimeString).toISOString() };
+    return { dateTime: parseIsoDate(dateTimeString).toISOString() };
   }
 
   // Strip any timezone offset (e.g., +02:00, +01:00, -05:00)
   const withoutOffset = dateTimeString.replace(/[+-]\d{2}:\d{2}$/, '');
 
   // Parse the date to determine DST status (use a rough Date for offset calculation)
-  const roughDate = new Date(withoutOffset);
+  const roughDate = parseIsoDate(withoutOffset);
   const pragueOffset = getPragueOffsetHours(roughDate);
 
   // Add correct Prague offset
@@ -318,10 +432,7 @@ export function normalizeCalendarTime(dateTimeString) {
 
   const withCorrectOffset = withoutOffset + offsetString;
 
-  // Now parseISO will correctly convert to UTC
-  const utcDate = parseISO(withCorrectOffset);
-
-  return { dateTime: utcDate.toISOString() };
+  return { dateTime: parseIsoDate(withCorrectOffset).toISOString() };
 }
 
 /**
