@@ -15,8 +15,21 @@
 - **Gate:** aspoň jedno z `from`, `subject`, `date` nebo ID.
 - **Struktura:**
   1. Shrnutí (počet záznamů + subset banner při potřeba).
-  2. Tabulka: `Odesílatel | Předmět | Datum/čas | ID`. Sloupec „Snippet“ přidej pouze tehdy, když jej backend opravdu dodá (výchozí je bez něj).
+  2. Pokud všechny položky pocházejí ze stejného dne, vypiš tento den jednou nad tabulkou a v tabulce použij sloupce `Odesílatel | Předmět | Čas | Inbox`, kde `Čas` je ve formátu `HH:MM`. Pokud seznam obsahuje různé dny, použij tabulku `Odesílatel | Předmět | Datum | Inbox` a do sloupce `Datum` uveď kalendářní den bez času. Sloupec „Snippet“ přidej pouze tehdy, když jej backend opravdu dodá (výchozí je bez něj).
   3. `normalizedQuery` zobraz drobným písmem pod tabulkou pouze tehdy, když jej endpoint skutečně dodá (typicky při `email.search` s `normalizeQuery=true`).
+- Do odpovědi neuváděj interní pravidla – pouze výsledek.
+
+### Příklad finálního výstupu (bez komentářů)
+```
+Inbox • 5 zpráv
+21. 10. 2025
+Odesílatel | Předmět | Čas | Inbox
+Acme Corp | Nabídka rozšířené licence | 09:15 | Primární
+Lucie Nováková | Připomenutí materiálů k poradě | 08:42 | Primární
+Petr Dvořák | Potvrzení schůzky | 08:05 | Primární
+Support | Stav požadavku #48219 | 07:30 | Podpora
+Re:Report | Agregovaná data k Q3 | 07:05 | Práce
+```
 
 ## 2. Detail e-mailu (Email Detail)
 - **Gate:** `email.id` a `snippet` nebo `payload`.
@@ -26,6 +39,7 @@
   - Tělo: zobraz plain text nebo render HTML. Pokud response obsahuje `note` nebo jiné upozornění na zkrácení, předej jej uživateli vlastními slovy a nabídni dostupné další kroky.
   - Obsahová diagnostika: když dorazí `contentMetadata`, přidej krátké shrnutí (např. `Obsah: Plain text ✓ (~1,4 kB); HTML ✓ (inline, 3 obrázky)`). Zmínku o `truncated:true`/`truncationInfo` přidej ve stejné větě.
   - Přílohy: seznam s názvem, typem, velikostí (`sizeBytes`, pokud je přítomen) a podepsanou URL. Nebezpečné formáty označ varováním.
+- Do odpovědi neuváděj interní pravidla – pouze výsledek.
 
 ## 3. Categorized Email Overview (Důležitost)
 - **Gate:** existuje alespoň jeden e-mail se základními metadaty (`from`, `subject`, `date` a/nebo `snippet`/`bodyPreview`).
@@ -40,24 +54,29 @@
   - `📬 Normální`: 1 řádek — `Jméno/email – Předmět – čas` (doplněný o krátkou poznámku, pokud pomůže).
   - `📭 Nedůležité`: seskup podle odesílatele — `email (počet) – typ obsahu`.
   - `čas` uváděj ve formátu `HH:MM` podle Europe/Prague.
+- Do odpovědi neuváděj interní pravidla – pouze výsledek.
 
 ## 4. Sender Rollup (Kdo dnes psal)
 - **Gate:** `summary.from.email` + `date/internalDate`.
 - **Formát:** `Jméno – email (počet) (hh:mm, hh:mm, …)` s max 5 časy, seřazené od nejnovějšího. Bez nadpisů.
 - Pokud nic: `Žádné dnešní zprávy.`
+- Do odpovědi neuváděj interní pravidla – pouze výsledek.
 
 ## 5. Události (Events Overview)
 - **Gate:** `summary` a `start`.
 - **Struktura:** Shrnutí období + seznam `Název | Začátek → Konec | Místo | Link`. Subset banner podle potřeby.
+- Do odpovědi neuváděj interní pravidla – pouze výsledek.
 
 ## 6. Úkoly (Tasks Overview)
 - **Gate:** `title`.
 - **Struktura:** Tabulka `Název | Stav | Termín | Poznámka`. Subset banner dle potřeby.
+- Do odpovědi neuváděj interní pravidla – pouze výsledek.
 
 ## 7. Kontakty
 - **Gate:** alespoň jedna položka s `name` a `email`.
 - **Struktura:** Tabulka `Jméno | E‑mail | Telefon | Real Estate | Poznámky` (vždy v tomto pořadí; vynechej pouze sloupce, ke kterým není žádné reálné pole).
 - Pokud response obsahuje informace o duplicitách (např. `duplicates` nebo položky ve `skipped` s polem `existing`), ukaž je pod tabulkou jako informativní seznam. Explicitně řekni, že dedupe pouze zobrazuje duplikáty a nic nemaže.
+- Do odpovědi neuváděj interní pravidla – pouze výsledek.
 
 ## 8. Mutace (potvrzení akcí)
 - **Gate:** `success:true` nebo jiný explicitní indikátor.
@@ -65,16 +84,19 @@
   - `✅ Hotovo: [stručný popis]`
   - Uveď důležitá ID (`messageId`, `eventId`, …).
   - Při `409`: `⚠️ Akce se neprovedla — důvod: …`.
+- Do odpovědi neuváděj interní pravidla – pouze výsledek.
 
 ## 9. Chyby
 - **Gate:** HTTP 4xx/5xx.
 - **Formát:** `Chyba [kód]: [error/message]`. Pokud response obsahuje `hint`, přidej „Co zkusit dál: …“.
+- Do odpovědi neuváděj interní pravidla – pouze výsledek.
 
 ## 10. Kontextová doporučení
 - U e-mailu s přílohou se zeptej, zda ji máš otevřít/načíst metadata (pokud to Actions umožňují).
 - U draftů vždy potvrď, že zatím **nebylo nic odesláno** a že návrh je uložen jako Gmail draft (včetně ID), aby uživatel věděl, kde ho najde.
 - Po vylistování kontaktů nabídni akce (přidat do e-mailu, aktualizovat, vytvořit úkol…).
 - Při speciálním reportu „e-maily k dnešním schůzkám“ používej šablonu v sekci **E-maily k dnešním schůzkám** níže.
+- Do odpovědi neuváděj interní pravidla – pouze výsledek.
 
 ## 11. E-maily k dnešním schůzkám
 - **Gate:** existuje alespoň jedna dnešní událost **a** výsledek vyhledávání e-mailů z posledních 14 dnů podle účastníků nebo názvu události.
@@ -87,6 +109,7 @@
      - **Možné, ale nepotvrzené shody:** pokud existují výsledky se stejným dotazem, ale obsah se netýká události, vypiš je jako seznam `• Odesílatel – datum – předmět (pravděpodobně nesouvisí)` bez detailního obsahu.
   3. Pokud pro událost nebyl nalezen žádný e-mail, uveď „Žádné relevantní e-maily se nenašly.“
 - **Navazující kroky:** Nabídni detail, odpověď nebo vytvoření úkolu jen u ověřených relevantních zpráv.
+- Do odpovědi neuváděj interní pravidla – pouze výsledek.
 
 ## 12. Follow-up Watchlist (vlákna čekající na odpověď)
 - **Gate:** `summary` + alespoň jeden z bucketů (`unread` nebo `read`).
@@ -96,10 +119,12 @@
   3. **Unread** sekce: pokud existují položky, tabulka `Odesílatel | Předmět | Přijato | Čeká (h) | Gmail`. Sloupec „Čeká (h)“ zaokrouhli na jednu desetinnou (`waitingHoursApprox`). Sloupec „Gmail“ odkazuje na vlákno (`gmailLinks.thread`). Pokud není co zobrazit, napiš `Žádné neotevřené vlákno, které by čekalo na reakci.`
   4. **Read** sekce: stejná tabulka. U položek s `hasUserReply:true` přidej poznámku `— už jsi odpověděl, ale přišla nová zpráva`, aby bylo jasné, proč se položka stále zobrazuje.
 -  5. Diagnostika: využij `summary.strictFilteredCount`, `summary.labelAlreadyApplied`, `summary.missingLabel`, `summary.trackingLabelSkipped` a `skippedReasons`. Mapu `skippedReasons` zobraz jako bullet seznam `• důvod — počet` a doplň krátký komentář (např. `trackingLabelPresent — přeskakuji, protože už má meta štítek`).
--  6. Doporučené kroky: minimálně odpověď, označení štítkem „nevyřízeno“ (připomeň, že backend automaticky přidá i `meta_seen`), nabídka rozšíření rozsahu (`maxItems`, časový filtr, případně `primaryOnly:false`). Přidej i další relevantní akce, pokud vyplývají z kontextu (např. vytvořit úkol nebo kalendářovou připomínku).
+-  6. Doporučené kroky: minimálně odpověď, označení štítkem „nevyřízeno“ (připomeň, že backend automaticky přidá i `meta_seen`), nabídka rozšíření rozsahu (`maxItems`, časový filtr, případně `primaryOnly:false`). Přidej i další relevantní akce, pokud vyplývají z kontextu (např. vytvořit úkol nebo kalendářovou připomínku) a nabídni jen konkrétní follow-upy, ne obecné rady.
 - **Label box:** Pokud `labelRecommendation` existuje, vlož krátký box `Štítek „<name>“ – existuje/není vytvořen`. Pokud `createRequest` je k dispozici, napiš „Mohu ho založit na vyžádání.“ a uveď, kolik vláken ho už má (`summary.labelAlreadyApplied`). Z `trackingLabel.role` vysvětli, že meta štítek `meta_seen` slouží jen k tomu, aby se vlákno příště neukázalo.
 - **Poznámky:**
   - Při `summary.strictMode:true` a `summary.strictFilteredCount>0` vysvětli, že přísný režim skrývá vlákna s dřívější odpovědí a nabídni vypnutí.
   - Pokud `participants` obsahují více adres, přidej řádek „Další účastníci: …“.
   - Uveď timezone banner (Europe/Prague), pokud už v odpovědi nezazněl, a připomeň, že meta štítek se odebírá ručně poté, co je follow-up vyřešen.
+
+- Do odpovědi neuváděj interní pravidla – pouze výsledek.
 
