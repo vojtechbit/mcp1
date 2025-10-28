@@ -62,6 +62,7 @@ async function listTasks(req, res) {
         let pagesConsumed = 0;
         let hasMore = false;
         let partial = false;
+        let truncated = false;
 
         while (true) {
           const result = await tasksService.listTasks(req.user.googleSub, {
@@ -74,17 +75,27 @@ async function listTasks(req, res) {
           allItems = allItems.concat(items);
           pagesConsumed++;
 
+          const nextPageToken = result.nextPageToken;
+          const hasNextPage = Boolean(nextPageToken);
+          const exceededCap = allItems.length > AGGREGATE_CAP_TASKS;
+          const reachedCap = allItems.length >= AGGREGATE_CAP_TASKS;
+
           // Check if we hit the cap
-          if (allItems.length >= AGGREGATE_CAP_TASKS) {
-            hasMore = true;
-            partial = true;
-            allItems = allItems.slice(0, AGGREGATE_CAP_TASKS);
+          if (reachedCap) {
+            const hasAdditionalResults = hasNextPage;
+            if (exceededCap) {
+              allItems = allItems.slice(0, AGGREGATE_CAP_TASKS);
+              truncated = true;
+            }
+            hasMore = hasAdditionalResults;
+            partial = hasAdditionalResults;
+            truncated = truncated || hasAdditionalResults;
             break;
           }
 
           // Check if there are more pages
-          if (result.nextPageToken) {
-            currentPageToken = result.nextPageToken;
+          if (hasNextPage) {
+            currentPageToken = nextPageToken;
           } else {
             hasMore = false;
             break;
@@ -104,6 +115,7 @@ async function listTasks(req, res) {
           pagesConsumed,
           hasMore,
           partial,
+          truncated,
           snapshotToken: newSnapshotToken
         };
 

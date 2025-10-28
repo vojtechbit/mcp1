@@ -378,6 +378,7 @@ async function searchEmails(req, res) {
         let pagesConsumed = 0;
         let hasMore = false;
         let partial = false;
+        let truncated = false;
 
         while (true) {
           const result = await gmailService.searchEmails(req.user.googleSub, {
@@ -390,15 +391,25 @@ async function searchEmails(req, res) {
           allItems = allItems.concat(items);
           pagesConsumed++;
 
-          if (allItems.length >= AGGREGATE_CAP_MAIL) {
-            hasMore = true;
-            partial = true;
-            allItems = allItems.slice(0, AGGREGATE_CAP_MAIL);
+          const nextPageToken = result.nextPageToken;
+          const hasNextPage = Boolean(nextPageToken);
+          const exceededCap = allItems.length > AGGREGATE_CAP_MAIL;
+          const reachedCap = allItems.length >= AGGREGATE_CAP_MAIL;
+
+          if (reachedCap) {
+            const hasAdditionalResults = hasNextPage;
+            if (exceededCap) {
+              allItems = allItems.slice(0, AGGREGATE_CAP_MAIL);
+              truncated = true;
+            }
+            hasMore = hasAdditionalResults;
+            partial = hasAdditionalResults;
+            truncated = truncated || hasAdditionalResults;
             break;
           }
 
-          if (result.nextPageToken) {
-            currentPageToken = result.nextPageToken;
+          if (hasNextPage) {
+            currentPageToken = nextPageToken;
           } else {
             hasMore = false;
             break;
@@ -431,6 +442,7 @@ async function searchEmails(req, res) {
           pagesConsumed,
           hasMore,
           partial,
+          truncated,
           snapshotToken: newSnapshotToken,
           idsReturned: allItems.length
         };
