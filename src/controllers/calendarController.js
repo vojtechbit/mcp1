@@ -420,14 +420,23 @@ async function updateEvent(req, res) {
     }
 
     // Check for conflicts if requested and time is being updated
+    let currentEventCache = null;
+
+    const getCurrentEvent = async () => {
+      if (!currentEventCache) {
+        currentEventCache = await calendarService.getCalendarEvent(
+          req.user.googleSub,
+          eventId
+        );
+      }
+      return currentEventCache;
+    };
+
     if (checkConflicts && (updates.start || updates.end)) {
       console.log(`🔍 Checking for calendar conflicts...`);
 
       // Get current event to determine time range
-      const currentEvent = await calendarService.getCalendarEvent(
-        req.user.googleSub,
-        eventId
-      );
+      const currentEvent = await getCurrentEvent();
 
       debugStep('Loaded current event for conflict check', {
         hasStartUpdate: Boolean(updates.start),
@@ -473,9 +482,46 @@ async function updateEvent(req, res) {
     console.log(`✏️  Updating calendar event ${eventId}...`);
 
     // Normalize time fields if present
+    let fallbackTimeZoneForStringTimes;
+
+    const resolveFallbackTimeZoneForStrings = async () => {
+      if (fallbackTimeZoneForStringTimes) {
+        return fallbackTimeZoneForStringTimes;
+      }
+
+      const requestTimeZone =
+        updates.timeZone ||
+        (typeof updates.start === 'object' && updates.start?.timeZone) ||
+        (typeof updates.end === 'object' && updates.end?.timeZone);
+
+      if (requestTimeZone) {
+        fallbackTimeZoneForStringTimes = requestTimeZone;
+        return fallbackTimeZoneForStringTimes;
+      }
+
+      const currentEvent = await getCurrentEvent();
+
+      const eventTimeZone =
+        currentEvent?.start?.timeZone ||
+        currentEvent?.end?.timeZone ||
+        currentEvent?.start?.originalTimeZone ||
+        currentEvent?.end?.originalTimeZone ||
+        currentEvent?.timeZone;
+
+      fallbackTimeZoneForStringTimes = eventTimeZone || REFERENCE_TIMEZONE;
+
+      debugStep('Resolved fallback timezone for string updates', {
+        fallbackTimeZone: fallbackTimeZoneForStringTimes,
+        source: eventTimeZone ? 'existing-event' : 'reference'
+      });
+
+      return fallbackTimeZoneForStringTimes;
+    };
+
     if (updates.start) {
       if (typeof updates.start === 'string') {
-        updates.start = normalizeCalendarTime(updates.start, REFERENCE_TIMEZONE);
+        const fallbackTimeZone = await resolveFallbackTimeZoneForStrings();
+        updates.start = normalizeCalendarTime(updates.start, fallbackTimeZone);
       } else if (updates.start.dateTime) {
         const normalized = normalizeCalendarTime(
           updates.start.dateTime,
@@ -487,7 +533,8 @@ async function updateEvent(req, res) {
 
     if (updates.end) {
       if (typeof updates.end === 'string') {
-        updates.end = normalizeCalendarTime(updates.end, REFERENCE_TIMEZONE);
+        const fallbackTimeZone = await resolveFallbackTimeZoneForStrings();
+        updates.end = normalizeCalendarTime(updates.end, fallbackTimeZone);
       } else if (updates.end.dateTime) {
         const normalized = normalizeCalendarTime(
           updates.end.dateTime,
