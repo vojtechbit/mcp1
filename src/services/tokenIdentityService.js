@@ -14,6 +14,10 @@ const CACHE_COLLECTION = process.env.ACCESS_TOKEN_CACHE_COLLECTION || 'access_to
 const CACHE_TTL_SECONDS = parseInt(process.env.ACCESS_TOKEN_CACHE_TTL_SECONDS || '900', 10);
 const CACHE_MIN_TTL_MS = parseInt(process.env.ACCESS_TOKEN_CACHE_MIN_TTL_MS || '60000', 10);
 const CACHE_EXPIRY_BUFFER_MS = parseInt(process.env.ACCESS_TOKEN_CACHE_EXPIRY_BUFFER_MS || '120000', 10);
+const CACHE_REVALIDATION_INTERVAL_MS = parseInt(
+  process.env.ACCESS_TOKEN_CACHE_REVALIDATION_INTERVAL_MS || '300000',
+  10
+);
 const HASH_ALGORITHM = 'sha256';
 
 let indexesEnsured = false;
@@ -95,6 +99,7 @@ async function cacheAccessTokenIdentity({ accessToken, googleSub, email = null, 
         email: email || null,
         expires_at: expiresAt,
         last_seen_at: now,
+        last_validated_at: now,
         source
       },
       $setOnInsert: {
@@ -135,14 +140,28 @@ async function getCachedIdentityForAccessToken(accessToken) {
     return null;
   }
 
+  const now = new Date();
   await collection.updateOne(
     { _id: doc._id },
-    { $set: { last_seen_at: new Date() } }
+    { $set: { last_seen_at: now } }
   );
+
+  const lastValidatedAt = doc.last_validated_at ? new Date(doc.last_validated_at) : null;
+  let shouldRevalidate = false;
+
+  if (CACHE_REVALIDATION_INTERVAL_MS > 0) {
+    if (!lastValidatedAt) {
+      shouldRevalidate = true;
+    } else if (now - lastValidatedAt >= CACHE_REVALIDATION_INTERVAL_MS) {
+      shouldRevalidate = true;
+    }
+  }
 
   return {
     googleSub: doc.google_sub,
-    email: doc.email || null
+    email: doc.email || null,
+    shouldRevalidate,
+    lastValidatedAt
   };
 }
 

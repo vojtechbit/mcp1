@@ -20,6 +20,22 @@ dotenv.config();
  * 4. Attach user info to req.user
  * 5. Continue to next middleware/controller
  */
+async function fetchGoogleUserInfo(token) {
+  const { OAuth2 } = google.auth;
+  const oauth2Client = new OAuth2(
+    process.env.GOOGLE_CLIENT_ID,
+    process.env.GOOGLE_CLIENT_SECRET,
+    process.env.REDIRECT_URI
+  );
+
+  oauth2Client.setCredentials({ access_token: token });
+
+  const oauth2 = google.oauth2({ version: 'v2', auth: oauth2Client });
+
+  const response = await oauth2.userinfo.get();
+  return response.data;
+}
+
 async function verifyToken(req, res, next) {
   try {
     // Extract token from Authorization header
@@ -80,7 +96,7 @@ async function verifyToken(req, res, next) {
     // STRATEGY 2: Try cached access token identity (non-proxy flow)
     const cachedIdentity = await getCachedIdentityForAccessToken(token);
 
-    if (cachedIdentity) {
+    if (cachedIdentity && !cachedIdentity.shouldRevalidate) {
       console.log('✅ Reused cached access token identity');
 
       let email = cachedIdentity.email;
@@ -108,26 +124,16 @@ async function verifyToken(req, res, next) {
       return next();
     }
 
-    // STRATEGY 3: Fallback to Google token validation (direct access flow)
-    console.log('🔐 Token is not a proxy token, validating with Google...');
-    
-    // Create OAuth2 client with the access token
-    const { OAuth2 } = google.auth;
-    const oauth2Client = new OAuth2(
-      process.env.GOOGLE_CLIENT_ID,
-      process.env.GOOGLE_CLIENT_SECRET,
-      process.env.REDIRECT_URI
-    );
-    
-    // Set the access token
-    oauth2Client.setCredentials({ access_token: token });
-    
-    const oauth2 = google.oauth2({ version: 'v2', auth: oauth2Client });
-    
+    const usingRevalidation = Boolean(cachedIdentity);
+    if (usingRevalidation) {
+      console.log('♻️  Cached access token identity requires revalidation, contacting Google...');
+    } else {
+      console.log('🔐 Token is not a proxy token, validating with Google...');
+    }
+
     let userInfo;
     try {
-      const response = await oauth2.userinfo.get();
-      userInfo = response.data;
+      userInfo = await fetchGoogleUserInfo(token);
     } catch (error) {
       console.error('❌ [AUTH_ERROR] Token validation failed');
       console.error('Details:', {
@@ -136,7 +142,6 @@ async function verifyToken(req, res, next) {
         timestamp: new Date().toISOString()
       });
 
-      // Check for specific error types
       if (error.response?.status === 401) {
         await invalidateCachedIdentity(token).catch(cacheError =>
           console.warn('⚠️  Failed to invalidate cached identity after 401:', cacheError.message)
@@ -172,7 +177,7 @@ async function verifyToken(req, res, next) {
       name: userInfo.name,
       picture: userInfo.picture,
       accessToken: token,
-      tokenType: 'google'
+      tokenType: usingRevalidation ? 'google-revalidated' : 'google'
     };
 
     console.log(`✅ User authenticated via Google token: ${email} (${googleSub})`)
@@ -181,11 +186,11 @@ async function verifyToken(req, res, next) {
       accessToken: token,
       googleSub,
       email,
-      source: 'google-userinfo'
+      source: usingRevalidation ? 'google-userinfo-revalidation' : 'google-userinfo'
     }).catch(cacheError =>
       console.warn('⚠️  Failed to cache access token identity:', cacheError.message)
     );
-    
+
     // Continue to next middleware/controller
     next();
 
