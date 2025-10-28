@@ -1,5 +1,6 @@
 import { MongoClient } from 'mongodb';
 import dotenv from 'dotenv';
+import { logDuration, startTimer } from '../utils/performanceLogger.js';
 
 dotenv.config();
 
@@ -15,7 +16,21 @@ let client;
 let db;
 let connectionPromise = null;
 let lastConnectionAttempt = 0;
-const MIN_RETRY_DELAY = 1000; // 1 second minimum between attempts
+
+const MONGO_TIMEOUT_TIERS = [
+  {
+    name: 'fast',
+    serverSelectionTimeoutMS: 2000,
+    socketTimeoutMS: 10000,
+    connectTimeoutMS: 5000
+  },
+  {
+    name: 'standard',
+    serverSelectionTimeoutMS: 5000,
+    socketTimeoutMS: 45000,
+    connectTimeoutMS: 10000
+  }
+];
 
 /**
  * Retry helper with exponential backoff
@@ -42,14 +57,23 @@ async function retryWithBackoff(operation, maxAttempts = 5) {
 }
 
 async function connectToDatabase() {
+  const overallTimer = startTimer();
+
   // If already connected and healthy, return immediately
   if (db) {
     try {
       // Quick health check
+      const pingTimer = startTimer();
       await db.admin().ping();
+      logDuration('mongo.ping', pingTimer, { source: 'reuse-check' });
+      logDuration('mongo.connectToDatabase', overallTimer, { status: 'reused' });
       console.log('✅ Using existing MongoDB connection (healthy)');
       return db;
     } catch (error) {
+      logDuration('mongo.connectToDatabase', overallTimer, {
+        status: 'reuse-failed',
+        error: error.message
+      });
       console.warn('⚠️  Existing connection unhealthy, reconnecting...');
       db = null;
       client = null;
@@ -60,8 +84,13 @@ async function connectToDatabase() {
   if (connectionPromise) {
     try {
       const result = await connectionPromise;
+      logDuration('mongo.connectToDatabase', overallTimer, { status: 'await-existing' });
       return result;
     } catch (error) {
+      logDuration('mongo.connectToDatabase', overallTimer, {
+        status: 'await-existing-failed',
+        error: error.message
+      });
       console.error('❌ Pending connection failed:', error.message);
       connectionPromise = null;
       throw error;
@@ -69,28 +98,51 @@ async function connectToDatabase() {
   }
 
   // Start new connection with retries
+  let attemptNumber = 0;
   connectionPromise = retryWithBackoff(async () => {
+    attemptNumber += 1;
+    const attemptTimer = startTimer();
     try {
       console.log('🔗 Connecting to MongoDB Atlas...');
-      
+
+      const timeoutTier =
+        MONGO_TIMEOUT_TIERS[Math.min(attemptNumber - 1, MONGO_TIMEOUT_TIERS.length - 1)];
+
       client = new MongoClient(MONGODB_URI, {
-        serverSelectionTimeoutMS: 5000,
-        socketTimeoutMS: 45000,
-        connectTimeoutMS: 10000,
+        ...timeoutTier,
         retryWrites: true,
         retryReads: true
       });
 
+      const connectTimer = startTimer();
       await client.connect();
+      logDuration('mongo.clientConnect', connectTimer, {
+        attempt: attemptNumber,
+        timeoutTier: timeoutTier.name
+      });
 
       db = client.db('oauth_db');
-      
+
       // Verify connection
+      const pingTimer = startTimer();
       await db.admin().ping();
-      
+      logDuration('mongo.ping', pingTimer, {
+        source: 'post-connect',
+        attempt: attemptNumber
+      });
+
       lastConnectionAttempt = Date.now();
+      logDuration('mongo.connectToDatabase.attempt', attemptTimer, {
+        attempt: attemptNumber,
+        timeoutTier: timeoutTier.name
+      });
       return db;
     } catch (error) {
+      logDuration('mongo.connectToDatabase.attempt', attemptTimer, {
+        attempt: attemptNumber,
+        status: 'error',
+        error: error.message
+      });
       console.error('❌ MongoDB connection attempt failed:', error.message);
       db = null;
       client = null;
@@ -101,8 +153,17 @@ async function connectToDatabase() {
     throw error;
   });
 
-  const result = await connectionPromise;
-  return result;
+  try {
+    const result = await connectionPromise;
+    logDuration('mongo.connectToDatabase', overallTimer, { status: 'connected' });
+    return result;
+  } catch (error) {
+    logDuration('mongo.connectToDatabase', overallTimer, {
+      status: 'error',
+      error: error.message
+    });
+    throw error;
+  }
 }
 
 async function getDatabase() {
