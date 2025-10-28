@@ -96,7 +96,7 @@ async function saveAuthCode({ authCode, googleSub, state, chatgptRedirectUri }) 
 
 /**
  * Validate and consume authorization code
- * Returns google_sub if valid, null if invalid/expired/used
+ * Returns auth flow details if valid, null if invalid/expired/used
  */
 async function validateAndConsumeAuthCode(authCode) {
   try {
@@ -134,7 +134,10 @@ async function validateAndConsumeAuthCode(authCode) {
     );
 
     console.log('✅ Auth code validated and consumed:', summarizeSecret(authCode));
-    return authFlow.google_sub;
+    return {
+      googleSub: authFlow.google_sub,
+      chatgptRedirectUri: authFlow.chatgpt_redirect_uri,
+    };
   } catch (error) {
     console.error('❌ [PROXY_TOKEN_ERROR] Failed to validate auth code');
     console.error('Details:', {
