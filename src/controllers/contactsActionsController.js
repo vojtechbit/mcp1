@@ -8,7 +8,7 @@ import { wrapModuleFunctions } from '../utils/advancedDebugging.js';
 
 
 import * as contactsService from '../services/contactsService.js';
-import { handleControllerError } from '../utils/errors.js';
+import { ApiError, handleControllerError, throwValidationError } from '../utils/errors.js';
 
 const overrides = globalThis.__CONTACTS_ACTIONS_TEST_OVERRIDES || {};
 const contactsSvc = overrides.contactsService || contactsService;
@@ -28,10 +28,10 @@ async function modifyContact(req, res) {
     const realEstate = pickRealEstate(req.body);
 
     if (!name || !email) {
-      return res.status(400).json({
-        error: 'Bad request',
+      throwValidationError({
+        code: 'CONTACT_NAME_AND_EMAIL_REQUIRED',
         message: 'Missing required fields: name, email',
-        code: 'INVALID_PARAM'
+        details: { fields: ['name', 'email'] }
       });
     }
 
@@ -63,10 +63,10 @@ async function deleteContact(req, res) {
     const { email, name } = req.body || {};
 
     if (!email && !name) {
-      return res.status(400).json({
-        error: 'Bad request',
+      throwValidationError({
+        code: 'CONTACT_IDENTIFIER_REQUIRED',
         message: 'At least one of email or name must be provided',
-        code: 'INVALID_PARAM'
+        details: { fields: ['email', 'name'] }
       });
     }
 
@@ -83,20 +83,40 @@ async function deleteContact(req, res) {
 
   } catch (error) {
     if (error.code === 'CONTACT_NOT_FOUND') {
-      return res.status(404).json({
-        error: 'Contact not found',
-        message: error.message,
-        code: 'CONTACT_NOT_FOUND'
-      });
+      return handleControllerError(
+        res,
+        new ApiError(error.message || 'Contact not found', {
+          statusCode: 404,
+          code: 'CONTACT_NOT_FOUND',
+          details: {
+            email,
+            name
+          }
+        }),
+        {
+          context: 'contactsActions.deleteContact',
+          defaultMessage: 'Contact delete failed'
+        }
+      );
     }
 
     if (error.code === 'AMBIGUOUS_DELETE') {
-      return res.status(409).json({
-        error: 'Ambiguous delete',
-        message: error.message,
-        code: 'AMBIGUOUS_DELETE',
-        candidates: error.candidates || []
-      });
+      return handleControllerError(
+        res,
+        new ApiError(error.message || 'Ambiguous delete', {
+          statusCode: 409,
+          code: 'AMBIGUOUS_DELETE',
+          details: {
+            candidates: error.candidates || [],
+            email,
+            name
+          }
+        }),
+        {
+          context: 'contactsActions.deleteContact',
+          defaultMessage: 'Contact delete failed'
+        }
+      );
     }
 
     return handleControllerError(res, error, {
@@ -115,13 +135,14 @@ async function bulkDeleteContacts(req, res) {
     const hasRowIds = Array.isArray(rowIds) && rowIds.length > 0;
 
     if (!hasEmails && !hasRowIds) {
-      return res.status(400).json({
-        error: 'Bad request',
+      throwValidationError({
+        code: 'CONTACT_BULK_TARGET_REQUIRED',
         message: 'bulkDelete requires emails[] or rowIds[]',
-        code: 'INVALID_PARAM',
-        examples: {
-          byEmail: { emails: ['john@example.com'] },
-          byRowId: { rowIds: [3, 5] }
+        details: {
+          examples: {
+            byEmail: { emails: ['john@example.com'] },
+            byRowId: { rowIds: [3, 5] }
+          }
         }
       });
     }

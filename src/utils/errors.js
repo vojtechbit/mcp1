@@ -158,6 +158,55 @@ class ApiError extends Error {
   }
 }
 
+function normalizeCodeFromField(field = '') {
+  return field
+    .toString()
+    .trim()
+    .replace(/([a-z0-9])([A-Z])/g, '$1_$2')
+    .replace(/[^a-zA-Z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '')
+    .toUpperCase();
+}
+
+function throwValidationError(fieldOrOptions, maybeCode, maybeMessage, maybeDetails) {
+  const options =
+    fieldOrOptions && typeof fieldOrOptions === 'object' && !Array.isArray(fieldOrOptions)
+      ? fieldOrOptions
+      : {
+          field: fieldOrOptions,
+          code: maybeCode,
+          message: maybeMessage,
+          details: maybeDetails
+        };
+
+  const {
+    field,
+    code,
+    message,
+    details,
+    statusCode = 400,
+    expose = true,
+    defaultMessage,
+    name = 'ValidationError'
+  } = options || {};
+
+  const normalizedCode = code || (field ? `${normalizeCodeFromField(field)}_REQUIRED` : undefined);
+  const normalizedDetails =
+    details !== undefined ? details : field ? { field } : undefined;
+  const finalMessage =
+    message ||
+    defaultMessage ||
+    (field ? `Missing required field: ${field}` : 'Request validation failed');
+
+  throw new ApiError(finalMessage, {
+    name,
+    statusCode,
+    code: normalizedCode,
+    details: normalizedDetails,
+    expose
+  });
+}
+
 function handleControllerError(res, error, options = {}) {
   const {
     context = 'Controller error',
@@ -201,4 +250,4 @@ function handleControllerError(res, error, options = {}) {
   return res.status(apiError.statusCode).json(responsePayload);
 }
 
-export { ApiError, handleControllerError, resolveStatusTitle };
+export { ApiError, handleControllerError, resolveStatusTitle, throwValidationError };
