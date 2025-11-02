@@ -5,7 +5,7 @@
  * directly instead of going through the generic RPC layer.
  */
 import { wrapModuleFunctions } from '../utils/advancedDebugging.js';
-
+import { ApiError, handleControllerError, throwValidationError } from '../utils/errors.js';
 
 import * as tasksService from '../services/tasksService.js';
 
@@ -89,10 +89,10 @@ async function createTask(req, res) {
     const { title, notes, due } = req.body || {};
 
     if (!title) {
-      return res.status(400).json({
-        error: 'Bad request',
-        message: 'Missing required field: title',
-        code: 'INVALID_PARAM'
+      throwValidationError({
+        field: 'title',
+        code: 'TASK_TITLE_REQUIRED',
+        message: 'Missing required field: title'
       });
     }
 
@@ -110,19 +110,24 @@ async function createTask(req, res) {
       message: 'Task created successfully'
     });
   } catch (error) {
-    console.error('❌ Tasks create failed:', error.message);
+    const context = 'Tasks Actions - createTask';
 
     if (error.code === 'AUTH_REQUIRED' || error.statusCode === 401) {
-      return res.status(401).json({
-        error: 'Authentication required',
-        message: 'Your session has expired. Please log in again.',
-        code: 'AUTH_REQUIRED'
-      });
+      return handleControllerError(
+        res,
+        new ApiError('Your session has expired. Please log in again.', {
+          statusCode: 401,
+          code: 'AUTH_REQUIRED',
+          requiresReauth: true
+        }),
+        { context, defaultMessage: 'Task create failed' }
+      );
     }
 
-    return res.status(error.statusCode || 500).json({
-      error: 'Task create failed',
-      message: error.message
+    return handleControllerError(res, error, {
+      context,
+      defaultMessage: 'Task create failed',
+      defaultCode: 'TASK_CREATE_FAILED'
     });
   }
 }
@@ -135,26 +140,30 @@ async function modifyTask(req, res) {
     const updates = buildUpdatePayload(body);
 
     if (!taskListId || !taskId) {
-      return res.status(400).json({
-        error: 'Bad request',
+      throwValidationError({
+        code: 'TASK_IDENTIFIERS_REQUIRED',
         message: 'modify requires taskListId and taskId',
-        code: 'INVALID_PARAM',
-        expectedFormat: {
-          taskListId: 'string',
-          taskId: 'string',
-          status: 'completed|needsAction?',
-          title: 'string?',
-          notes: 'string?',
-          due: 'RFC3339 timestamp?'
+        details: {
+          fields: ['taskListId', 'taskId'],
+          expectedFormat: {
+            taskListId: 'string',
+            taskId: 'string',
+            status: 'completed|needsAction?',
+            title: 'string?',
+            notes: 'string?',
+            due: 'RFC3339 timestamp?'
+          }
         }
       });
     }
 
     if (Object.keys(updates).length === 0) {
-      return res.status(400).json({
-        error: 'Bad request',
+      throwValidationError({
+        code: 'TASK_UPDATE_FIELDS_REQUIRED',
         message: 'modify requires at least one update field',
-        code: 'INVALID_PARAM'
+        details: {
+          allowedFields: ['status', 'title', 'notes', 'due']
+        }
       });
     }
 
@@ -171,19 +180,24 @@ async function modifyTask(req, res) {
       message: 'Task updated successfully'
     });
   } catch (error) {
-    console.error('❌ Tasks modify failed:', error.message);
+    const context = 'Tasks Actions - modifyTask';
 
     if (error.code === 'AUTH_REQUIRED' || error.statusCode === 401) {
-      return res.status(401).json({
-        error: 'Authentication required',
-        message: 'Your session has expired. Please log in again.',
-        code: 'AUTH_REQUIRED'
-      });
+      return handleControllerError(
+        res,
+        new ApiError('Your session has expired. Please log in again.', {
+          statusCode: 401,
+          code: 'AUTH_REQUIRED',
+          requiresReauth: true
+        }),
+        { context, defaultMessage: 'Task modify failed' }
+      );
     }
 
-    return res.status(error.statusCode || 500).json({
-      error: 'Task modify failed',
-      message: error.message
+    return handleControllerError(res, error, {
+      context,
+      defaultMessage: 'Task modify failed',
+      defaultCode: 'TASK_MODIFY_FAILED'
     });
   }
 }
@@ -195,13 +209,15 @@ async function deleteTask(req, res) {
     const taskId = normalizeTaskId(body);
 
     if (!taskListId || !taskId) {
-      return res.status(400).json({
-        error: 'Bad request',
+      throwValidationError({
+        code: 'TASK_IDENTIFIERS_REQUIRED',
         message: 'delete requires taskListId and taskId',
-        code: 'INVALID_PARAM',
-        expectedFormat: {
-          taskListId: 'string',
-          taskId: 'string'
+        details: {
+          fields: ['taskListId', 'taskId'],
+          expectedFormat: {
+            taskListId: 'string',
+            taskId: 'string'
+          }
         }
       });
     }
@@ -213,19 +229,24 @@ async function deleteTask(req, res) {
       message: 'Task deleted successfully'
     });
   } catch (error) {
-    console.error('❌ Tasks delete failed:', error.message);
+    const context = 'Tasks Actions - deleteTask';
 
     if (error.code === 'AUTH_REQUIRED' || error.statusCode === 401) {
-      return res.status(401).json({
-        error: 'Authentication required',
-        message: 'Your session has expired. Please log in again.',
-        code: 'AUTH_REQUIRED'
-      });
+      return handleControllerError(
+        res,
+        new ApiError('Your session has expired. Please log in again.', {
+          statusCode: 401,
+          code: 'AUTH_REQUIRED',
+          requiresReauth: true
+        }),
+        { context, defaultMessage: 'Task delete failed' }
+      );
     }
 
-    return res.status(error.statusCode || 500).json({
-      error: 'Task delete failed',
-      message: error.message
+    return handleControllerError(res, error, {
+      context,
+      defaultMessage: 'Task delete failed',
+      defaultCode: 'TASK_DELETE_FAILED'
     });
   }
 }
