@@ -1,9 +1,14 @@
 #!/bin/bash
 
+set -e
+
 cd /Users/vojtechbroucek/Desktop/mcp1
 
 # Add all changes
 git add .
+
+echo "🧪 Running test suite before commit..."
+npm test
 
 # Commit with detailed message
 git commit -m "feat: Complete advanced features implementation

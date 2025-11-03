@@ -1,11 +1,17 @@
 #!/bin/bash
 
+set -e
+
 echo "🔍 Checking git status..."
 git status
 
 echo ""
 echo "📦 Adding all changes..."
 git add .
+
+echo ""
+echo "🧪 Running npm test before committing..."
+npm test
 
 echo ""
 echo "💾 Creating commit..."
