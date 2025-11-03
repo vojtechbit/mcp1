@@ -555,11 +555,53 @@ async function inboxUserUnansweredRequests(googleSub, params = {}) {
     gmail.getUserAddresses(googleSub).catch(() => [])
   ]);
 
-  const trackingLabelRecommendation = buildLabelRecommendation(
+  let trackingLabelRecommendation = buildLabelRecommendation(
     labels,
     TRACKING_LABEL_NAME,
     TRACKING_LABEL_DEFAULTS.color
   );
+
+  // Auto-create tracking label if it doesn't exist
+  if (autoAddLabels !== false && !trackingLabelRecommendation.existingLabel) {
+    try {
+      const createdTrackingLabel = await gmail.createLabel(googleSub, {
+        name: TRACKING_LABEL_NAME,
+        color: TRACKING_LABEL_DEFAULTS.color,
+        labelListVisibility: 'labelHide', // Hide from label list by default
+        messageListVisibility: 'hide' // Hide from message list by default
+      });
+
+      if (createdTrackingLabel?.id) {
+        const createdTrackingMetadata = {
+          id: createdTrackingLabel.id,
+          name: createdTrackingLabel.name,
+          color: createdTrackingLabel.color
+            ? {
+                backgroundColor: createdTrackingLabel.color,
+                textColor: createdTrackingLabel.textColor || null
+              }
+            : null
+        };
+
+        labels.push({
+          id: createdTrackingLabel.id,
+          name: createdTrackingLabel.name,
+          type: 'user',
+          color: createdTrackingMetadata.color
+        });
+
+        trackingLabelRecommendation = buildLabelRecommendation(
+          labels,
+          TRACKING_LABEL_NAME,
+          TRACKING_LABEL_DEFAULTS.color
+        );
+
+        console.log(`✓ Auto-created tracking label "${TRACKING_LABEL_NAME}" (ID: ${createdTrackingLabel.id})`);
+      }
+    } catch (creationError) {
+      console.warn('⚠️ Unable to auto-create tracking label:', creationError.message);
+    }
+  }
 
   const watchlistLabelColor = normalizeWatchlistLabelColor(labelColor);
 
