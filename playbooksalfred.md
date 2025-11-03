@@ -174,7 +174,7 @@
    - Přidej `htmlLink` jako odkaz na událost
    - Přizpůsob obsah podle kontextu (název události, místo, vztah k osobě)
    - Udrž přátelský, profesionální tón
-3. Pro každého účastníka zavolej `/rpc/mail` s `op:"createDraft"` a `params`:
+3. Pro každého účastníka (až na usera samotného - kdo je user popřípadě najdeš v kontaktech) zavolej `/rpc/mail` s `op:"createDraft"` a `params`:
    - `to`: email účastníka
    - `subject`: např. "Připomínka: [název události]"
    - `body`: personalizovaný text s českým vokativem, naformátovaným časem a htmlLink
