@@ -390,14 +390,26 @@ async function mailRpc(req, res) {
             }
           );
         } else if (params.modify) {
-          result = await gmailSvc.modifyMessageLabels(
-            req.user.googleSub,
-            params.modify.messageId || params.modify.ids?.[0],
-            {
-              add: params.modify.add,
-              remove: params.modify.remove
-            }
-          );
+          // Support batch processing when ids array is provided
+          if (Array.isArray(params.modify.ids) && params.modify.ids.length > 0) {
+            result = await Promise.all(
+              params.modify.ids.map(id =>
+                gmailSvc.modifyMessageLabels(req.user.googleSub, id, {
+                  add: params.modify.add,
+                  remove: params.modify.remove
+                })
+              )
+            );
+          } else {
+            result = await gmailSvc.modifyMessageLabels(
+              req.user.googleSub,
+              params.modify.messageId || params.modify.ids?.[0],
+              {
+                add: params.modify.add,
+                remove: params.modify.remove
+              }
+            );
+          }
         } else if (params.create) {
           result = await gmailSvc.createLabel(req.user.googleSub, params.create);
         } else {
