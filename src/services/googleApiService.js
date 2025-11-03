@@ -425,9 +425,14 @@ function generateDraftLinks(draftId, messageId) {
 }
 
 /**
- * Decorate a draft object with links
+ * Decorate a draft object with links and normalize ID
+ *
+ * IMPORTANT: This function returns message.id as the primary 'id' field instead of draft.id
+ * because message.id is stable (doesn't change when user opens draft in Gmail UI),
+ * while draft.id changes frequently. The original draft.id is preserved in the 'draftId' field.
+ *
  * @param {object} draft - The draft object from Gmail API
- * @returns {object} Draft object with links added
+ * @returns {object} Draft object with links added and normalized ID
  */
 function decorateDraftWithLinks(draft) {
   if (!draft || typeof draft !== 'object') {
@@ -446,10 +451,22 @@ function decorateDraftWithLinks(draft) {
     return draft;
   }
 
-  return {
+  const decorated = {
     ...draft,
     links
   };
+
+  // Return message.id as primary ID for stability
+  // Keep original draft.id for reference
+  if (messageId) {
+    return {
+      ...decorated,
+      id: messageId,
+      draftId: draftId
+    };
+  }
+
+  return decorated;
 }
 
 /**
@@ -1815,52 +1832,46 @@ async function createDraft(googleSub, { to, subject, body, cc, bcc, threadId } =
     console.log(`✅ Using draft.id: ${result.data.id}`);
 
     // Add links to draft
-    const draftWithLinks = decorateDraftWithLinks(result.data);
-
-    // IMPORTANT: Return message.id as the primary ID instead of draft.id
-    // This is because draft.id changes when the user opens the draft in Gmail UI,
-    // but message.id remains stable. This allows us to find and send the draft later.
-    const messageId = draftWithLinks.message?.id;
-    if (messageId) {
-      console.log(`✅ Returning message.id (${messageId}) as primary ID instead of draft.id (${draftWithLinks.id})`);
-      return {
-        ...draftWithLinks,
-        id: messageId,
-        draftId: draftWithLinks.id, // Keep original draft.id for reference
-      };
-    }
-
-    return draftWithLinks;
+    // Note: decorateDraftWithLinks now automatically returns message.id as primary ID
+    return decorateDraftWithLinks(result.data);
   });
 }
 
 /**
- * Send an existing draft by ID
+ * Helper function to find a draft by ID (tries draft.id first, then message.id)
+ *
+ * Why this order?
+ * - Gmail API requires draft.id for all operations (get/send/update)
+ * - Trying draft.id first is O(1) - single API call
+ * - Searching by message.id is O(N) - must list all drafts and compare
+ *
+ * @param {Object} gmail - Authenticated Gmail API client
+ * @param {string} id - Either draft.id or message.id
+ * @param {string} format - Format for draft.get (full/metadata/minimal)
+ * @param {Function} [getWatchlistLabelContext] - Optional function to get watchlist context
+ * @param {string} [googleSub] - User's Google sub (required if getWatchlistLabelContext is provided)
+ * @returns {Promise<{draft: Object, actualDraftId: string, unrepliedLabelReminder: Object|null}>}
  */
-async function sendDraft(googleSub, draftId) {
-  return await handleGoogleApiCall(googleSub, async () => {
-    const authClient = await getAuthenticatedClient(googleSub);
-    const gmail = google.gmail({ version: 'v1', auth: authClient });
+async function findDraftById(gmail, id, format, getWatchlistLabelContext = null, googleSub = null) {
+  let actualDraftId = id;
+  let draftData = null;
+  let unrepliedLabelReminder = null;
 
-    let unrepliedLabelReminder = null;
-    let actualDraftId = draftId;
-    let draftData = null;
+  // Step 1: Try to get draft using ID as draft.id (fast path - O(1))
+  try {
+    const draft = await gmail.users.drafts.get({
+      userId: 'me',
+      id: id,
+      format: format,
+      metadataHeaders: format === 'metadata' ? ['Message-ID'] : undefined
+    });
 
-    // First, try to get the draft using the provided ID as draft.id
-    // This handles the case where an old draft.id is provided (before our change to use message.id)
-    try {
+    draftData = draft.data;
+    console.log(`✅ Found draft using provided ID as draft.id`);
+
+    // Check for unreplied label if needed
+    if (getWatchlistLabelContext) {
       const { unrepliedLabel } = await getWatchlistLabelContext(googleSub);
-
-      const draft = await gmail.users.drafts.get({
-        userId: 'me',
-        id: draftId,
-        format: 'metadata',
-        metadataHeaders: ['Message-ID']
-      });
-
-      draftData = draft.data;
-      console.log(`✅ Found draft using provided ID as draft.id`);
-
       if (unrepliedLabel) {
         const threadId = draft.data?.message?.threadId || null;
         if (threadId) {
@@ -1880,109 +1891,116 @@ async function sendDraft(googleSub, draftId) {
           });
         }
       }
-    } catch (error) {
-      // Draft with this ID doesn't exist as draft.id - try to find it by message.id
-      // This handles the case where the provided ID is a message.id (our new approach)
-      console.warn(`⚠️ Draft not found using ID as draft.id: ${error.message}`);
-      console.log(`🔍 Attempting to find draft by message ID (ID: ${draftId})...`);
+    }
 
+    return { draft: draftData, actualDraftId, unrepliedLabelReminder };
+  } catch (error) {
+    console.warn(`⚠️ Draft not found using ID as draft.id: ${error.message}`);
+  }
+
+  // Step 2: ID is not a valid draft.id, try to find by message.id (slow path - O(N))
+  console.log(`🔍 Attempting to find draft by message ID (ID: ${id})...`);
+
+  try {
+    const draftsResponse = await gmail.users.drafts.list({
+      userId: 'me',
+      maxResults: 100
+    });
+
+    if (!draftsResponse.data.drafts || draftsResponse.data.drafts.length === 0) {
+      throwServiceError('Draft not found', {
+        statusCode: 404,
+        code: 'DRAFT_NOT_FOUND',
+        expose: true
+      });
+    }
+
+    console.log(`📋 Found ${draftsResponse.data.drafts.length} drafts, searching for matching message ID...`);
+
+    // Search through all drafts to find one with matching message.id
+    for (const draftSummary of draftsResponse.data.drafts) {
       try {
-        // The draft ID changed (likely because user opened it in Gmail UI)
-        // We need to find the new draft ID by listing all drafts and matching by message ID
-        const draftsResponse = await gmail.users.drafts.list({
+        const fullDraft = await gmail.users.drafts.get({
           userId: 'me',
-          maxResults: 100
+          id: draftSummary.id,
+          format: format,
+          metadataHeaders: format === 'metadata' ? ['Message-ID'] : undefined
         });
 
-        if (!draftsResponse.data.drafts || draftsResponse.data.drafts.length === 0) {
-          throwServiceError('Draft not found', {
-            statusCode: 404,
-            code: 'DRAFT_NOT_FOUND',
-            expose: true
-          });
-        }
+        if (fullDraft.data.message?.id === id) {
+          console.log(`✅ Found matching draft by message ID! New draft ID: ${fullDraft.data.id}`);
+          draftData = fullDraft.data;
+          actualDraftId = fullDraft.data.id;
 
-        console.log(`📋 Found ${draftsResponse.data.drafts.length} drafts, searching for matching message ID...`);
+          // Check for unreplied label if needed
+          if (getWatchlistLabelContext) {
+            const { unrepliedLabel } = await getWatchlistLabelContext(googleSub);
+            if (unrepliedLabel) {
+              const threadId = fullDraft.data?.message?.threadId || null;
+              if (threadId) {
+                const thread = await gmail.users.threads.get({
+                  userId: 'me',
+                  id: threadId,
+                  format: 'metadata'
+                });
 
-        // Get detailed info for each draft to find the one with matching message ID
-        let foundDraft = null;
+                const messageIds = (thread.data?.messages || [])
+                  .filter(msg => Array.isArray(msg.labelIds) && msg.labelIds.includes(unrepliedLabel.id))
+                  .map(msg => msg.id);
 
-        for (const draftSummary of draftsResponse.data.drafts) {
-          try {
-            const fullDraft = await gmail.users.drafts.get({
-              userId: 'me',
-              id: draftSummary.id,
-              format: 'metadata',
-              metadataHeaders: ['Message-ID']
-            });
-
-            // Check if the message ID matches the original draft ID we're looking for
-            // The original draftId might actually be a message ID that we stored
-            if (fullDraft.data.message?.id === draftId) {
-              console.log(`✅ Found matching draft by message ID! New draft ID: ${fullDraft.data.id}`);
-              foundDraft = fullDraft.data;
-              actualDraftId = fullDraft.data.id;
-              draftData = fullDraft.data;
-
-              // Also check for unreplied label
-              const { unrepliedLabel } = await getWatchlistLabelContext(googleSub);
-              if (unrepliedLabel) {
-                const threadId = fullDraft.data?.message?.threadId || null;
-                if (threadId) {
-                  const thread = await gmail.users.threads.get({
-                    userId: 'me',
-                    id: threadId,
-                    format: 'metadata'
-                  });
-
-                  const messageIds = (thread.data?.messages || [])
-                    .filter(msg => Array.isArray(msg.labelIds) && msg.labelIds.includes(unrepliedLabel.id))
-                    .map(msg => msg.id);
-
-                  unrepliedLabelReminder = buildUnrepliedLabelReminderPayload(unrepliedLabel, {
-                    messageIds,
-                    threadId
-                  });
-                }
+                unrepliedLabelReminder = buildUnrepliedLabelReminderPayload(unrepliedLabel, {
+                  messageIds,
+                  threadId
+                });
               }
-
-              break;
             }
-          } catch (getDraftError) {
-            console.warn(`Failed to get draft ${draftSummary.id}:`, getDraftError.message);
           }
-        }
 
-        if (!foundDraft) {
-          // We couldn't find the draft by message ID either
-          throwServiceError('Draft ID is no longer valid. The draft was likely modified in Gmail (e.g., opened in Gmail UI). Please send the email directly from Gmail or recreate the draft.', {
-            statusCode: 400,
-            code: 'DRAFT_ID_INVALID',
-            expose: true,
-            details: {
-              originalDraftId: draftId,
-              reason: 'Draft was modified after creation and could not be located',
-              suggestion: 'Send directly from Gmail or recreate the draft',
-              availableDrafts: draftsResponse.data.drafts.length
-            }
-          });
+          return { draft: draftData, actualDraftId, unrepliedLabelReminder };
         }
-
-      } catch (searchError) {
-        if (searchError.statusCode === 400 || searchError.statusCode === 404) {
-          throw searchError;
-        }
-        // If we can't search, throw the original error
-        throwServiceError('Draft ID is no longer valid', {
-          statusCode: 400,
-          code: 'DRAFT_ID_INVALID',
-          expose: true,
-          details: { originalDraftId: draftId }
-        });
+      } catch (getDraftError) {
+        console.warn(`Failed to get draft ${draftSummary.id}:`, getDraftError.message);
       }
     }
 
-    // Now try to send the draft
+    // Draft not found by message.id either
+    throwServiceError('Draft not found. The draft may have been deleted or is no longer accessible.', {
+      statusCode: 404,
+      code: 'DRAFT_NOT_FOUND',
+      expose: true,
+      details: { providedId: id }
+    });
+  } catch (searchError) {
+    if (searchError.statusCode === 404) {
+      throw searchError;
+    }
+    throwServiceError('Draft not found', {
+      statusCode: 404,
+      code: 'DRAFT_NOT_FOUND',
+      expose: true,
+      details: { providedId: id }
+    });
+  }
+}
+
+/**
+ * Send an existing draft by ID (accepts either draft.id or message.id)
+ */
+async function sendDraft(googleSub, draftId) {
+  return await handleGoogleApiCall(googleSub, async () => {
+    const authClient = await getAuthenticatedClient(googleSub);
+    const gmail = google.gmail({ version: 'v1', auth: authClient });
+
+    // Find the draft by ID (tries draft.id first, then message.id)
+    const { actualDraftId, unrepliedLabelReminder } = await findDraftById(
+      gmail,
+      draftId,
+      'metadata',
+      getWatchlistLabelContext,
+      googleSub
+    );
+
+    // Send the draft using the actual draft.id
     const result = await gmail.users.drafts.send({
       userId: 'me',
       id: actualDraftId
@@ -2021,73 +2039,8 @@ async function updateDraft(googleSub, draftId, { to, subject, body, cc, bcc, thr
     const authClient = await getAuthenticatedClient(googleSub);
     const gmail = google.gmail({ version: 'v1', auth: authClient });
 
-    let actualDraftId = draftId.trim();
-
-    // Try to find the draft by ID (could be draft.id or message.id)
-    try {
-      // First, try as draft.id
-      await gmail.users.drafts.get({
-        userId: 'me',
-        id: actualDraftId
-      });
-      console.log(`✅ Found draft using provided ID as draft.id`);
-    } catch (error) {
-      // Not found as draft.id, try to find by message.id
-      console.warn(`⚠️ Draft not found using ID as draft.id, searching by message.id...`);
-
-      try {
-        const draftsResponse = await gmail.users.drafts.list({
-          userId: 'me',
-          maxResults: 100
-        });
-
-        if (!draftsResponse.data.drafts || draftsResponse.data.drafts.length === 0) {
-          throwServiceError('Draft not found', {
-            statusCode: 404,
-            code: 'DRAFT_NOT_FOUND',
-            expose: true
-          });
-        }
-
-        let foundDraft = null;
-        for (const draftSummary of draftsResponse.data.drafts) {
-          try {
-            const fullDraft = await gmail.users.drafts.get({
-              userId: 'me',
-              id: draftSummary.id,
-              format: 'metadata'
-            });
-
-            if (fullDraft.data.message?.id === actualDraftId) {
-              console.log(`✅ Found matching draft by message ID! Draft ID: ${fullDraft.data.id}`);
-              actualDraftId = fullDraft.data.id;
-              foundDraft = fullDraft.data;
-              break;
-            }
-          } catch (getDraftError) {
-            // Continue searching
-          }
-        }
-
-        if (!foundDraft) {
-          throwServiceError('Draft not found', {
-            statusCode: 404,
-            code: 'DRAFT_NOT_FOUND',
-            expose: true,
-            details: { providedId: draftId }
-          });
-        }
-      } catch (searchError) {
-        if (searchError.statusCode === 404) {
-          throw searchError;
-        }
-        throwServiceError('Draft not found', {
-          statusCode: 404,
-          code: 'DRAFT_NOT_FOUND',
-          expose: true
-        });
-      }
-    }
+    // Find the draft by ID (tries draft.id first, then message.id)
+    const { actualDraftId } = await findDraftById(gmail, draftId.trim(), 'metadata');
 
     const encodedMessage = buildDraftMimeMessage({ to, subject, body, cc, bcc });
 
@@ -2108,17 +2061,9 @@ async function updateDraft(googleSub, draftId, { to, subject, body, cc, bcc, thr
       requestBody
     });
 
-    // Add links to draft and return message.id as primary ID
-    const draftWithLinks = decorateDraftWithLinks(result.data);
-    const messageId = draftWithLinks.message?.id;
-    if (messageId) {
-      return {
-        ...draftWithLinks,
-        id: messageId,
-        draftId: draftWithLinks.id,
-      };
-    }
-    return draftWithLinks;
+    // Add links to draft
+    // Note: decorateDraftWithLinks now automatically returns message.id as primary ID
+    return decorateDraftWithLinks(result.data);
   });
 }
 
@@ -2164,85 +2109,12 @@ async function getDraft(googleSub, draftId, { format = 'full' } = {}) {
     const authClient = await getAuthenticatedClient(googleSub);
     const gmail = google.gmail({ version: 'v1', auth: authClient });
 
-    let actualDraftId = draftId.trim();
-    let draftData = null;
+    // Find the draft by ID (tries draft.id first, then message.id)
+    const { draft } = await findDraftById(gmail, draftId.trim(), safeFormat);
 
-    // Try to get draft using ID as draft.id first
-    try {
-      const result = await gmail.users.drafts.get({
-        userId: 'me',
-        id: actualDraftId,
-        format: safeFormat
-      });
-      draftData = result.data;
-    } catch (error) {
-      // Not found as draft.id, try to find by message.id
-      console.warn(`⚠️ Draft not found using ID as draft.id, searching by message.id...`);
-
-      try {
-        const draftsResponse = await gmail.users.drafts.list({
-          userId: 'me',
-          maxResults: 100
-        });
-
-        if (!draftsResponse.data.drafts || draftsResponse.data.drafts.length === 0) {
-          throwServiceError('Draft not found', {
-            statusCode: 404,
-            code: 'DRAFT_NOT_FOUND',
-            expose: true
-          });
-        }
-
-        let foundDraft = null;
-        for (const draftSummary of draftsResponse.data.drafts) {
-          try {
-            const fullDraft = await gmail.users.drafts.get({
-              userId: 'me',
-              id: draftSummary.id,
-              format: safeFormat
-            });
-
-            if (fullDraft.data.message?.id === actualDraftId) {
-              console.log(`✅ Found matching draft by message ID! Draft ID: ${fullDraft.data.id}`);
-              draftData = fullDraft.data;
-              break;
-            }
-          } catch (getDraftError) {
-            // Continue searching
-          }
-        }
-
-        if (!draftData) {
-          throwServiceError('Draft not found', {
-            statusCode: 404,
-            code: 'DRAFT_NOT_FOUND',
-            expose: true,
-            details: { providedId: draftId }
-          });
-        }
-      } catch (searchError) {
-        if (searchError.statusCode === 404) {
-          throw searchError;
-        }
-        throwServiceError('Draft not found', {
-          statusCode: 404,
-          code: 'DRAFT_NOT_FOUND',
-          expose: true
-        });
-      }
-    }
-
-    // Add links to draft and return message.id as primary ID
-    const draftWithLinks = decorateDraftWithLinks(draftData);
-    const messageId = draftWithLinks.message?.id;
-    if (messageId) {
-      return {
-        ...draftWithLinks,
-        id: messageId,
-        draftId: draftWithLinks.id,
-      };
-    }
-    return draftWithLinks;
+    // Add links to draft
+    // Note: decorateDraftWithLinks now automatically returns message.id as primary ID
+    return decorateDraftWithLinks(draft);
   });
 }
 
