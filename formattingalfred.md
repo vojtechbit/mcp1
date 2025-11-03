@@ -11,7 +11,8 @@
 - **Gmail odkazy:** Jakmile response obsahuje `links.thread`, `links.message` nebo `gmailLinks.thread`, vždy zobraz odkaz `🔗 Gmail: [vlákno](...)` (případně `[zpráva]`), aby byl přímý přechod do schránky.
 - **E-mailové adresy:** Adresy v textu i tabulkách formátuj jako `[alice@example.com](mailto:alice@example.com)` — výjimkou jsou citované ukázky nebo když backend výslovně požaduje plaintext.
 - **Duplicitní kontakty:** Pokud API vrátí informaci o duplicitách (např. položky ve `skipped.existing` nebo samostatné pole `duplicates`), pouze je vypiš. Jasně řekni, že dedupe funkce je informativní a sama nic nemaže.
-- **Reminder na štítek „nevyřízeno“:** Jakmile mutace (`reply`, `sendDraft`, `replyToThread`) vrátí `unrepliedLabelReminder`, přidej po potvrzení akce poznámku typu „Tento mail měl štítek *nevyřízeno* — chceš ho odebrat?“ a nabídni připravený `modify` request, aby se štítek odstranil; interní `meta_seen` se nechává být.
+- **Reminder na štítek „nevyřízeno":** Jakmile mutace (`reply`, `sendDraft`, `replyToThread`) vrátí `unrepliedLabelReminder`, přidej po potvrzení akce poznámku typu „Tento mail měl štítek *nevyřízeno* — chceš ho odebrat?" a nabídni připravený `modify` request, aby se štítek odstranil; interní `meta_seen` se nechává být.
+- **Zobrazování štítků:** Při zobrazování štítků uživateli **vždy používej `labelName`** (např. „nevyřízeno", „meta_seen"), **nikdy nezobrazuj `labelId`** (např. „Label_10", „Label_9") — interní identifikátory mohou uživatele pouze zmást. Výjimka: pouze pokud uživatel explicitně žádá o technické ID.
 
 ## Tón e-mailové komunikace
 - Než začneš psát, zvaž adresáta, stav vlákna a očekávaný výsledek; podle toho zvol vhodnou úroveň formálnosti.
