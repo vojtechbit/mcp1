@@ -202,7 +202,7 @@
                               "object",
                               "null"
                             ],
-                            "description": "Přímé odkazy do Gmailu. `thread` vede na vlákno, `message` (pokud existuje) přímo na konkrétní zprávu.",
+                            "description": "P\u0159\u00edm\u00e9 odkazy do Gmailu. `thread` vede na vl\u00e1kno, `message` (pokud existuje) p\u0159\u00edmo na konkr\u00e9tn\u00ed zpr\u00e1vu.",
                             "properties": {
                               "thread": {
                                 "type": [
@@ -249,10 +249,21 @@
                           "items": {
                             "type": "object",
                             "properties": {
-                              "id": { "type": "string" },
-                              "name": { "type": "string" },
-                              "type": { "type": "string" },
-                              "color": { "type": ["string", "null"] }
+                              "id": {
+                                "type": "string"
+                              },
+                              "name": {
+                                "type": "string"
+                              },
+                              "type": {
+                                "type": "string"
+                              },
+                              "color": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ]
+                              }
                             }
                           },
                           "description": "Label objects that were confidently matched (subset of full label list)."
@@ -289,20 +300,42 @@
                           "items": {
                             "type": "object",
                             "properties": {
-                              "input": { "type": "string" },
+                              "input": {
+                                "type": "string"
+                              },
                               "label": {
                                 "type": "object",
                                 "properties": {
-                                  "id": { "type": "string" },
-                                  "name": { "type": "string" },
-                                  "type": { "type": "string" },
-                                  "color": { "type": ["string", "null"] }
+                                  "id": {
+                                    "type": "string"
+                                  },
+                                  "name": {
+                                    "type": "string"
+                                  },
+                                  "type": {
+                                    "type": "string"
+                                  },
+                                  "color": {
+                                    "type": [
+                                      "string",
+                                      "null"
+                                    ]
+                                  }
                                 }
                               },
-                              "confidence": { "type": "number" },
-                              "reason": { "type": "string" }
+                              "confidence": {
+                                "type": "number"
+                              },
+                              "reason": {
+                                "type": "string"
+                              }
                             },
-                            "required": ["input", "label", "confidence", "reason"]
+                            "required": [
+                              "input",
+                              "label",
+                              "confidence",
+                              "reason"
+                            ]
                           }
                         },
                         "ambiguous": {
@@ -311,7 +344,9 @@
                           "items": {
                             "type": "object",
                             "properties": {
-                              "input": { "type": "string" },
+                              "input": {
+                                "type": "string"
+                              },
                               "options": {
                                 "type": "array",
                                 "items": {
@@ -320,20 +355,42 @@
                                     "label": {
                                       "type": "object",
                                       "properties": {
-                                        "id": { "type": "string" },
-                                        "name": { "type": "string" },
-                                        "type": { "type": "string" },
-                                        "color": { "type": ["string", "null"] }
+                                        "id": {
+                                          "type": "string"
+                                        },
+                                        "name": {
+                                          "type": "string"
+                                        },
+                                        "type": {
+                                          "type": "string"
+                                        },
+                                        "color": {
+                                          "type": [
+                                            "string",
+                                            "null"
+                                          ]
+                                        }
                                       }
                                     },
-                                    "confidence": { "type": "number" },
-                                    "reason": { "type": "string" }
+                                    "confidence": {
+                                      "type": "number"
+                                    },
+                                    "reason": {
+                                      "type": "string"
+                                    }
                                   },
-                                  "required": ["label", "confidence", "reason"]
+                                  "required": [
+                                    "label",
+                                    "confidence",
+                                    "reason"
+                                  ]
                                 }
                               }
                             },
-                            "required": ["input", "options"]
+                            "required": [
+                              "input",
+                              "options"
+                            ]
                           }
                         },
                         "unmatched": {
@@ -342,7 +399,9 @@
                           "items": {
                             "type": "object",
                             "properties": {
-                              "input": { "type": "string" },
+                              "input": {
+                                "type": "string"
+                              },
                               "suggestions": {
                                 "type": "array",
                                 "items": {
@@ -351,20 +410,42 @@
                                     "label": {
                                       "type": "object",
                                       "properties": {
-                                        "id": { "type": "string" },
-                                        "name": { "type": "string" },
-                                        "type": { "type": "string" },
-                                        "color": { "type": ["string", "null"] }
+                                        "id": {
+                                          "type": "string"
+                                        },
+                                        "name": {
+                                          "type": "string"
+                                        },
+                                        "type": {
+                                          "type": "string"
+                                        },
+                                        "color": {
+                                          "type": [
+                                            "string",
+                                            "null"
+                                          ]
+                                        }
                                       }
                                     },
-                                    "confidence": { "type": "number" },
-                                    "reason": { "type": "string" }
+                                    "confidence": {
+                                      "type": "number"
+                                    },
+                                    "reason": {
+                                      "type": "string"
+                                    }
                                   },
-                                  "required": ["label", "confidence", "reason"]
+                                  "required": [
+                                    "label",
+                                    "confidence",
+                                    "reason"
+                                  ]
                                 }
                               }
                             },
-                            "required": ["input", "suggestions"]
+                            "required": [
+                              "input",
+                              "suggestions"
+                            ]
                           }
                         }
                       }
@@ -507,7 +588,7 @@
                               "object",
                               "null"
                             ],
-                            "description": "Přímé odkazy do Gmailu. `thread` vede na vlákno, `message` (pokud existuje) přímo na konkrétní zprávu.",
+                            "description": "P\u0159\u00edm\u00e9 odkazy do Gmailu. `thread` vede na vl\u00e1kno, `message` (pokud existuje) p\u0159\u00edmo na konkr\u00e9tn\u00ed zpr\u00e1vu.",
                             "properties": {
                               "thread": {
                                 "type": [
@@ -539,41 +620,90 @@
                       "type": "object",
                       "description": "Same structure as /macros/inbox/overview labelResolution. Present when label name fuzzy-matching ran.",
                       "properties": {
-                        "requested": { "type": "array", "items": { "type": "string" } },
+                        "requested": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
                         "appliedLabels": {
                           "type": "array",
                           "items": {
                             "type": "object",
                             "properties": {
-                              "id": { "type": "string" },
-                              "name": { "type": "string" },
-                              "type": { "type": "string" },
-                              "color": { "type": ["string", "null"] }
+                              "id": {
+                                "type": "string"
+                              },
+                              "name": {
+                                "type": "string"
+                              },
+                              "type": {
+                                "type": "string"
+                              },
+                              "color": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ]
+                              }
                             }
                           }
                         },
-                        "appliedLabelIds": { "type": "array", "items": { "type": "string" } },
-                        "queryAppliedLabelIds": { "type": "array", "items": { "type": "string" } },
-                        "requestedCount": { "type": "integer" },
-                        "requiresConfirmation": { "type": "boolean" },
-                        "querySkipped": { "type": "boolean" },
+                        "appliedLabelIds": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "queryAppliedLabelIds": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "requestedCount": {
+                          "type": "integer"
+                        },
+                        "requiresConfirmation": {
+                          "type": "boolean"
+                        },
+                        "querySkipped": {
+                          "type": "boolean"
+                        },
                         "resolved": {
                           "type": "array",
                           "items": {
                             "type": "object",
                             "properties": {
-                              "input": { "type": "string" },
+                              "input": {
+                                "type": "string"
+                              },
                               "label": {
                                 "type": "object",
                                 "properties": {
-                                  "id": { "type": "string" },
-                                  "name": { "type": "string" },
-                                  "type": { "type": "string" },
-                                  "color": { "type": ["string", "null"] }
+                                  "id": {
+                                    "type": "string"
+                                  },
+                                  "name": {
+                                    "type": "string"
+                                  },
+                                  "type": {
+                                    "type": "string"
+                                  },
+                                  "color": {
+                                    "type": [
+                                      "string",
+                                      "null"
+                                    ]
+                                  }
                                 }
                               },
-                              "confidence": { "type": "number" },
-                              "reason": { "type": "string" }
+                              "confidence": {
+                                "type": "number"
+                              },
+                              "reason": {
+                                "type": "string"
+                              }
                             }
                           }
                         },
@@ -582,7 +712,9 @@
                           "items": {
                             "type": "object",
                             "properties": {
-                              "input": { "type": "string" },
+                              "input": {
+                                "type": "string"
+                              },
                               "options": {
                                 "type": "array",
                                 "items": {
@@ -591,14 +723,29 @@
                                     "label": {
                                       "type": "object",
                                       "properties": {
-                                        "id": { "type": "string" },
-                                        "name": { "type": "string" },
-                                        "type": { "type": "string" },
-                                        "color": { "type": ["string", "null"] }
+                                        "id": {
+                                          "type": "string"
+                                        },
+                                        "name": {
+                                          "type": "string"
+                                        },
+                                        "type": {
+                                          "type": "string"
+                                        },
+                                        "color": {
+                                          "type": [
+                                            "string",
+                                            "null"
+                                          ]
+                                        }
                                       }
                                     },
-                                    "confidence": { "type": "number" },
-                                    "reason": { "type": "string" }
+                                    "confidence": {
+                                      "type": "number"
+                                    },
+                                    "reason": {
+                                      "type": "string"
+                                    }
                                   }
                                 }
                               }
@@ -610,7 +757,9 @@
                           "items": {
                             "type": "object",
                             "properties": {
-                              "input": { "type": "string" },
+                              "input": {
+                                "type": "string"
+                              },
                               "suggestions": {
                                 "type": "array",
                                 "items": {
@@ -619,14 +768,29 @@
                                     "label": {
                                       "type": "object",
                                       "properties": {
-                                        "id": { "type": "string" },
-                                        "name": { "type": "string" },
-                                        "type": { "type": "string" },
-                                        "color": { "type": ["string", "null"] }
+                                        "id": {
+                                          "type": "string"
+                                        },
+                                        "name": {
+                                          "type": "string"
+                                        },
+                                        "type": {
+                                          "type": "string"
+                                        },
+                                        "color": {
+                                          "type": [
+                                            "string",
+                                            "null"
+                                          ]
+                                        }
                                       }
                                     },
-                                    "confidence": { "type": "number" },
-                                    "reason": { "type": "string" }
+                                    "confidence": {
+                                      "type": "number"
+                                    },
+                                    "reason": {
+                                      "type": "string"
+                                    }
                                   }
                                 }
                               }
@@ -647,7 +811,7 @@
       "post": {
         "operationId": "macroInboxUserUnanswered",
         "summary": "Find inbox conversations awaiting your reply",
-        "description": "Lists inbox threads awaiting your reply. Defaults to today's Primary inbox with unread/read buckets, auto-applies the 'nevyřízeno' plus internal 'meta_seen' labels, and exposes candidateMessageIds for checks. Use timeRange/timeWindow for longer spans or autoAddLabels=false for a read-only view.",
+        "description": "Lists inbox threads awaiting your reply. Defaults to today's Primary inbox with unread/read buckets, auto-applies the 'nevy\u0159\u00edzeno' plus internal 'meta_seen' labels, and exposes candidateMessageIds for checks. Use timeRange/timeWindow for longer spans or autoAddLabels=false for a read-only view.",
         "requestBody": {
           "required": false,
           "content": {
@@ -729,8 +893,8 @@
                   },
                   "labelName": {
                     "type": "string",
-                    "default": "nevyřízeno",
-                    "description": "Preferred label name GPT should suggest for the unanswered watchlist. Defaults to 'nevyřízeno'."
+                    "default": "nevy\u0159\u00edzeno",
+                    "description": "Preferred label name GPT should suggest for the unanswered watchlist. Defaults to 'nevy\u0159\u00edzeno'."
                   },
                   "labelColor": {
                     "type": "string",
@@ -739,7 +903,7 @@
                   "autoAddLabels": {
                     "type": "boolean",
                     "default": true,
-                    "description": "true (default)=auto-create and apply the watchlist labels ('nevyřízeno' + 'meta_seen') to each returned conversation. false=skip auto labeling and only return the report."
+                    "description": "true (default)=auto-create and apply the watchlist labels ('nevy\u0159\u00edzeno' + 'meta_seen') to each returned conversation. false=skip auto labeling and only return the report."
                   },
                   "query": {
                     "type": "string",
@@ -780,30 +944,91 @@
                       "type": "object",
                       "description": "Top-level counters and diagnostics for the current run.",
                       "properties": {
-                        "totalAwaiting": { "type": "integer" },
-                        "unreadCount": { "type": "integer" },
-                        "readCount": { "type": "integer" },
-                        "strictMode": { "type": "boolean" },
-                        "timeRangeApplied": { "type": "boolean", "description": "true when any time filter (including the default 'today') was applied." },
-                        "timeRangeSource": { "type": ["string", "null"], "description": "'default_today' when the macro auto-limited to today; 'timeWindow_today' if the client explicitly passed timeWindow='today'; otherwise null or a custom hint." },
+                        "totalAwaiting": {
+                          "type": "integer"
+                        },
+                        "unreadCount": {
+                          "type": "integer"
+                        },
+                        "readCount": {
+                          "type": "integer"
+                        },
+                        "strictMode": {
+                          "type": "boolean"
+                        },
+                        "timeRangeApplied": {
+                          "type": "boolean",
+                          "description": "true when any time filter (including the default 'today') was applied."
+                        },
+                        "timeRangeSource": {
+                          "type": [
+                            "string",
+                            "null"
+                          ],
+                          "description": "'default_today' when the macro auto-limited to today; 'timeWindow_today' if the client explicitly passed timeWindow='today'; otherwise null or a custom hint."
+                        },
                         "timeWindow": {
-                          "type": ["object", "null"],
+                          "type": [
+                            "object",
+                            "null"
+                          ],
                           "description": "Resolved time window expressed in Europe/Prague timezone.",
                           "properties": {
-                            "start": { "type": ["string", "null"], "format": "date-time" },
-                            "end": { "type": ["string", "null"], "format": "date-time" },
-                            "timezone": { "type": "string" }
+                            "start": {
+                              "type": [
+                                "string",
+                                "null"
+                              ],
+                              "format": "date-time"
+                            },
+                            "end": {
+                              "type": [
+                                "string",
+                                "null"
+                              ],
+                              "format": "date-time"
+                            },
+                            "timezone": {
+                              "type": "string"
+                            }
                           }
                         },
-                        "primaryOnly": { "type": "boolean", "description": "true when only category:Primary was scanned." },
-                        "scannedMessages": { "type": "integer", "description": "Raw Gmail messages inspected to build the list." },
-                        "overflowCount": { "type": "integer", "description": "Threads skipped because maxItems limit was reached." },
-                        "strictFilteredCount": { "type": "integer", "description": "Threads skipped due to strictNoReply=true (already replied before)." },
-                        "labelAlreadyApplied": { "type": "integer", "description": "How many returned threads already have the suggested label." },
-                        "missingLabel": { "type": "boolean", "description": "true if the suggested label does not yet exist in Gmail." },
-                        "trackingLabelAlreadyApplied": { "type": "integer", "description": "How many returned threads already have the internal tracking label." },
-                        "trackingLabelMissing": { "type": "boolean", "description": "true if the internal meta_seen label does not exist in Gmail." },
-                        "trackingLabelSkipped": { "type": "integer", "description": "Threads skipped because meta_seen was already applied." }
+                        "primaryOnly": {
+                          "type": "boolean",
+                          "description": "true when only category:Primary was scanned."
+                        },
+                        "scannedMessages": {
+                          "type": "integer",
+                          "description": "Raw Gmail messages inspected to build the list."
+                        },
+                        "overflowCount": {
+                          "type": "integer",
+                          "description": "Threads skipped because maxItems limit was reached."
+                        },
+                        "strictFilteredCount": {
+                          "type": "integer",
+                          "description": "Threads skipped due to strictNoReply=true (already replied before)."
+                        },
+                        "labelAlreadyApplied": {
+                          "type": "integer",
+                          "description": "How many returned threads already have the suggested label."
+                        },
+                        "missingLabel": {
+                          "type": "boolean",
+                          "description": "true if the suggested label does not yet exist in Gmail."
+                        },
+                        "trackingLabelAlreadyApplied": {
+                          "type": "integer",
+                          "description": "How many returned threads already have the internal tracking label."
+                        },
+                        "trackingLabelMissing": {
+                          "type": "boolean",
+                          "description": "true if the internal meta_seen label does not exist in Gmail."
+                        },
+                        "trackingLabelSkipped": {
+                          "type": "integer",
+                          "description": "Threads skipped because meta_seen was already applied."
+                        }
                       }
                     },
                     "unread": {
@@ -814,26 +1039,52 @@
                     },
                     "labelRecommendation": {
                       "type": "object",
-                      "description": "Suggested label metadata to help GPT offer unanswered-watchlist tagging (user-facing 'nevyřízeno').",
+                      "description": "Suggested label metadata to help GPT offer unanswered-watchlist tagging (user-facing 'nevy\u0159\u00edzeno').",
                       "properties": {
-                        "suggestedName": { "type": "string" },
-                        "suggestedColor": { "type": "string" },
-                        "textColor": { "type": "string" },
+                        "suggestedName": {
+                          "type": "string"
+                        },
+                        "suggestedColor": {
+                          "type": "string"
+                        },
+                        "textColor": {
+                          "type": "string"
+                        },
                         "existingLabel": {
-                          "type": ["object", "null"],
+                          "type": [
+                            "object",
+                            "null"
+                          ],
                           "properties": {
-                            "id": { "type": "string" },
-                            "name": { "type": "string" },
-                            "color": { "type": ["string", "null"] }
+                            "id": {
+                              "type": "string"
+                            },
+                            "name": {
+                              "type": "string"
+                            },
+                            "color": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            }
                           }
                         },
-                        "canCreate": { "type": "boolean" },
+                        "canCreate": {
+                          "type": "boolean"
+                        },
                         "createRequest": {
-                          "type": ["object", "null"],
+                          "type": [
+                            "object",
+                            "null"
+                          ],
                           "description": "Pre-filled RPC payload GPT can send to create the label via /rpc/mail (op=labels, create)."
                         },
                         "applyRequestTemplate": {
-                          "type": ["object", "null"],
+                          "type": [
+                            "object",
+                            "null"
+                          ],
                           "description": "Template RPC payload for applying the label (messageId must be filled before calling /rpc/mail)."
                         },
                         "missingLabel": {
@@ -841,34 +1092,71 @@
                           "description": "true if the suggested label does not yet exist in Gmail."
                         }
                       }
-                    }
-                    ,
+                    },
                     "trackingLabel": {
                       "type": "object",
                       "description": "Internal tracking label ('meta_seen') used so the macro does not return the same thread twice.",
                       "properties": {
-                        "suggestedName": { "type": "string" },
-                        "suggestedColor": { "type": "string" },
-                        "textColor": { "type": "string" },
+                        "suggestedName": {
+                          "type": "string"
+                        },
+                        "suggestedColor": {
+                          "type": "string"
+                        },
+                        "textColor": {
+                          "type": "string"
+                        },
                         "existingLabel": {
-                          "type": ["object", "null"],
+                          "type": [
+                            "object",
+                            "null"
+                          ],
                           "properties": {
-                            "id": { "type": "string" },
-                            "name": { "type": "string" },
-                            "color": { "type": ["string", "null"] }
+                            "id": {
+                              "type": "string"
+                            },
+                            "name": {
+                              "type": "string"
+                            },
+                            "color": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            }
                           }
                         },
-                        "canCreate": { "type": "boolean" },
+                        "canCreate": {
+                          "type": "boolean"
+                        },
                         "createRequest": {
-                          "type": ["object", "null"],
+                          "type": [
+                            "object",
+                            "null"
+                          ],
                           "description": "Pre-filled RPC payload GPT can send to create the meta_seen label via /rpc/mail (op=labels, create)."
                         },
                         "applyRequestTemplate": {
-                          "type": ["object", "null"],
+                          "type": [
+                            "object",
+                            "null"
+                          ],
                           "description": "Template RPC payload for applying the tracking label. Normally used together with labelRecommendation when tagging messages."
                         },
-                        "role": { "type": ["string", "null"], "description": "Constant 'watchlist_tracking'." },
-                        "skipReason": { "type": ["string", "null"], "description": "Diagnostic key for skippedReasons (e.g., 'trackingLabelPresent')." }
+                        "role": {
+                          "type": [
+                            "string",
+                            "null"
+                          ],
+                          "description": "Constant 'watchlist_tracking'."
+                        },
+                        "skipReason": {
+                          "type": [
+                            "string",
+                            "null"
+                          ],
+                          "description": "Diagnostic key for skippedReasons (e.g., 'trackingLabelPresent')."
+                        }
                       }
                     }
                   }
@@ -1547,183 +1835,6 @@
         }
       }
     },
-    "/macros/calendar/reminderDrafts": {
-      "post": {
-        "operationId": "macroCalendarReminderDrafts",
-        "summary": "Generate reminder email drafts for upcoming events",
-        "description": "Create Gmail draft reminders for event attendees. Scopes: today (all day's events) or nextHours (next N hours). Returns draft list with generated emails ready to send. Email templates customizable. Defaults to primary calendar unless calendarId provided.",
-        "requestBody": {
-          "required": false,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "description": "Generate reminder drafts for events. Scope: 'today'=all day's events, 'nextHours'=next N hours. Creates one draft per attendee. Templates customizable with {title}, {start}, {end}, {location}, {recipientName}.",
-                "properties": {
-                  "window": {
-                    "type": "string",
-                    "enum": [
-                      "today",
-                      "nextHours"
-                    ],
-                    "description": "Time window: 'today'=ALL events today, 'nextHours'=next N hours (requires hours param)"
-                  },
-                  "hours": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "maximum": 24,
-                    "description": "Lookahead window in hours (required when window='nextHours')"
-                  },
-                  "template": {
-                    "type": "string",
-                    "maxLength": 2000,
-                    "description": "Custom email template (optional)"
-                  },
-                  "includeLocation": {
-                    "type": "boolean",
-                    "default": true,
-                    "description": "Include location in reminder"
-                  },
-                  "createDrafts": {
-                    "type": "boolean",
-                    "default": true,
-                    "description": "Create drafts or preview only"
-                  },
-                  "calendarId": {
-                    "type": "string",
-                    "default": "primary",
-                    "description": "Optional calendar identifier to scan. Defaults to 'primary'. Supply only when targeting a specific non-primary calendar."
-                  }
-                },
-                "oneOf": [
-                  {
-                    "type": "object",
-                    "title": "Generate for today",
-                    "properties": {
-                      "window": {
-                        "type": "string"
-                      },
-                      "template": {
-                        "type": "string"
-                      },
-                      "includeLocation": {
-                        "type": "boolean"
-                      },
-                      "createDrafts": {
-                        "type": "boolean"
-                      }
-                    }
-                  },
-                  {
-                    "type": "object",
-                    "title": "Generate for next N hours",
-                    "required": [
-                      "hours"
-                    ],
-                    "properties": {
-                      "window": {
-                        "type": "string"
-                      },
-                      "hours": {
-                        "type": "integer"
-                      },
-                      "template": {
-                        "type": "string"
-                      },
-                      "includeLocation": {
-                        "type": "boolean"
-                      },
-                      "createDrafts": {
-                        "type": "boolean"
-                      }
-                    }
-                  }
-                ]
-              },
-              "examples": {
-                "todayReminders": {
-                  "summary": "Generate reminders for ALL today's events",
-                  "value": {
-                    "window": "today"
-                  }
-                },
-                "nextHoursReminders": {
-                  "summary": "Generate reminders for next 4 hours only",
-                  "value": {
-                    "window": "nextHours",
-                    "hours": 4
-                  }
-                },
-                "customTemplate": {
-                  "summary": "Use custom reminder template",
-                  "value": {
-                    "window": "today",
-                    "template": "Hi {recipientName},\n\nDon't forget about {title}!\nWhen: {start}\nWhere: {location}\n\nLooking forward to seeing you!"
-                  }
-                },
-                "sharedCalendar": {
-                  "summary": "Reminders for shared team calendar",
-                  "value": {
-                    "window": "today",
-                    "calendarId": "team@example.com"
-                  }
-                }
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Successfully generated reminder drafts",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "drafts": {
-                      "type": "array",
-                      "description": "Email drafts created (one per attendee per event). Ready to send or customize further.",
-                      "items": {
-                        "type": "object",
-                        "properties": {
-                          "draftId": {
-                            "type": [
-                              "string",
-                              "null"
-                            ],
-                            "description": "Gmail draft ID. Use to access/modify/send via Gmail API. Null if createDrafts=false or draft creation failed."
-                          },
-                          "to": {
-                            "type": "string",
-                            "description": "Recipient email address (event attendee)"
-                          },
-                          "subject": {
-                            "type": "string",
-                            "description": "Email subject line. Format: 'Reminder: {event title}'"
-                          },
-                          "preview": {
-                            "type": "string",
-                            "description": "First 200 chars of email body for preview"
-                          },
-                          "eventId": {
-                            "type": "string",
-                            "description": "Google Calendar event ID. Use to reference original event."
-                          }
-                        }
-                      }
-                    },
-                    "subset": {
-                      "type": "boolean",
-                      "description": "Always false. All matching events included (no pagination)"
-                    }
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "/macros/calendar/listCalendars": {
       "post": {
         "operationId": "macroCalendarListCalendars",
@@ -1784,7 +1895,7 @@
                     "value": [
                       {
                         "id": "primary",
-                        "displayName": "Osobní",
+                        "displayName": "Osobn\u00ed",
                         "isPrimary": true,
                         "accessRole": "owner"
                       },
@@ -2487,7 +2598,7 @@
                   "value": {
                     "op": "addressSuggest",
                     "params": {
-                      "query": "Vrchlického"
+                      "query": "Vrchlick\u00e9ho"
                     }
                   }
                 }
@@ -2509,24 +2620,38 @@
                     },
                     "data": {
                       "type": "object",
-                      "description": "Response data (varies by operation). Reply/send flows return the Gmail payload and may include unrepliedLabelReminder so the assistant can offer removing the 'nevyřízeno' label after replying.",
+                      "description": "Response data (varies by operation). Reply/send flows return the Gmail payload and may include unrepliedLabelReminder so the assistant can offer removing the 'nevy\u0159\u00edzeno' label after replying.",
                       "properties": {
                         "unrepliedLabelReminder": {
-                          "type": ["object", "null"],
-                          "description": "Present when the replied-to message still has the 'nevyřízeno' label. Use the provided modify payload(s) to remove it after confirming with the user; the meta_seen tracker stays in place.",
+                          "type": [
+                            "object",
+                            "null"
+                          ],
+                          "description": "Present when the replied-to message still has the 'nevy\u0159\u00edzeno' label. Use the provided modify payload(s) to remove it after confirming with the user; the meta_seen tracker stays in place.",
                           "properties": {
-                            "labelId": { "type": "string" },
-                            "labelName": { "type": "string" },
-                            "threadId": { "type": ["string", "null"] },
+                            "labelId": {
+                              "type": "string"
+                            },
+                            "labelName": {
+                              "type": "string"
+                            },
+                            "threadId": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            },
                             "messages": {
                               "type": "array",
                               "items": {
                                 "type": "object",
                                 "properties": {
-                                  "messageId": { "type": "string" },
+                                  "messageId": {
+                                    "type": "string"
+                                  },
                                   "removeRequest": {
                                     "type": "object",
-                                    "description": "Pre-filled /rpc/mail payload (op=labels, modify) to remove 'nevyřízeno' from the message."
+                                    "description": "Pre-filled /rpc/mail payload (op=labels, modify) to remove 'nevy\u0159\u00edzeno' from the message."
                                   }
                                 }
                               }
@@ -2593,7 +2718,7 @@
           {
             "name": "maxAgeDays",
             "in": "query",
-            "description": "Maximum age in days for the latest outbound message. Defaults to 14. Leave blank to allow older threads. Must be ≥ minAgeDays when provided.",
+            "description": "Maximum age in days for the latest outbound message. Defaults to 14. Leave blank to allow older threads. Must be \u2265 minAgeDays when provided.",
             "schema": {
               "type": "number",
               "minimum": 1,
@@ -2701,10 +2826,20 @@
                             ],
                             "description": "Timestamps of when the user last wrote in the thread (UTC + Europe/Prague).",
                             "properties": {
-                              "epochMs": { "type": "number" },
-                              "utc": { "type": "string", "format": "date-time" },
-                              "prague": { "type": "string", "description": "ISO string adjusted to Europe/Prague offset." },
-                              "offsetHours": { "type": "number" }
+                              "epochMs": {
+                                "type": "number"
+                              },
+                              "utc": {
+                                "type": "string",
+                                "format": "date-time"
+                              },
+                              "prague": {
+                                "type": "string",
+                                "description": "ISO string adjusted to Europe/Prague offset."
+                              },
+                              "offsetHours": {
+                                "type": "number"
+                              }
                             }
                           },
                           "waitingDays": {
@@ -2732,10 +2867,24 @@
                                 "items": {
                                   "type": "object",
                                   "properties": {
-                                    "address": { "type": "string" },
-                                    "name": { "type": ["string", "null"] },
-                                    "raw": { "type": ["string", "null"] },
-                                    "isUser": { "type": "boolean" }
+                                    "address": {
+                                      "type": "string"
+                                    },
+                                    "name": {
+                                      "type": [
+                                        "string",
+                                        "null"
+                                      ]
+                                    },
+                                    "raw": {
+                                      "type": [
+                                        "string",
+                                        "null"
+                                      ]
+                                    },
+                                    "isUser": {
+                                      "type": "boolean"
+                                    }
                                   }
                                 }
                               },
@@ -2744,10 +2893,24 @@
                                 "items": {
                                   "type": "object",
                                   "properties": {
-                                    "address": { "type": "string" },
-                                    "name": { "type": ["string", "null"] },
-                                    "raw": { "type": ["string", "null"] },
-                                    "isUser": { "type": "boolean" }
+                                    "address": {
+                                      "type": "string"
+                                    },
+                                    "name": {
+                                      "type": [
+                                        "string",
+                                        "null"
+                                      ]
+                                    },
+                                    "raw": {
+                                      "type": [
+                                        "string",
+                                        "null"
+                                      ]
+                                    },
+                                    "isUser": {
+                                      "type": "boolean"
+                                    }
                                   }
                                 }
                               },
@@ -2756,10 +2919,24 @@
                                 "items": {
                                   "type": "object",
                                   "properties": {
-                                    "address": { "type": "string" },
-                                    "name": { "type": ["string", "null"] },
-                                    "raw": { "type": ["string", "null"] },
-                                    "isUser": { "type": "boolean" }
+                                    "address": {
+                                      "type": "string"
+                                    },
+                                    "name": {
+                                      "type": [
+                                        "string",
+                                        "null"
+                                      ]
+                                    },
+                                    "raw": {
+                                      "type": [
+                                        "string",
+                                        "null"
+                                      ]
+                                    },
+                                    "isUser": {
+                                      "type": "boolean"
+                                    }
                                   }
                                 }
                               }
@@ -2768,104 +2945,271 @@
                           "sender": {
                             "type": "object",
                             "properties": {
-                              "raw": { "type": ["string", "null"] },
-                              "address": { "type": ["string", "null"] },
-                              "name": { "type": ["string", "null"] },
-                              "isUser": { "type": "boolean" }
+                              "raw": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ]
+                              },
+                              "address": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ]
+                              },
+                              "name": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ]
+                              },
+                              "isUser": {
+                                "type": "boolean"
+                              }
                             }
                           },
                           "headers": {
                             "type": "object",
                             "properties": {
-                              "subject": { "type": ["string", "null"] },
-                              "from": { "type": ["string", "null"] },
-                              "to": { "type": ["string", "null"] },
-                              "cc": { "type": ["string", "null"] },
-                              "bcc": { "type": ["string", "null"] },
-                              "date": { "type": ["string", "null"] }
+                              "subject": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ]
+                              },
+                              "from": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ]
+                              },
+                              "to": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ]
+                              },
+                              "cc": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ]
+                              },
+                              "bcc": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ]
+                              },
+                              "date": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ]
+                              }
                             }
                           },
                           "lastMessage": {
                             "type": "object",
                             "properties": {
-                              "id": { "type": "string" },
-                              "snippet": { "type": ["string", "null"] },
+                              "id": {
+                                "type": "string"
+                              },
+                              "snippet": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ]
+                              },
                               "timestamps": {
-                                "type": ["object", "null"],
+                                "type": [
+                                  "object",
+                                  "null"
+                                ],
                                 "properties": {
-                                  "epochMs": { "type": "number" },
-                                  "utc": { "type": "string", "format": "date-time" },
-                                  "prague": { "type": "string" },
-                                  "offsetHours": { "type": "number" }
+                                  "epochMs": {
+                                    "type": "number"
+                                  },
+                                  "utc": {
+                                    "type": "string",
+                                    "format": "date-time"
+                                  },
+                                  "prague": {
+                                    "type": "string"
+                                  },
+                                  "offsetHours": {
+                                    "type": "number"
+                                  }
                                 }
                               },
                               "labelIds": {
                                 "type": "array",
-                                "items": { "type": "string" }
+                                "items": {
+                                  "type": "string"
+                                }
                               },
                               "readState": {
                                 "type": "object",
                                 "properties": {
-                                  "isUnread": { "type": "boolean" },
-                                  "isRead": { "type": "boolean" }
+                                  "isUnread": {
+                                    "type": "boolean"
+                                  },
+                                  "isRead": {
+                                    "type": "boolean"
+                                  }
                                 }
                               },
-                              "sizeEstimate": { "type": ["integer", "null"] },
-                              "hasAttachments": { "type": "boolean" },
-                              "plainText": { "type": ["string", "null"] },
+                              "sizeEstimate": {
+                                "type": [
+                                  "integer",
+                                  "null"
+                                ]
+                              },
+                              "hasAttachments": {
+                                "type": "boolean"
+                              },
+                              "plainText": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ]
+                              },
                               "contentMetadata": {
-                                "type": ["object", "null"],
+                                "type": [
+                                  "object",
+                                  "null"
+                                ],
                                 "properties": {
                                   "plainText": {
                                     "type": "object",
                                     "properties": {
-                                      "available": { "type": "boolean" },
-                                      "bytes": { "type": "integer" },
-                                      "preview": { "type": ["string", "null"] },
-                                      "truncated": { "type": "boolean" }
+                                      "available": {
+                                        "type": "boolean"
+                                      },
+                                      "bytes": {
+                                        "type": "integer"
+                                      },
+                                      "preview": {
+                                        "type": [
+                                          "string",
+                                          "null"
+                                        ]
+                                      },
+                                      "truncated": {
+                                        "type": "boolean"
+                                      }
                                     }
                                   },
                                   "html": {
                                     "type": "object",
                                     "properties": {
-                                      "available": { "type": "boolean" },
-                                      "inline": { "type": "boolean" },
-                                      "viaAttachments": { "type": "boolean" },
-                                      "bytes": { "type": "integer" },
-                                      "preview": { "type": ["string", "null"] },
-                                      "truncated": { "type": "boolean" }
+                                      "available": {
+                                        "type": "boolean"
+                                      },
+                                      "inline": {
+                                        "type": "boolean"
+                                      },
+                                      "viaAttachments": {
+                                        "type": "boolean"
+                                      },
+                                      "bytes": {
+                                        "type": "integer"
+                                      },
+                                      "preview": {
+                                        "type": [
+                                          "string",
+                                          "null"
+                                        ]
+                                      },
+                                      "truncated": {
+                                        "type": "boolean"
+                                      }
                                     }
                                   },
-                                  "inlineImages": { "type": "integer" },
-                                  "inlineAttachments": { "type": "integer" }
+                                  "inlineImages": {
+                                    "type": "integer"
+                                  },
+                                  "inlineAttachments": {
+                                    "type": "integer"
+                                  }
                                 }
                               },
                               "links": {
-                                "type": ["object", "null"],
+                                "type": [
+                                  "object",
+                                  "null"
+                                ],
                                 "properties": {
-                                  "thread": { "type": ["string", "null"] },
-                                  "message": { "type": ["string", "null"] }
+                                  "thread": {
+                                    "type": [
+                                      "string",
+                                      "null"
+                                    ]
+                                  },
+                                  "message": {
+                                    "type": [
+                                      "string",
+                                      "null"
+                                    ]
+                                  }
                                 }
                               }
                             }
                           },
                           "lastInbound": {
-                            "type": ["object", "null"],
+                            "type": [
+                              "object",
+                              "null"
+                            ],
                             "properties": {
-                              "id": { "type": "string" },
-                              "from": { "type": ["string", "null"] },
-                              "fromAddress": { "type": ["string", "null"] },
-                              "snippet": { "type": ["string", "null"] },
+                              "id": {
+                                "type": "string"
+                              },
+                              "from": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ]
+                              },
+                              "fromAddress": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ]
+                              },
+                              "snippet": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ]
+                              },
                               "timestamps": {
-                                "type": ["object", "null"],
+                                "type": [
+                                  "object",
+                                  "null"
+                                ],
                                 "properties": {
-                                  "epochMs": { "type": "number" },
-                                  "utc": { "type": "string", "format": "date-time" },
-                                  "prague": { "type": "string" },
-                                  "offsetHours": { "type": "number" }
+                                  "epochMs": {
+                                    "type": "number"
+                                  },
+                                  "utc": {
+                                    "type": "string",
+                                    "format": "date-time"
+                                  },
+                                  "prague": {
+                                    "type": "string"
+                                  },
+                                  "offsetHours": {
+                                    "type": "number"
+                                  }
                                 }
                               },
-                              "ageDays": { "type": ["number", "null"] }
+                              "ageDays": {
+                                "type": [
+                                  "number",
+                                  "null"
+                                ]
+                              }
                             }
                           },
                           "participants": {
@@ -2873,12 +3217,33 @@
                             "items": {
                               "type": "object",
                               "properties": {
-                                "address": { "type": "string" },
-                                "name": { "type": ["string", "null"] },
-                                "raw": { "type": ["string", "null"] },
-                                "firstSeenIn": { "type": ["string", "null"] },
-                                "firstMessageId": { "type": "string" },
-                                "isUser": { "type": "boolean" }
+                                "address": {
+                                  "type": "string"
+                                },
+                                "name": {
+                                  "type": [
+                                    "string",
+                                    "null"
+                                  ]
+                                },
+                                "raw": {
+                                  "type": [
+                                    "string",
+                                    "null"
+                                  ]
+                                },
+                                "firstSeenIn": {
+                                  "type": [
+                                    "string",
+                                    "null"
+                                  ]
+                                },
+                                "firstMessageId": {
+                                  "type": "string"
+                                },
+                                "isUser": {
+                                  "type": "boolean"
+                                }
                               }
                             }
                           },
@@ -2888,46 +3253,115 @@
                             "items": {
                               "type": "object",
                               "properties": {
-                                "id": { "type": "string" },
+                                "id": {
+                                  "type": "string"
+                                },
                                 "direction": {
                                   "type": "string",
-                                  "enum": ["outgoing", "incoming", "draft"]
+                                  "enum": [
+                                    "outgoing",
+                                    "incoming",
+                                    "draft"
+                                  ]
                                 },
-                                "subject": { "type": ["string", "null"] },
-                                "from": { "type": ["string", "null"] },
-                                "to": { "type": ["string", "null"] },
-                                "cc": { "type": ["string", "null"] },
-                                "bcc": { "type": ["string", "null"] },
-                                "snippet": { "type": ["string", "null"] },
+                                "subject": {
+                                  "type": [
+                                    "string",
+                                    "null"
+                                  ]
+                                },
+                                "from": {
+                                  "type": [
+                                    "string",
+                                    "null"
+                                  ]
+                                },
+                                "to": {
+                                  "type": [
+                                    "string",
+                                    "null"
+                                  ]
+                                },
+                                "cc": {
+                                  "type": [
+                                    "string",
+                                    "null"
+                                  ]
+                                },
+                                "bcc": {
+                                  "type": [
+                                    "string",
+                                    "null"
+                                  ]
+                                },
+                                "snippet": {
+                                  "type": [
+                                    "string",
+                                    "null"
+                                  ]
+                                },
                                 "timestamps": {
-                                  "type": ["object", "null"],
+                                  "type": [
+                                    "object",
+                                    "null"
+                                  ],
                                   "properties": {
-                                    "epochMs": { "type": "number" },
-                                    "utc": { "type": "string", "format": "date-time" },
-                                    "prague": { "type": "string" },
-                                    "offsetHours": { "type": "number" }
+                                    "epochMs": {
+                                      "type": "number"
+                                    },
+                                    "utc": {
+                                      "type": "string",
+                                      "format": "date-time"
+                                    },
+                                    "prague": {
+                                      "type": "string"
+                                    },
+                                    "offsetHours": {
+                                      "type": "number"
+                                    }
                                   }
                                 },
                                 "labelIds": {
                                   "type": "array",
-                                  "items": { "type": "string" }
+                                  "items": {
+                                    "type": "string"
+                                  }
                                 },
-                                "hasAttachments": { "type": "boolean" },
+                                "hasAttachments": {
+                                  "type": "boolean"
+                                },
                                 "readState": {
                                   "type": "object",
                                   "properties": {
-                                    "isUnread": { "type": "boolean" },
-                                    "isRead": { "type": "boolean" }
+                                    "isUnread": {
+                                      "type": "boolean"
+                                    },
+                                    "isRead": {
+                                      "type": "boolean"
+                                    }
                                   }
                                 }
                               }
                             }
                           },
                           "links": {
-                            "type": ["object", "null"],
+                            "type": [
+                              "object",
+                              "null"
+                            ],
                             "properties": {
-                              "thread": { "type": ["string", "null"] },
-                              "message": { "type": ["string", "null"] }
+                              "thread": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ]
+                              },
+                              "message": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ]
+                              }
                             }
                           }
                         }
@@ -2937,32 +3371,66 @@
                       "type": "object",
                       "description": "Suggested label metadata to help GPT mark sent follow-up threads (default name 'followup').",
                       "properties": {
-                        "suggestedName": { "type": "string" },
-                        "suggestedColor": { "type": "string" },
-                        "textColor": { "type": "string" },
+                        "suggestedName": {
+                          "type": "string"
+                        },
+                        "suggestedColor": {
+                          "type": "string"
+                        },
+                        "textColor": {
+                          "type": "string"
+                        },
                         "existingLabel": {
-                          "type": ["object", "null"],
+                          "type": [
+                            "object",
+                            "null"
+                          ],
                           "properties": {
-                            "id": { "type": "string" },
-                            "name": { "type": "string" },
-                            "color": { "type": ["string", "null"] }
+                            "id": {
+                              "type": "string"
+                            },
+                            "name": {
+                              "type": "string"
+                            },
+                            "color": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
+                            }
                           }
                         },
-                        "canCreate": { "type": "boolean" },
+                        "canCreate": {
+                          "type": "boolean"
+                        },
                         "createRequest": {
-                          "type": ["object", "null"],
+                          "type": [
+                            "object",
+                            "null"
+                          ],
                           "description": "Pre-filled request body to create the follow-up label if it doesn't exist.",
                           "properties": {
-                            "op": { "type": "string" },
-                            "params": { "type": "object" }
+                            "op": {
+                              "type": "string"
+                            },
+                            "params": {
+                              "type": "object"
+                            }
                           }
                         },
                         "applyRequestTemplate": {
-                          "type": ["object", "null"],
+                          "type": [
+                            "object",
+                            "null"
+                          ],
                           "description": "Template for applying the label to a specific Gmail message. Replace <messageId> before calling /rpc/gmail.",
                           "properties": {
-                            "op": { "type": "string" },
-                            "params": { "type": "object" }
+                            "op": {
+                              "type": "string"
+                            },
+                            "params": {
+                              "type": "object"
+                            }
                           }
                         }
                       }
@@ -2980,22 +3448,51 @@
                       "type": "object",
                       "description": "Final parameters applied by the backend.",
                       "properties": {
-                        "minAgeDays": { "type": "number" },
-                        "maxAgeDays": { "type": ["number", "null"] },
-                        "maxThreads": { "type": "integer" },
-                        "includeBodies": { "type": "boolean" },
-                        "includeDrafts": { "type": "boolean" },
-                        "historyLimit": { "type": "integer" },
-                        "additionalQuery": { "type": ["string", "null"] },
-                        "pageToken": { "type": ["string", "null"] }
+                        "minAgeDays": {
+                          "type": "number"
+                        },
+                        "maxAgeDays": {
+                          "type": [
+                            "number",
+                            "null"
+                          ]
+                        },
+                        "maxThreads": {
+                          "type": "integer"
+                        },
+                        "includeBodies": {
+                          "type": "boolean"
+                        },
+                        "includeDrafts": {
+                          "type": "boolean"
+                        },
+                        "historyLimit": {
+                          "type": "integer"
+                        },
+                        "additionalQuery": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "pageToken": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        }
                       }
                     },
                     "stats": {
                       "type": "object",
                       "description": "Diagnostic counters for transparency.",
                       "properties": {
-                        "scannedMessages": { "type": "integer" },
-                        "inspectedThreads": { "type": "integer" },
+                        "scannedMessages": {
+                          "type": "integer"
+                        },
+                        "inspectedThreads": {
+                          "type": "integer"
+                        },
                         "skipped": {
                           "type": "object",
                           "additionalProperties": {
@@ -3010,7 +3507,10 @@
                       "description": "true when additional threads are available via nextPageToken."
                     },
                     "nextPageToken": {
-                      "type": ["string", "null"],
+                      "type": [
+                        "string",
+                        "null"
+                      ],
                       "description": "Pass to the next request to continue scanning Gmail results."
                     }
                   },
@@ -3030,9 +3530,15 @@
                 "schema": {
                   "type": "object",
                   "properties": {
-                    "error": { "type": "string" },
-                    "message": { "type": "string" },
-                    "code": { "type": "string" }
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "code": {
+                      "type": "string"
+                    }
                   }
                 }
               }
@@ -3072,7 +3578,7 @@
                       "attachmentPreview",
                       "labels"
                     ],
-                    "description": "Operation: search, preview (metadata for ids), read (full email or by search), create drafts (trigger phrases: 'vytvořit mi draft', 'udělej mi draft'), update existing drafts, list or fetch drafts, send (direct OR by draftId), reply, modify labels, preview attachments, or manage labels list/modify."
+                    "description": "Operation: search, preview (metadata for ids), read (full email or by search), create drafts (trigger phrases: 'vytvo\u0159it mi draft', 'ud\u011blej mi draft'), update existing drafts, list or fetch drafts, send (direct OR by draftId), reply, modify labels, preview attachments, or manage labels list/modify."
                   },
                   "params": {
                     "anyOf": [
@@ -3088,7 +3594,7 @@
                             "type": "string",
                             "pattern": "^r-[0-9]+$",
                             "example": "r-70585620154190988",
-                            "description": "Draft ID returned from /macros/calendar/reminderDrafts. Format: r-XXXXXXXXX (immutable draft identifier)"
+                            "description": "Draft ID in Gmail format: r-XXXXXXXXX (immutable draft identifier)"
                           }
                         }
                       },
@@ -3133,7 +3639,7 @@
                       {
                         "type": "object",
                         "title": "Create Draft",
-                        "description": "Create Gmail draft without sending (op=createDraft). Use for requests like 'vytvořit mi draft' or 'udělej mi draft'.",
+                        "description": "Create Gmail draft without sending (op=createDraft). Use for requests like 'vytvo\u0159it mi draft' or 'ud\u011blej mi draft'.",
                         "required": [
                           "to",
                           "subject",
@@ -3155,7 +3661,7 @@
                           "body": {
                             "type": "string",
                             "maxLength": 20000,
-                            "example": "Ahoj, tady je návrh status reportu...",
+                            "example": "Ahoj, tady je n\u00e1vrh status reportu...",
                             "description": "Plain-text body saved to the draft"
                           },
                           "cc": {
@@ -3273,13 +3779,17 @@
                           },
                           "labelIds": {
                             "oneOf": [
-                              { "type": "string" },
+                              {
+                                "type": "string"
+                              },
                               {
                                 "type": "array",
-                                "items": { "type": "string" }
+                                "items": {
+                                  "type": "string"
+                                }
                               }
                             ],
-                            "description": "Optional Gmail label IDs to filter results (e.g., use with the 'nevyřízeno' label). Always fetch fresh results instead of relying on cached label membership."
+                            "description": "Optional Gmail label IDs to filter results (e.g., use with the 'nevy\u0159\u00edzeno' label). Always fetch fresh results instead of relying on cached label membership."
                           }
                         }
                       },
@@ -3332,40 +3842,56 @@
                           },
                           "includeMatchesFor": {
                             "oneOf": [
-                              { "type": "string" },
+                              {
+                                "type": "string"
+                              },
                               {
                                 "type": "array",
-                                "items": { "type": "string" }
+                                "items": {
+                                  "type": "string"
+                                }
                               }
                             ],
                             "description": "Optional array (or single string) of label names provided by the user. When present, the server performs fuzzy matching and returns resolution metadata alongside the label list."
                           },
                           "search": {
                             "oneOf": [
-                              { "type": "string" },
+                              {
+                                "type": "string"
+                              },
                               {
                                 "type": "array",
-                                "items": { "type": "string" }
+                                "items": {
+                                  "type": "string"
+                                }
                               }
                             ],
                             "description": "Alias for includeMatchesFor. Accepts a single string or array for backwards compatibility."
                           },
                           "lookup": {
                             "oneOf": [
-                              { "type": "string" },
+                              {
+                                "type": "string"
+                              },
                               {
                                 "type": "array",
-                                "items": { "type": "string" }
+                                "items": {
+                                  "type": "string"
+                                }
                               }
                             ],
                             "description": "Another alias for includeMatchesFor used by some orchestrators."
                           },
                           "resolve": {
                             "oneOf": [
-                              { "type": "string" },
+                              {
+                                "type": "string"
+                              },
                               {
                                 "type": "array",
-                                "items": { "type": "string" }
+                                "items": {
+                                  "type": "string"
+                                }
                               }
                             ],
                             "description": "Resolve label strings without returning the full label directory. Returns the same resolution object used by macros."
@@ -3442,7 +3968,7 @@
                     "params": {
                       "to": "coworker@example.com",
                       "subject": "Weekly status update",
-                      "body": "Ahoj! Posílám koncept reportu ke schválení."
+                      "body": "Ahoj! Pos\u00edl\u00e1m koncept reportu ke schv\u00e1len\u00ed."
                     }
                   }
                 },
@@ -3493,17 +4019,33 @@
                     },
                     "data": {
                       "anyOf": [
-                        { "$ref": "#/components/schemas/MailRpcSearchResult" },
-                        { "$ref": "#/components/schemas/MailRpcReadItem" },
+                        {
+                          "$ref": "#/components/schemas/MailRpcSearchResult"
+                        },
+                        {
+                          "$ref": "#/components/schemas/MailRpcReadItem"
+                        },
                         {
                           "type": "array",
-                          "items": { "$ref": "#/components/schemas/MailRpcReadItem" }
+                          "items": {
+                            "$ref": "#/components/schemas/MailRpcReadItem"
+                          }
                         },
-                        { "$ref": "#/components/schemas/MailRpcBatchReadResult" },
-                        { "type": "object" },
-                        { "type": "array" },
-                        { "type": "string" },
-                        { "type": "null" }
+                        {
+                          "$ref": "#/components/schemas/MailRpcBatchReadResult"
+                        },
+                        {
+                          "type": "object"
+                        },
+                        {
+                          "type": "array"
+                        },
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
                       ],
                       "description": "Operation result. Search returns MailRpcSearchResult (messages[] with Gmail web links). Read returns MailRpcReadItem for a single email or an array of MailRpcReadItems. Other operations return their documented payloads."
                     }
@@ -4335,8 +4877,12 @@
           },
           "links": {
             "oneOf": [
-              { "$ref": "#/components/schemas/GmailWebLinks" },
-              { "type": "null" }
+              {
+                "$ref": "#/components/schemas/GmailWebLinks"
+              },
+              {
+                "type": "null"
+              }
             ],
             "description": "Direct Gmail web links for this search hit."
           }
@@ -4354,7 +4900,9 @@
           "messages": {
             "type": "array",
             "description": "Array of Gmail search results.",
-            "items": { "$ref": "#/components/schemas/MailRpcSearchMessage" }
+            "items": {
+              "$ref": "#/components/schemas/MailRpcSearchMessage"
+            }
           },
           "nextPageToken": {
             "type": [
@@ -4376,18 +4924,28 @@
             "items": {
               "type": "object",
               "properties": {
-                "id": { "type": "string" },
-                "threadId": { "type": "string" },
+                "id": {
+                  "type": "string"
+                },
+                "threadId": {
+                  "type": "string"
+                },
                 "links": {
                   "oneOf": [
-                    { "$ref": "#/components/schemas/GmailWebLinks" },
-                    { "type": "null" }
+                    {
+                      "$ref": "#/components/schemas/GmailWebLinks"
+                    },
+                    {
+                      "type": "null"
+                    }
                   ],
                   "description": "Thread link along with the newest message pointer."
                 },
                 "messages": {
                   "type": "array",
-                  "items": { "$ref": "#/components/schemas/MailRpcSearchMessage" }
+                  "items": {
+                    "$ref": "#/components/schemas/MailRpcSearchMessage"
+                  }
                 }
               },
               "additionalProperties": true
@@ -4413,8 +4971,12 @@
           },
           "links": {
             "oneOf": [
-              { "$ref": "#/components/schemas/GmailWebLinks" },
-              { "type": "null" }
+              {
+                "$ref": "#/components/schemas/GmailWebLinks"
+              },
+              {
+                "type": "null"
+              }
             ],
             "description": "Direct Gmail web links for this email."
           }
@@ -4430,15 +4992,25 @@
         "type": "object",
         "description": "REST batch read response. Mirrors /mail/batchRead with Gmail links included on each item.",
         "properties": {
-          "success": { "type": "boolean" },
-          "idsRequested": { "type": "integer" },
-          "idsReturned": { "type": "integer" },
+          "success": {
+            "type": "boolean"
+          },
+          "idsRequested": {
+            "type": "integer"
+          },
+          "idsReturned": {
+            "type": "integer"
+          },
           "items": {
             "type": "array",
             "description": "Emails returned in this batch.",
-            "items": { "$ref": "#/components/schemas/MailRpcReadItem" }
+            "items": {
+              "$ref": "#/components/schemas/MailRpcReadItem"
+            }
           },
-          "note": { "type": "string" }
+          "note": {
+            "type": "string"
+          }
         },
         "required": [
           "success",
@@ -4457,70 +5029,160 @@
             "items": {
               "type": "object",
               "properties": {
-                "threadId": { "type": "string" },
-                "messageId": { "type": "string" },
+                "threadId": {
+                  "type": "string"
+                },
+                "messageId": {
+                  "type": "string"
+                },
                 "candidateMessageIds": {
                   "type": "array",
                   "description": "All Gmail message IDs within the thread that appear in the watchlist label diagnostics (latest incoming message plus related drafts), useful for confirming which messages already carry or need the suggested tag.",
-                  "items": { "type": "string" }
+                  "items": {
+                    "type": "string"
+                  }
                 },
-                "subject": { "type": "string" },
+                "subject": {
+                  "type": "string"
+                },
                 "sender": {
                   "type": "object",
                   "properties": {
-                    "name": { "type": ["string", "null"] },
-                    "email": { "type": ["string", "null"] }
+                    "name": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "email": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    }
                   }
                 },
                 "receivedAt": {
-                  "type": ["string", "null"],
+                  "type": [
+                    "string",
+                    "null"
+                  ],
                   "description": "Europe/Prague ISO timestamp of the latest incoming message."
                 },
                 "receivedInternal": {
-                  "type": ["integer", "null"],
+                  "type": [
+                    "integer",
+                    "null"
+                  ],
                   "description": "Gmail internalDate (ms epoch) for the latest incoming message."
                 },
-                "snippet": { "type": "string" },
+                "snippet": {
+                  "type": "string"
+                },
                 "gmailLinks": {
-                  "type": ["object", "null"],
+                  "type": [
+                    "object",
+                    "null"
+                  ],
                   "properties": {
-                    "thread": { "type": "string" },
-                    "message": { "type": ["string", "null"] }
+                    "thread": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    }
                   }
                 },
-                "messageCount": { "type": "integer" },
+                "messageCount": {
+                  "type": "integer"
+                },
                 "readState": {
                   "type": "object",
                   "properties": {
-                    "isUnread": { "type": "boolean" },
-                    "isRead": { "type": "boolean" }
+                    "isUnread": {
+                      "type": "boolean"
+                    },
+                    "isRead": {
+                      "type": "boolean"
+                    }
                   }
                 },
-                "hasUserReply": { "type": "boolean" },
-                "lastUserReplyAt": { "type": ["string", "null"] },
-                "lastUserReplyInternal": { "type": ["integer", "null"] },
-                "waitingMinutes": { "type": ["integer", "null"] },
-                "waitingHoursApprox": { "type": ["number", "null"] },
-                "sinceLastUserReplyMinutes": { "type": ["integer", "null"] },
+                "hasUserReply": {
+                  "type": "boolean"
+                },
+                "lastUserReplyAt": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "lastUserReplyInternal": {
+                  "type": [
+                    "integer",
+                    "null"
+                  ]
+                },
+                "waitingMinutes": {
+                  "type": [
+                    "integer",
+                    "null"
+                  ]
+                },
+                "waitingHoursApprox": {
+                  "type": [
+                    "number",
+                    "null"
+                  ]
+                },
+                "sinceLastUserReplyMinutes": {
+                  "type": [
+                    "integer",
+                    "null"
+                  ]
+                },
                 "participants": {
                   "type": "array",
                   "items": {
                     "type": "object",
                     "properties": {
-                      "email": { "type": ["string", "null"] },
-                      "name": { "type": ["string", "null"] }
+                      "email": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "name": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      }
                     }
                   }
                 },
                 "label": {
-                  "type": ["object", "null"],
+                  "type": [
+                    "object",
+                    "null"
+                  ],
                   "properties": {
-                    "suggestedId": { "type": "string" },
-                    "suggestedName": { "type": "string" },
-                    "alreadyApplied": { "type": "boolean" }
+                    "suggestedId": {
+                      "type": "string"
+                    },
+                    "suggestedName": {
+                      "type": "string"
+                    },
+                    "alreadyApplied": {
+                      "type": "boolean"
+                    }
                   }
                 },
-                "labelApplied": { "type": "boolean" },
+                "labelApplied": {
+                  "type": "boolean"
+                },
                 "strictFiltered": {
                   "type": "boolean",
                   "description": "true when the item would be hidden in strict mode because you already replied earlier."
@@ -4533,7 +5195,10 @@
             "description": "true when additional matching threads exist beyond this response."
           },
           "nextPageToken": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "description": "Token for fetching the next page of this bucket via unreadPageToken/readPageToken."
           },
           "scanned": {
@@ -4547,7 +5212,9 @@
           "skippedReasons": {
             "type": "object",
             "description": "Diagnostic map of skip reasons (e.g., lastMessageFromUser, userReplyPresent).",
-            "additionalProperties": { "type": "integer" }
+            "additionalProperties": {
+              "type": "integer"
+            }
           }
         }
       },
@@ -4597,7 +5264,7 @@
         ],
         "x-googleSheetsParams": {
           "list": {
-            "description": "List all contacts – no params needed (omit or {})."
+            "description": "List all contacts \u2013 no params needed (omit or {})."
           },
           "dedupe": {
             "description": "Find duplicate groups in Google Sheets. No params required."
