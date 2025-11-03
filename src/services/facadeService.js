@@ -2196,27 +2196,27 @@ async function tasksOverview(googleSub, params) {
  * Format ISO datetime range to human-readable Czech format
  * @param {string} startIso - Start time ISO 8601 string
  * @param {string} endIso - End time ISO 8601 string
- * @returns {string} Formatted time range like "15:00-16:00 21.10 2025"
+ * @returns {string} Formatted time range like "15:00-16:00, 21.10.2025"
  */
 function formatTimeRangeForEmail(startIso, endIso) {
   if (!startIso || !endIso) return '';
   try {
     const startDate = new Date(startIso);
     const endDate = new Date(endIso);
-    
+
     // Formátování času (HH:MM)
     const startTime = startDate.toLocaleString('cs-CZ', {
       hour: '2-digit',
       minute: '2-digit',
       timeZone: 'Europe/Prague'
     });
-    
+
     const endTime = endDate.toLocaleString('cs-CZ', {
       hour: '2-digit',
       minute: '2-digit',
       timeZone: 'Europe/Prague'
     });
-    
+
     // Formátování data (DD.MM YYYY)
     const dateStr = startDate.toLocaleString('cs-CZ', {
       day: '2-digit',
@@ -2224,8 +2224,8 @@ function formatTimeRangeForEmail(startIso, endIso) {
       year: 'numeric',
       timeZone: 'Europe/Prague'
     });
-    
-    return `${startTime}-${endTime} ${dateStr}`;
+
+    return `${startTime}-${endTime}, ${dateStr}`;
   } catch (e) {
     console.warn('Failed to format time range:', startIso, endIso, e.message);
     return `${startIso} - ${endIso}`;
@@ -2233,30 +2233,8 @@ function formatTimeRangeForEmail(startIso, endIso) {
 }
 
 /**
- * Format ISO datetime to human-readable Czech format
- * @param {string} isoString - ISO 8601 datetime string
- * @returns {string} Formatted time like "21.10.2025 15:00"
- */
-function formatTimeForEmail(isoString) {
-  if (!isoString) return '';
-  try {
-    const date = new Date(isoString);
-    return date.toLocaleString('cs-CZ', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-      timeZone: 'Europe/Prague'
-    });
-  } catch (e) {
-    console.warn('Failed to format time:', isoString, e.message);
-    return isoString;
-  }
-}
-
-/**
  * Reminder Drafts - bulk email reminders for today's events
+ * Hybrid approach: prepareOnly (default) returns data for GPT, or creates drafts directly
  */
 async function calendarReminderDrafts(googleSub, params) {
   const {
@@ -2264,7 +2242,7 @@ async function calendarReminderDrafts(googleSub, params) {
     hours,
     template,
     includeLocation = true,
-    createDrafts = true,
+    prepareOnly = true,
     calendarId = 'primary'
   } = params;
 
@@ -2284,11 +2262,11 @@ async function calendarReminderDrafts(googleSub, params) {
       });
     }
   }
-  
+
   // Calculate time window
   const now = new Date();
   let start, end;
-  
+
   if (window === 'today') {
     start = new Date(now);
     start.setHours(0, 0, 0, 0);
@@ -2298,7 +2276,7 @@ async function calendarReminderDrafts(googleSub, params) {
     start = now;
     end = new Date(now.getTime() + (hours || 4) * 60 * 60 * 1000);
   }
-  
+
   // Fetch upcoming events with attendees
   const events = await calendarService.listCalendarEvents(googleSub, {
     calendarId,
@@ -2307,15 +2285,48 @@ async function calendarReminderDrafts(googleSub, params) {
     orderBy: 'startTime',
     singleEvents: true
   });
-  
+
   const upcomingEvents = events.items.filter(e => {
     const eventStart = new Date(e.start.dateTime || e.start.date);
     return eventStart > now && e.attendees && e.attendees.length > 0;
   });
-  
-  // Generate drafts
+
+  // If prepareOnly mode, return structured data for GPT to process
+  if (prepareOnly) {
+    const preparedEvents = upcomingEvents.map(event => {
+      const attendeesList = (event.attendees || []).filter(a => a && a.email);
+      const timeRange = formatTimeRangeForEmail(
+        event.start.dateTime || event.start.date,
+        event.end.dateTime || event.end.date
+      );
+
+      return {
+        eventId: event.id,
+        summary: event.summary,
+        start: event.start.dateTime || event.start.date,
+        end: event.end.dateTime || event.end.date,
+        location: event.location || null,
+        htmlLink: event.htmlLink || null,
+        timeRangeFormatted: timeRange,
+        attendees: attendeesList.map(a => ({
+          email: a.email,
+          displayName: a.displayName || null
+        }))
+      };
+    });
+
+    return {
+      mode: 'prepareOnly',
+      events: preparedEvents,
+      count: preparedEvents.length,
+      window,
+      note: 'Use these prepared events to create personalized reminder drafts via /rpc/mail with op:createDraft'
+    };
+  }
+
+  // Legacy mode: create drafts directly (without proper Czech grammar)
   const drafts = [];
-  
+
   for (const event of upcomingEvents) {
     const attendeesList = (event.attendees || []).filter(a => a && a.email);
     if (attendeesList.length === 0) {
@@ -2323,11 +2334,12 @@ async function calendarReminderDrafts(googleSub, params) {
     }
 
     const subject = `Reminder: ${event.summary}`;
-    const locationText = includeLocation && event.location ? `\nLocation: ${event.location}` : '';
+    const locationText = includeLocation && event.location ? `\nMísto: ${event.location}` : '';
     const timeRange = formatTimeRangeForEmail(
       event.start.dateTime || event.start.date,
       event.end.dateTime || event.end.date
     );
+    const eventLink = event.htmlLink ? `\nOdkaz na událost: ${event.htmlLink}` : '';
 
     // Create personalized email for each attendee
     for (const attendee of attendeesList) {
@@ -2337,11 +2349,12 @@ async function calendarReminderDrafts(googleSub, params) {
         template,
         locationText,
         timeRange,
+        eventLink,
         recipientLabel,
         isGroup: false
       });
 
-      const draftId = await createReminderDraft(googleSub, createDrafts, {
+      const draftId = await createReminderDraft(googleSub, true, {
         to: attendee.email,
         subject,
         body,
@@ -2357,10 +2370,12 @@ async function calendarReminderDrafts(googleSub, params) {
       });
     }
   }
-  
+
   return {
+    mode: 'createDrafts',
     drafts,
-    subset: false
+    count: drafts.length,
+    note: 'Drafts created but may have imperfect Czech grammar (no declension). Use prepareOnly:true for GPT-personalized drafts.'
   };
 }
 
@@ -2370,6 +2385,7 @@ function buildReminderBody({
   recipientLabel,
   timeRange,
   locationText,
+  eventLink,
   isGroup
 }) {
   const safeSummary = event.summary || '';
@@ -2382,10 +2398,12 @@ function buildReminderBody({
       .replace(/{start}/g, event.start.dateTime || event.start.date || '')
       .replace(/{end}/g, event.end.dateTime || event.end.date || '')
       .replace(/{location}/g, event.location || '')
-      .replace(/{recipientName}/g, recipientLabel || (isGroup ? 'všichni' : ''));
+      .replace(/{recipientName}/g, recipientLabel || (isGroup ? 'všichni' : ''))
+      .replace(/{timeRange}/g, timeRange || '')
+      .replace(/{eventLink}/g, eventLink || '');
   }
 
-  return `Ahoj${greetingName},\n\njen připomínám, že s tebou počítám na akci "${safeSummary}"\nČas: ${timeRange}${locationText}\n\n${closing}`;
+  return `Ahoj${greetingName},\n\njen připomínám, že s tebou počítám na akci "${safeSummary}"\nČas: ${timeRange}${locationText}${eventLink}\n\n${closing}`;
 }
 
 async function createReminderDraft(googleSub, shouldCreate, { to, subject, body, logLabel }) {

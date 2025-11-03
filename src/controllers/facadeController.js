@@ -220,7 +220,7 @@ async function macroCalendarReminderDrafts(req, res) {
     res.json(result);
   } catch (error) {
     console.error('❌ Macro calendar reminder drafts failed:', error.message);
-    
+
     if (error.statusCode === 401) {
       return res.status(401).json({
         error: 'Authentication required',
@@ -228,7 +228,7 @@ async function macroCalendarReminderDrafts(req, res) {
         code: 'REAUTH_REQUIRED'
       });
     }
-    
+
     res.status(500).json({
       error: 'Calendar reminder drafts failed',
       message: error.message,
