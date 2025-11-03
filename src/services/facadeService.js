@@ -163,6 +163,9 @@ async function inboxOverview(googleSub, params = {}) {
   let labelResolution = null;
   let requestedLabelCount = 0;
 
+  // Exclude sent emails by default (only show received emails)
+  queryParts.push('-in:sent');
+
   if (typeof rawQuery === 'string' && rawQuery.trim()) {
     queryParts.push(rawQuery.trim());
   }
