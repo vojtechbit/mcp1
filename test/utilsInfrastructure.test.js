@@ -87,6 +87,48 @@ test('handleControllerError returns structured response', () => {
   assert.ok(res.payload.message.includes('Default error'));
 });
 
+test('handleControllerError preserves ApiError code and details', () => {
+  const customError = new errorsUtil.ApiError('Task update failed', {
+    statusCode: 409,
+    code: 'TASK_UPDATE_FAILED',
+    details: { taskId: 'task-123' }
+  });
+
+  const res = { statusCode: null, payload: null, status(code) { this.statusCode = code; return this; }, json(data) { this.payload = data; return this; } };
+
+  errorsUtil.handleControllerError(res, customError, { context: 'tasks.createTask', defaultMessage: 'Task creation failed' });
+
+  assert.equal(res.statusCode, 409);
+  assert.equal(res.payload.error, 'Conflict');
+  assert.equal(res.payload.code, 'TASK_UPDATE_FAILED');
+  assert.deepEqual(res.payload.details, { taskId: 'task-123' });
+  assert.equal(res.payload.message, 'Task update failed');
+});
+
+test('handleControllerError surfaces response-derived code and details', () => {
+  const apiResponseError = {
+    response: {
+      status: 422,
+      data: {
+        error: 'Validation Failed',
+        message: 'Missing required field: title',
+        code: 'TASK_TITLE_REQUIRED',
+        details: { field: 'title' }
+      }
+    }
+  };
+
+  const res = { statusCode: null, payload: null, status(code) { this.statusCode = code; return this; }, json(data) { this.payload = data; return this; } };
+
+  errorsUtil.handleControllerError(res, apiResponseError, { context: 'tasks.createTask', defaultMessage: 'Task creation failed' });
+
+  assert.equal(res.statusCode, 422);
+  assert.equal(res.payload.error, 'Unprocessable Entity');
+  assert.equal(res.payload.code, 'TASK_TITLE_REQUIRED');
+  assert.deepEqual(res.payload.details, { field: 'title' });
+  assert.equal(res.payload.message, 'Missing required field: title');
+});
+
 test('redact utilities mask secrets and sensitive keys', () => {
   const summarized = redactUtil.summarizeSecret('abcdefghijklmnopqrstuvwxyz');
   assert.ok(summarized.startsWith('abcd'));
