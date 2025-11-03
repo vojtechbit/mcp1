@@ -4665,6 +4665,214 @@
           }
         }
       }
+    },
+    "/macros/calendar/reminderDrafts": {
+      "post": {
+        "operationId": "macroCalendarReminderDrafts",
+        "summary": "Prepare or create reminder email drafts for upcoming events",
+        "description": "Hybrid approach for creating reminder emails. Default prepareOnly mode returns structured data (events, attendees, formatted times, htmlLinks) for GPT to create personalized drafts. Legacy mode (prepareOnly:false) creates drafts directly but without proper Czech declension.",
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "description": "Generate reminder data/drafts for events. Scope: 'today'=all day's events, 'nextHours'=next N hours. DEFAULT prepareOnly:true returns data for GPT to personalize. Set prepareOnly:false for direct draft creation (imperfect grammar).",
+                "properties": {
+                  "window": {
+                    "type": "string",
+                    "enum": [
+                      "today",
+                      "nextHours"
+                    ],
+                    "default": "today",
+                    "description": "Time window: 'today'=ALL events today, 'nextHours'=next N hours (requires hours param)"
+                  },
+                  "hours": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 24,
+                    "description": "Lookahead window in hours (required when window='nextHours')"
+                  },
+                  "prepareOnly": {
+                    "type": "boolean",
+                    "default": true,
+                    "description": "DEFAULT true: Returns event data (timeRangeFormatted, htmlLink, attendees) for GPT to create personalized drafts with proper Czech vokativ. false: Backend creates drafts directly but WITHOUT proper declension - use only as fallback."
+                  },
+                  "template": {
+                    "type": "string",
+                    "maxLength": 2000,
+                    "description": "Custom email template (only used when prepareOnly:false). Supports placeholders: {title}, {timeRange}, {location}, {recipientName}, {eventLink}"
+                  },
+                  "includeLocation": {
+                    "type": "boolean",
+                    "default": true,
+                    "description": "Include location in reminder (only used when prepareOnly:false)"
+                  },
+                  "calendarId": {
+                    "type": "string",
+                    "default": "primary",
+                    "description": "Optional calendar identifier to scan. Defaults to 'primary'. Supply only when targeting a specific non-primary calendar."
+                  }
+                }
+              },
+              "examples": {
+                "prepareForGPT": {
+                  "summary": "RECOMMENDED: Get data for GPT to create personalized drafts",
+                  "value": {
+                    "window": "today",
+                    "prepareOnly": true
+                  }
+                },
+                "legacyMode": {
+                  "summary": "FALLBACK: Backend creates drafts (imperfect grammar)",
+                  "value": {
+                    "window": "today",
+                    "prepareOnly": false
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success - returns prepared data or created drafts depending on prepareOnly mode",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "type": "object",
+                      "title": "PrepareOnly Mode Response",
+                      "properties": {
+                        "mode": {
+                          "type": "string",
+                          "enum": [
+                            "prepareOnly"
+                          ]
+                        },
+                        "events": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "eventId": {
+                                "type": "string"
+                              },
+                              "summary": {
+                                "type": "string"
+                              },
+                              "start": {
+                                "type": "string"
+                              },
+                              "end": {
+                                "type": "string"
+                              },
+                              "location": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ]
+                              },
+                              "htmlLink": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ]
+                              },
+                              "timeRangeFormatted": {
+                                "type": "string",
+                                "description": "Czech-formatted time range like '14:00-15:00, 03.11.2025'"
+                              },
+                              "attendees": {
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "properties": {
+                                    "email": {
+                                      "type": "string"
+                                    },
+                                    "displayName": {
+                                      "type": [
+                                        "string",
+                                        "null"
+                                      ]
+                                    }
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        },
+                        "count": {
+                          "type": "integer"
+                        },
+                        "window": {
+                          "type": "string"
+                        },
+                        "note": {
+                          "type": "string"
+                        }
+                      }
+                    },
+                    {
+                      "type": "object",
+                      "title": "CreateDrafts Mode Response",
+                      "properties": {
+                        "mode": {
+                          "type": "string",
+                          "enum": [
+                            "createDrafts"
+                          ]
+                        },
+                        "drafts": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "draftId": {
+                                "type": "string"
+                              },
+                              "to": {
+                                "type": "string"
+                              },
+                              "subject": {
+                                "type": "string"
+                              },
+                              "preview": {
+                                "type": "string"
+                              },
+                              "eventId": {
+                                "type": "string"
+                              }
+                            }
+                          }
+                        },
+                        "count": {
+                          "type": "integer"
+                        },
+                        "note": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request - invalid parameters"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "500": {
+            "description": "Server error"
+          }
+        }
+      }
     }
   },
   "components": {

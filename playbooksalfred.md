@@ -161,30 +161,33 @@
    - Po vykonání requestu zkontroluj v `labelRecommendation`/`labelUpdates`, jestli `verified` potvrdilo přidání. Pokud ne, rovnou oznam chybu a nenaznačuj, že je hotovo.
 
 ## 17. Reminder drafty pro dnešní schůzky
-1. Když uživatel požádá o reminder maily pro dnešní/nadcházející schůzky, postupuj takto:
-   - Načti události pomocí `/rpc/calendar` s `op:"list"` a `params` obsahujícími dnešní časové okno (`timeMin` od začátku dne, `timeMax` konec dne) a `calendarId:"primary"` (nebo jiný, pokud uživatel specifikuje).
-   - Filtruj pouze budoucí události s účastníky.
-2. Pro každou událost s účastníky vygeneruj personalizované reminder maily:
-   - Projdi všechny účastníky události zvlášť.
-   - Pro každého účastníka **vytvoř vlastní personalizovaný text** emailu:
-     - Použij správný český vokativ v pozdravu (např. "Ahoj Marku," místo "Ahoj Marek,").
-     - **VŽDY zahrň čas události** ve formátu Czech (např. "14:00-15:00, 3. listopadu 2025").
-     - Přizpůsob obsah podle události (název, místo).
-     - **Přidej odkaz na událost v Google Calendar** (pokud máš `event.htmlLink` z response).
-     - Udrž přátelský, profesionální tón.
-   - Pro každého účastníka zavolej `/rpc/mail` s `op:"createDraft"` a `params` obsahujícími:
-     - `to`: email účastníka
-     - `subject`: např. "Reminder: [název události]"
-     - `body`: personalizovaný text s časem a odkazem na event
-3. Po vytvoření všech draftů shrň výsledek:
-   - Uveď počet vytvořených draftů a pro které schůzky.
-   - Připomeň, že drafty jsou uložené v Gmailu a lze je ještě upravit před odesláním.
-   - Nabídni možnost odeslání draftů nebo další akce.
-4. DŮLEŽITÉ:
-   - Nevytvářej jeden společný email pro všechny účastníky.
-   - Každý účastník musí dostat vlastní, personalizovaný draft.
-   - Dbej na správnou češtinu, zejména vokativ.
-   - Vždy zahrň čas a odkaz na event.
+1. Zavolej `/macros/calendar/reminderDrafts` s `prepareOnly:true` (default):
+   - Parametry: `window:"today"` (nebo `window:"nextHours"` s `hours`)
+   - Backend vrátí strukturovaná data pro každou událost s účastníky:
+     - `timeRangeFormatted`: Český formát času (např. "14:00-15:00, 03.11.2025")
+     - `htmlLink`: Odkaz na Google Calendar event
+     - `attendees`: Seznam s `email` a `displayName`
+     - `summary`, `location`, `eventId`
+2. Pro každou událost a každého účastníka vygeneruj **personalizovaný text** emailu:
+   - Použij správný **český vokativ** v pozdravu (např. "Ahoj Marku," místo "Ahoj Marek,")
+   - Použij `timeRangeFormatted` z response (backend už naformátoval v češtině)
+   - Přidej `htmlLink` jako odkaz na událost
+   - Přizpůsob obsah podle kontextu (název události, místo, vztah k osobě)
+   - Udrž přátelský, profesionální tón
+3. Pro každého účastníka zavolej `/rpc/mail` s `op:"createDraft"` a `params`:
+   - `to`: email účastníka
+   - `subject`: např. "Reminder: [název události]"
+   - `body`: personalizovaný text s českým vokativem, naformátovaným časem a htmlLink
+4. Po vytvoření všech draftů shrň výsledek:
+   - Uveď počet vytvořených draftů a pro které schůzky
+   - Připomeň, že drafty jsou uložené v Gmailu a lze je upravit před odesláním
+   - Nabídni možnost odeslání nebo další akce
+5. DŮLEŽITÉ:
+   - VŽDY používej `prepareOnly:true` pro správnou češtinu s vokativem
+   - Každý účastník musí dostat vlastní, personalizovaný draft
+   - Využij `timeRangeFormatted` z backendu (neformátuj ručně)
+   - Zahrň `htmlLink` jako odkaz na event
+   - Fallback `prepareOnly:false` použij jen když selže GPT personalizace (má špatnou gramatiku)
 
 ---
 

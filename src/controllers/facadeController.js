@@ -214,6 +214,29 @@ async function macroCalendarSchedule(req, res) {
   }
 }
 
+async function macroCalendarReminderDrafts(req, res) {
+  try {
+    const result = await facadeService.calendarReminderDrafts(req.user.googleSub, req.body);
+    res.json(result);
+  } catch (error) {
+    console.error('❌ Macro calendar reminder drafts failed:', error.message);
+
+    if (error.statusCode === 401) {
+      return res.status(401).json({
+        error: 'Authentication required',
+        message: error.message,
+        code: 'REAUTH_REQUIRED'
+      });
+    }
+
+    res.status(500).json({
+      error: 'Calendar reminder drafts failed',
+      message: error.message,
+      code: 'SERVER_ERROR'
+    });
+  }
+}
+
 async function macroCalendarListCalendars(req, res) {
   try {
     const result = await facadeService.calendarListCalendars(req.user.googleSub);
@@ -295,6 +318,7 @@ const traced = wrapModuleFunctions('controllers.facadeController', {
   macroBriefingsMeetingEmailsToday,
   macroCalendarPlan,
   macroCalendarSchedule,
+  macroCalendarReminderDrafts,
   macroCalendarListCalendars,
   macroContactsSafeAdd,
   macroTasksOverview,
@@ -308,6 +332,7 @@ const {
   macroBriefingsMeetingEmailsToday: tracedMacroBriefingsMeetingEmailsToday,
   macroCalendarPlan: tracedMacroCalendarPlan,
   macroCalendarSchedule: tracedMacroCalendarSchedule,
+  macroCalendarReminderDrafts: tracedMacroCalendarReminderDrafts,
   macroCalendarListCalendars: tracedMacroCalendarListCalendars,
   macroContactsSafeAdd: tracedMacroContactsSafeAdd,
   macroTasksOverview: tracedMacroTasksOverview,
@@ -321,6 +346,7 @@ export {
   tracedMacroBriefingsMeetingEmailsToday as macroBriefingsMeetingEmailsToday,
   tracedMacroCalendarPlan as macroCalendarPlan,
   tracedMacroCalendarSchedule as macroCalendarSchedule,
+  tracedMacroCalendarReminderDrafts as macroCalendarReminderDrafts,
   tracedMacroCalendarListCalendars as macroCalendarListCalendars,
   tracedMacroContactsSafeAdd as macroContactsSafeAdd,
   tracedMacroTasksOverview as macroTasksOverview,
