@@ -1815,7 +1815,22 @@ async function createDraft(googleSub, { to, subject, body, cc, bcc, threadId } =
     console.log(`✅ Using draft.id: ${result.data.id}`);
 
     // Add links to draft
-    return decorateDraftWithLinks(result.data);
+    const draftWithLinks = decorateDraftWithLinks(result.data);
+
+    // IMPORTANT: Return message.id as the primary ID instead of draft.id
+    // This is because draft.id changes when the user opens the draft in Gmail UI,
+    // but message.id remains stable. This allows us to find and send the draft later.
+    const messageId = draftWithLinks.message?.id;
+    if (messageId) {
+      console.log(`✅ Returning message.id (${messageId}) as primary ID instead of draft.id (${draftWithLinks.id})`);
+      return {
+        ...draftWithLinks,
+        id: messageId,
+        draftId: draftWithLinks.id, // Keep original draft.id for reference
+      };
+    }
+
+    return draftWithLinks;
   });
 }
 
@@ -1828,17 +1843,25 @@ async function sendDraft(googleSub, draftId) {
     const gmail = google.gmail({ version: 'v1', auth: authClient });
 
     let unrepliedLabelReminder = null;
+    let actualDraftId = draftId;
+    let draftData = null;
 
+    // First, try to get the draft using the provided ID as draft.id
+    // This handles the case where an old draft.id is provided (before our change to use message.id)
     try {
       const { unrepliedLabel } = await getWatchlistLabelContext(googleSub);
-      if (unrepliedLabel) {
-        const draft = await gmail.users.drafts.get({
-          userId: 'me',
-          id: draftId,
-          format: 'metadata',
-          metadataHeaders: ['Message-ID']
-        });
 
+      const draft = await gmail.users.drafts.get({
+        userId: 'me',
+        id: draftId,
+        format: 'metadata',
+        metadataHeaders: ['Message-ID']
+      });
+
+      draftData = draft.data;
+      console.log(`✅ Found draft using provided ID as draft.id`);
+
+      if (unrepliedLabel) {
         const threadId = draft.data?.message?.threadId || null;
         if (threadId) {
           const thread = await gmail.users.threads.get({
@@ -1857,16 +1880,115 @@ async function sendDraft(googleSub, draftId) {
           });
         }
       }
-    } catch (reminderError) {
-      console.warn('⚠️ Unable to build unreplied label reminder for draft send:', reminderError.message);
+    } catch (error) {
+      // Draft with this ID doesn't exist as draft.id - try to find it by message.id
+      // This handles the case where the provided ID is a message.id (our new approach)
+      console.warn(`⚠️ Draft not found using ID as draft.id: ${error.message}`);
+      console.log(`🔍 Attempting to find draft by message ID (ID: ${draftId})...`);
+
+      try {
+        // The draft ID changed (likely because user opened it in Gmail UI)
+        // We need to find the new draft ID by listing all drafts and matching by message ID
+        const draftsResponse = await gmail.users.drafts.list({
+          userId: 'me',
+          maxResults: 100
+        });
+
+        if (!draftsResponse.data.drafts || draftsResponse.data.drafts.length === 0) {
+          throwServiceError('Draft not found', {
+            statusCode: 404,
+            code: 'DRAFT_NOT_FOUND',
+            expose: true
+          });
+        }
+
+        console.log(`📋 Found ${draftsResponse.data.drafts.length} drafts, searching for matching message ID...`);
+
+        // Get detailed info for each draft to find the one with matching message ID
+        let foundDraft = null;
+
+        for (const draftSummary of draftsResponse.data.drafts) {
+          try {
+            const fullDraft = await gmail.users.drafts.get({
+              userId: 'me',
+              id: draftSummary.id,
+              format: 'metadata',
+              metadataHeaders: ['Message-ID']
+            });
+
+            // Check if the message ID matches the original draft ID we're looking for
+            // The original draftId might actually be a message ID that we stored
+            if (fullDraft.data.message?.id === draftId) {
+              console.log(`✅ Found matching draft by message ID! New draft ID: ${fullDraft.data.id}`);
+              foundDraft = fullDraft.data;
+              actualDraftId = fullDraft.data.id;
+              draftData = fullDraft.data;
+
+              // Also check for unreplied label
+              const { unrepliedLabel } = await getWatchlistLabelContext(googleSub);
+              if (unrepliedLabel) {
+                const threadId = fullDraft.data?.message?.threadId || null;
+                if (threadId) {
+                  const thread = await gmail.users.threads.get({
+                    userId: 'me',
+                    id: threadId,
+                    format: 'metadata'
+                  });
+
+                  const messageIds = (thread.data?.messages || [])
+                    .filter(msg => Array.isArray(msg.labelIds) && msg.labelIds.includes(unrepliedLabel.id))
+                    .map(msg => msg.id);
+
+                  unrepliedLabelReminder = buildUnrepliedLabelReminderPayload(unrepliedLabel, {
+                    messageIds,
+                    threadId
+                  });
+                }
+              }
+
+              break;
+            }
+          } catch (getDraftError) {
+            console.warn(`Failed to get draft ${draftSummary.id}:`, getDraftError.message);
+          }
+        }
+
+        if (!foundDraft) {
+          // We couldn't find the draft by message ID either
+          throwServiceError('Draft ID is no longer valid. The draft was likely modified in Gmail (e.g., opened in Gmail UI). Please send the email directly from Gmail or recreate the draft.', {
+            statusCode: 400,
+            code: 'DRAFT_ID_INVALID',
+            expose: true,
+            details: {
+              originalDraftId: draftId,
+              reason: 'Draft was modified after creation and could not be located',
+              suggestion: 'Send directly from Gmail or recreate the draft',
+              availableDrafts: draftsResponse.data.drafts.length
+            }
+          });
+        }
+
+      } catch (searchError) {
+        if (searchError.statusCode === 400 || searchError.statusCode === 404) {
+          throw searchError;
+        }
+        // If we can't search, throw the original error
+        throwServiceError('Draft ID is no longer valid', {
+          statusCode: 400,
+          code: 'DRAFT_ID_INVALID',
+          expose: true,
+          details: { originalDraftId: draftId }
+        });
+      }
     }
 
+    // Now try to send the draft
     const result = await gmail.users.drafts.send({
       userId: 'me',
-      id: draftId
+      id: actualDraftId
     });
 
-    console.log('✅ Draft sent:', draftId);
+    console.log('✅ Draft sent:', actualDraftId);
 
     // Add links to sent message
     const sentMessage = decorateMessageWithLinks(result.data);
@@ -1899,10 +2021,78 @@ async function updateDraft(googleSub, draftId, { to, subject, body, cc, bcc, thr
     const authClient = await getAuthenticatedClient(googleSub);
     const gmail = google.gmail({ version: 'v1', auth: authClient });
 
+    let actualDraftId = draftId.trim();
+
+    // Try to find the draft by ID (could be draft.id or message.id)
+    try {
+      // First, try as draft.id
+      await gmail.users.drafts.get({
+        userId: 'me',
+        id: actualDraftId
+      });
+      console.log(`✅ Found draft using provided ID as draft.id`);
+    } catch (error) {
+      // Not found as draft.id, try to find by message.id
+      console.warn(`⚠️ Draft not found using ID as draft.id, searching by message.id...`);
+
+      try {
+        const draftsResponse = await gmail.users.drafts.list({
+          userId: 'me',
+          maxResults: 100
+        });
+
+        if (!draftsResponse.data.drafts || draftsResponse.data.drafts.length === 0) {
+          throwServiceError('Draft not found', {
+            statusCode: 404,
+            code: 'DRAFT_NOT_FOUND',
+            expose: true
+          });
+        }
+
+        let foundDraft = null;
+        for (const draftSummary of draftsResponse.data.drafts) {
+          try {
+            const fullDraft = await gmail.users.drafts.get({
+              userId: 'me',
+              id: draftSummary.id,
+              format: 'metadata'
+            });
+
+            if (fullDraft.data.message?.id === actualDraftId) {
+              console.log(`✅ Found matching draft by message ID! Draft ID: ${fullDraft.data.id}`);
+              actualDraftId = fullDraft.data.id;
+              foundDraft = fullDraft.data;
+              break;
+            }
+          } catch (getDraftError) {
+            // Continue searching
+          }
+        }
+
+        if (!foundDraft) {
+          throwServiceError('Draft not found', {
+            statusCode: 404,
+            code: 'DRAFT_NOT_FOUND',
+            expose: true,
+            details: { providedId: draftId }
+          });
+        }
+      } catch (searchError) {
+        if (searchError.statusCode === 404) {
+          throw searchError;
+        }
+        throwServiceError('Draft not found', {
+          statusCode: 404,
+          code: 'DRAFT_NOT_FOUND',
+          expose: true
+        });
+      }
+    }
+
     const encodedMessage = buildDraftMimeMessage({ to, subject, body, cc, bcc });
 
     const requestBody = {
-      id: draftId.trim(),
+      id: actualDraftId,
       message: {
         raw: encodedMessage
       }
@@ -1914,12 +2104,21 @@ async function updateDraft(googleSub, draftId, { to, subject, body, cc, bcc, thr
 
     const result = await gmail.users.drafts.update({
       userId: 'me',
-      id: draftId.trim(),
+      id: actualDraftId,
       requestBody
     });
 
-    // Add links to draft
-    return decorateDraftWithLinks(result.data);
+    // Add links to draft and return message.id as primary ID
+    const draftWithLinks = decorateDraftWithLinks(result.data);
+    const messageId = draftWithLinks.message?.id;
+    if (messageId) {
+      return {
+        ...draftWithLinks,
+        id: messageId,
+        draftId: draftWithLinks.id,
+      };
+    }
+    return draftWithLinks;
   });
 }
 
@@ -1965,14 +2164,85 @@ async function getDraft(googleSub, draftId, { format = 'full' } = {}) {
     const authClient = await getAuthenticatedClient(googleSub);
     const gmail = google.gmail({ version: 'v1', auth: authClient });
 
-    const result = await gmail.users.drafts.get({
-      userId: 'me',
-      id: draftId.trim(),
-      format: safeFormat
-    });
+    let actualDraftId = draftId.trim();
+    let draftData = null;
 
-    // Add links to draft
-    return decorateDraftWithLinks(result.data);
+    // Try to get draft using ID as draft.id first
+    try {
+      const result = await gmail.users.drafts.get({
+        userId: 'me',
+        id: actualDraftId,
+        format: safeFormat
+      });
+      draftData = result.data;
+    } catch (error) {
+      // Not found as draft.id, try to find by message.id
+      console.warn(`⚠️ Draft not found using ID as draft.id, searching by message.id...`);
+
+      try {
+        const draftsResponse = await gmail.users.drafts.list({
+          userId: 'me',
+          maxResults: 100
+        });
+
+        if (!draftsResponse.data.drafts || draftsResponse.data.drafts.length === 0) {
+          throwServiceError('Draft not found', {
+            statusCode: 404,
+            code: 'DRAFT_NOT_FOUND',
+            expose: true
+          });
+        }
+
+        let foundDraft = null;
+        for (const draftSummary of draftsResponse.data.drafts) {
+          try {
+            const fullDraft = await gmail.users.drafts.get({
+              userId: 'me',
+              id: draftSummary.id,
+              format: safeFormat
+            });
+
+            if (fullDraft.data.message?.id === actualDraftId) {
+              console.log(`✅ Found matching draft by message ID! Draft ID: ${fullDraft.data.id}`);
+              draftData = fullDraft.data;
+              break;
+            }
+          } catch (getDraftError) {
+            // Continue searching
+          }
+        }
+
+        if (!draftData) {
+          throwServiceError('Draft not found', {
+            statusCode: 404,
+            code: 'DRAFT_NOT_FOUND',
+            expose: true,
+            details: { providedId: draftId }
+          });
+        }
+      } catch (searchError) {
+        if (searchError.statusCode === 404) {
+          throw searchError;
+        }
+        throwServiceError('Draft not found', {
+          statusCode: 404,
+          code: 'DRAFT_NOT_FOUND',
+          expose: true
+        });
+      }
+    }
+
+    // Add links to draft and return message.id as primary ID
+    const draftWithLinks = decorateDraftWithLinks(draftData);
+    const messageId = draftWithLinks.message?.id;
+    if (messageId) {
+      return {
+        ...draftWithLinks,
+        id: messageId,
+        draftId: draftWithLinks.id,
+      };
+    }
+    return draftWithLinks;
   });
 }
 
