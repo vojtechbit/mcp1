@@ -2735,6 +2735,8 @@ async function prepareLabelModificationRequest(googleSub, { add = [], remove = [
   };
 
   if (requestedAdd.length === 0 && requestedRemove.length === 0) {
+    // Mark that no labels were actually requested
+    details.noLabelsRequested = true;
     return {
       addLabelIds: [],
       removeLabelIds: [],
@@ -3194,7 +3196,7 @@ async function modifyMessageLabels(googleSub, messageId, { add = [], remove = []
     };
   }
 
-  return {
+  const response = {
     success: true,
     labelUpdates: {
       ...details,
@@ -3202,6 +3204,14 @@ async function modifyMessageLabels(googleSub, messageId, { add = [], remove = []
       appliedRemoveLabelIds: expectedRemove
     }
   };
+
+  // Add warning if no labels were actually requested
+  if (details.noLabelsRequested === true) {
+    response.warning = 'No labels were specified in the modify request. No changes were made.';
+    response.labelUpdates.noLabelsRequested = true;
+  }
+
+  return response;
 }
 
 /**
@@ -3304,7 +3314,7 @@ async function modifyThreadLabels(googleSub, threadId, { add = [], remove = [] }
     };
   }
 
-  return {
+  const response = {
     success: true,
     labelUpdates: {
       ...details,
@@ -3312,6 +3322,14 @@ async function modifyThreadLabels(googleSub, threadId, { add = [], remove = [] }
       appliedRemoveLabelIds: expectedRemove
     }
   };
+
+  // Add warning if no labels were actually requested
+  if (details.noLabelsRequested === true) {
+    response.warning = 'No labels were specified in the modify request. No changes were made.';
+    response.labelUpdates.noLabelsRequested = true;
+  }
+
+  return response;
 }
 
 async function fetchUserAddressDirectory(googleSub) {
