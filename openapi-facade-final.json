@@ -3835,7 +3835,7 @@
                       {
                         "type": "object",
                         "title": "Labels ops",
-                        "description": "List, resolve, modify, or create labels (op=labels). Must specify exactly one operation: list, resolve, modify, or create.",
+                        "description": "List, resolve, modify, or create labels (op=labels). Must specify exactly one operation: list, resolve, modify, or create. NOTE: 'Follow-up' label is system-managed and should ONLY be used via /gmail/followups endpoint, not added manually to arbitrary messages.",
                         "oneOf": [
                           {
                             "title": "List labels",
@@ -3944,7 +3944,7 @@
                                     "items": {
                                       "type": "string"
                                     },
-                                    "description": "Label names to add (e.g., ['Follow-up']). Managed labels are auto-created if missing."
+                                    "description": "Label names to add (e.g., ['IMPORTANT', 'Projects/ClientA']). System-managed labels ('Follow-up', 'nevyřízeno', 'meta_seen') are auto-created if missing - use 'Follow-up' ONLY via /gmail/followups macro, not manually."
                                   },
                                   "remove": {
                                     "type": "array",
@@ -4089,23 +4089,23 @@
                     "op": "labels",
                     "params": {
                       "create": {
-                        "name": "Follow-up",
+                        "name": "Projects/ClientA",
                         "color": {
-                          "backgroundColor": "#c9daf8",
-                          "textColor": "#000000"
+                          "backgroundColor": "#a479e2",
+                          "textColor": "#ffffff"
                         }
                       }
                     }
                   }
                 },
                 "modifyLabels": {
-                  "summary": "Add Follow-up label to a message",
+                  "summary": "Add Important label to a message",
                   "value": {
                     "op": "labels",
                     "params": {
                       "modify": {
                         "messageId": "1890de2cafe3a3b7",
-                        "add": ["Follow-up"],
+                        "add": ["IMPORTANT"],
                         "remove": []
                       }
                     }
@@ -4116,7 +4116,7 @@
                   "value": {
                     "op": "labels",
                     "params": {
-                      "resolve": ["Follow-up", "nevyřízeno"]
+                      "resolve": ["IMPORTANT", "INBOX"]
                     }
                   }
                 }
