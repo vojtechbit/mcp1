@@ -96,7 +96,7 @@ test('modifyContact enforces required fields', async () => {
   await modifyContact(request, response);
 
   assert.equal(response.statusCode, 400);
-  assert.equal(response.body.code, 'INVALID_PARAM');
+  assert.equal(response.body.code, 'CONTACT_NAME_AND_EMAIL_REQUIRED');
   assert.equal(calls.update.length, 1); // unchanged from previous success call
 });
 
@@ -153,6 +153,6 @@ test('bulkDeleteContacts rejects missing payload', async () => {
   await bulkDeleteContacts(request, response);
 
   assert.equal(response.statusCode, 400);
-  assert.equal(response.body.code, 'INVALID_PARAM');
+  assert.equal(response.body.code, 'CONTACT_BULK_TARGET_REQUIRED');
   assert.equal(calls.bulkDelete.length, 1); // unchanged from previous success call
 });

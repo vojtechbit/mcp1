@@ -8,6 +8,7 @@ import { REFERENCE_TIMEZONE } from '../config/limits.js';
 import { debugStep, wrapModuleFunctions } from '../utils/advancedDebugging.js';
 import { logDuration, startTimer } from '../utils/performanceLogger.js';
 import dotenv from 'dotenv';
+import { mapGoogleApiError, throwServiceError } from './serviceErrors.js';
 import {
   UNREPLIED_LABEL_NAME,
   UNREPLIED_LABEL_DEFAULTS,
@@ -187,31 +188,38 @@ async function handleGoogleApiCall(googleSub, apiCall, retryCount = 0) {
     
     if (is401 && retryCount < MAX_RETRIES) {
       console.log(`⚠️ 401 error detected (attempt ${retryCount + 1}/${MAX_RETRIES + 1}), forcing token refresh...`);
-      
+
       try {
         await getValidAccessToken(googleSub, true);
         await new Promise(resolve => setTimeout(resolve, 500 * (retryCount + 1)));
         return await handleGoogleApiCall(googleSub, apiCall, retryCount + 1);
       } catch (refreshError) {
-        if (refreshError.message?.includes('invalid_grant') || 
+        if (refreshError.message?.includes('invalid_grant') ||
             refreshError.message?.includes('Token has been expired')) {
-          const authError = new Error('Your session has expired. Please log in again.');
-          authError.code = 'REFRESH_TOKEN_INVALID';
-          authError.statusCode = 401;
-          authError.requiresReauth = true;
-          throw authError;
+          throwServiceError('Your session has expired. Please log in again.', {
+            statusCode: 401,
+            code: 'GOOGLE_UNAUTHORIZED',
+            requiresReauth: true,
+            cause: refreshError
+          });
         }
       }
     }
-    
+
     if (is401) {
-      const authError = new Error('Authentication required - please log in again');
-      authError.code = 'AUTH_REQUIRED';
-      authError.statusCode = 401;
-      throw authError;
+      throwServiceError('Authentication required - please log in again', {
+        statusCode: 401,
+        code: 'GOOGLE_UNAUTHORIZED',
+        requiresReauth: true,
+        cause: error
+      });
     }
-    
-    throw error;
+
+    throw mapGoogleApiError(error, {
+      message: 'Google API request failed',
+      details: { googleSub },
+      cause: error
+    });
   }
 }
 
@@ -230,7 +238,11 @@ async function getValidAccessToken(googleSub, forceRefresh = false) {
 
     if (!user) {
       debugStep('User missing in database', { googleSub });
-      throw new Error('User not found in database');
+      throwServiceError('User not found in database', {
+        statusCode: 401,
+        code: 'GOOGLE_USER_NOT_FOUND',
+        requiresReauth: true
+      });
     }
 
     updateLastUsed(googleSub).catch(err =>
@@ -290,10 +302,12 @@ async function getValidAccessToken(googleSub, forceRefresh = false) {
             googleSub,
             error: refreshError.message
           });
-          const authError = new Error('Authentication required - please log in again');
-          authError.code = 'AUTH_REQUIRED';
-          authError.statusCode = 401;
-          throw authError;
+          throwServiceError('Authentication required - please log in again', {
+            statusCode: 401,
+            code: 'GOOGLE_UNAUTHORIZED',
+            requiresReauth: true,
+            cause: refreshError
+          });
         } finally {
           debugStep('Released refresh mutex', { googleSub });
           activeRefreshes.delete(googleSub);
@@ -310,7 +324,11 @@ async function getValidAccessToken(googleSub, forceRefresh = false) {
     console.error('❌ [TOKEN_ERROR] Failed to get valid access token:', error.message);
     status = 'error';
     lastError = error;
-    throw error;
+    throw mapGoogleApiError(error, {
+      message: 'Failed to resolve Google access token',
+      details: { googleSub, forceRefresh },
+      cause: error
+    });
   } finally {
     logDuration('google.getValidAccessToken', overallTimer, {
       googleSub,
@@ -1145,7 +1163,11 @@ async function searchEmails(googleSub, { query, q, maxResults = 10, pageToken, l
 function buildDraftMimeMessage({ to, subject, body, cc, bcc }) {
   const safeSubject = typeof subject === 'string' ? subject.trim() : '';
   if (!safeSubject) {
-    throw new Error('Draft subject is required');
+    throwServiceError('Draft subject is required', {
+      statusCode: 400,
+      code: 'DRAFT_SUBJECT_REQUIRED',
+      expose: true
+    });
   }
 
   const safeBody = typeof body === 'string' ? body : '';
@@ -1209,10 +1231,12 @@ async function listFollowupCandidates(googleSub, options = {}) {
     : null;
 
   if (safeMaxAge !== null && safeMaxAge < safeMinAge) {
-    const error = new Error('maxAgeDays must be greater than or equal to minAgeDays');
-    error.code = 'INVALID_FOLLOWUP_WINDOW';
-    error.statusCode = 400;
-    throw error;
+    throwServiceError('maxAgeDays must be greater than or equal to minAgeDays', {
+      statusCode: 400,
+      code: 'INVALID_FOLLOWUP_WINDOW',
+      expose: true,
+      details: { minAgeDays: safeMinAge, maxAgeDays: safeMaxAge }
+    });
   }
 
   const parsedMaxThreads = Number(maxThreads);
@@ -1653,7 +1677,11 @@ async function createDraft(googleSub, { to, subject, body, cc, bcc, threadId } =
     const gmail = google.gmail({ version: 'v1', auth: authClient });
 
     if (typeof to !== 'string' || to.trim().length === 0) {
-      throw new Error('Draft recipient is required');
+      throwServiceError('Draft recipient is required', {
+        statusCode: 400,
+        code: 'DRAFT_RECIPIENT_REQUIRED',
+        expose: true
+      });
     }
 
     const encodedMessage = buildDraftMimeMessage({ to, subject, body, cc, bcc });
@@ -1674,18 +1702,30 @@ async function createDraft(googleSub, { to, subject, body, cc, bcc, threadId } =
     // ✅ VALIDACE draft response
     if (!result.data) {
       console.error('❌ [DRAFT_ERROR] Gmail API vrátila prázdný response');
-      throw new Error('Draft creation failed - empty response from Gmail API');
+      throwServiceError('Draft creation failed - empty response from Gmail API', {
+        statusCode: 502,
+        code: 'GMAIL_DRAFT_INVALID',
+        details: { to }
+      });
     }
 
     if (!result.data.id) {
       console.error('🔴 [DRAFT_ERROR] Draft ID chybí v odpovědi!');
       console.error('Full response:', JSON.stringify(result.data, null, 2));
-      throw new Error('Draft creation failed - missing draft ID in response');
+      throwServiceError('Draft creation failed - missing draft ID in response', {
+        statusCode: 502,
+        code: 'GMAIL_DRAFT_INVALID',
+        details: { to }
+      });
     }
 
     if (typeof result.data.id !== 'string') {
       console.error('⚠️ [DRAFT_ERROR] Draft ID má nesprávný typ:', typeof result.data.id);
-      throw new Error('Draft creation failed - draft ID is not a string');
+      throwServiceError('Draft creation failed - draft ID is not a string', {
+        statusCode: 502,
+        code: 'GMAIL_DRAFT_INVALID',
+        details: { to, type: typeof result.data.id }
+      });
     }
 
     // 🔍 DEBUG: Inspekce kompletního response
@@ -1761,15 +1801,19 @@ async function sendDraft(googleSub, draftId) {
 
 async function updateDraft(googleSub, draftId, { to, subject, body, cc, bcc, threadId } = {}) {
   if (typeof draftId !== 'string' || draftId.trim().length === 0) {
-    const error = new Error('Draft ID is required');
-    error.statusCode = 400;
-    throw error;
+    throwServiceError('Draft ID is required', {
+      statusCode: 400,
+      code: 'DRAFT_ID_REQUIRED',
+      expose: true
+    });
   }
 
   if (typeof to !== 'string' || to.trim().length === 0) {
-    const error = new Error('Draft recipient is required');
-    error.statusCode = 400;
-    throw error;
+    throwServiceError('Draft recipient is required', {
+      statusCode: 400,
+      code: 'DRAFT_RECIPIENT_REQUIRED',
+      expose: true
+    });
   }
 
   return await handleGoogleApiCall(googleSub, async () => {
@@ -1822,9 +1866,11 @@ async function listDrafts(googleSub, { maxResults = 50, pageToken } = {}) {
 
 async function getDraft(googleSub, draftId, { format = 'full' } = {}) {
   if (typeof draftId !== 'string' || draftId.trim().length === 0) {
-    const error = new Error('Draft ID is required');
-    error.statusCode = 400;
-    throw error;
+    throwServiceError('Draft ID is required', {
+      statusCode: 400,
+      code: 'DRAFT_ID_REQUIRED',
+      expose: true
+    });
   }
 
   const safeFormat = ['full', 'metadata', 'minimal'].includes(format) ? format : 'full';
@@ -2640,15 +2686,17 @@ async function prepareLabelModificationRequest(googleSub, { add = [], remove = [
       unmatchedMessages.push(`remove [${details.unmatched.remove.join(', ')}]`);
     }
 
-    const resolutionError = new Error(
+    throwServiceError(
       unmatchedMessages.length > 0
         ? `Unable to resolve some labels: ${unmatchedMessages.join('; ')}`
-        : 'Some labels could not be resolved'
+        : 'Some labels could not be resolved',
+      {
+        statusCode: 400,
+        code: 'LABEL_RESOLUTION_FAILED',
+        expose: true,
+        details
+      }
     );
-    resolutionError.code = 'LABEL_RESOLUTION_FAILED';
-    resolutionError.statusCode = 400;
-    resolutionError.details = details;
-    throw resolutionError;
   }
 
   return {
@@ -2662,9 +2710,11 @@ async function createLabel(googleSub, options = {}) {
   const { name, color, labelListVisibility, messageListVisibility } = options;
 
   if (typeof name !== 'string' || name.trim().length === 0) {
-    const error = new Error('Label name is required');
-    error.statusCode = 400;
-    throw error;
+    throwServiceError('Label name is required', {
+      statusCode: 400,
+      code: 'LABEL_NAME_REQUIRED',
+      expose: true
+    });
   }
 
   return await handleGoogleApiCall(googleSub, async () => {
@@ -2826,25 +2876,25 @@ async function modifyMessageLabels(googleSub, messageId, { add = [], remove = []
       }
     });
 
-    const evaluation = evaluateLabelMutationSnapshot(verificationSnapshot.labelIds, {
-      addIds: expectedAdd,
-      removeIds: expectedRemove
-    });
+  const evaluation = evaluateLabelMutationSnapshot(verificationSnapshot.labelIds, {
+    addIds: expectedAdd,
+    removeIds: expectedRemove
+  });
 
-    if (!evaluation.ok) {
-      const verificationError = new Error('Label mutation verification failed');
-      verificationError.code = 'LABEL_MUTATION_VERIFICATION_FAILED';
-      verificationError.statusCode = 502;
-      verificationError.details = {
+  if (!evaluation.ok) {
+    throwServiceError('Label mutation verification failed', {
+      statusCode: 502,
+      code: 'LABEL_MUTATION_VERIFICATION_FAILED',
+      details: {
         attemptedAdd: expectedAdd,
         attemptedRemove: expectedRemove,
         snapshotSource: verificationSnapshot.source,
         snapshotError: verificationSnapshot.error,
         missingAdd: evaluation.missingAdd,
         remainingRemove: evaluation.remainingRemove
-      };
-      throw verificationError;
-    }
+      }
+    });
+  }
 
     console.log(`✅ Labels modified on message ${messageId}`);
 
@@ -2936,25 +2986,25 @@ async function modifyThreadLabels(googleSub, threadId, { add = [], remove = [] }
       }
     });
 
-    const evaluation = evaluateLabelMutationSnapshot(verificationSnapshot.labelIds, {
-      addIds: expectedAdd,
-      removeIds: expectedRemove
-    });
+  const evaluation = evaluateLabelMutationSnapshot(verificationSnapshot.labelIds, {
+    addIds: expectedAdd,
+    removeIds: expectedRemove
+  });
 
-    if (!evaluation.ok) {
-      const verificationError = new Error('Label mutation verification failed');
-      verificationError.code = 'LABEL_MUTATION_VERIFICATION_FAILED';
-      verificationError.statusCode = 502;
-      verificationError.details = {
+  if (!evaluation.ok) {
+    throwServiceError('Label mutation verification failed', {
+      statusCode: 502,
+      code: 'LABEL_MUTATION_VERIFICATION_FAILED',
+      details: {
         attemptedAdd: expectedAdd,
         attemptedRemove: expectedRemove,
         snapshotSource: verificationSnapshot.source,
         snapshotError: verificationSnapshot.error,
         missingAdd: evaluation.missingAdd,
         remainingRemove: evaluation.remainingRemove
-      };
-      throw verificationError;
-    }
+      }
+    });
+  }
 
     console.log(`✅ Labels modified on thread ${threadId}`);
 
@@ -3280,15 +3330,22 @@ async function getAttachmentMeta(googleSub, messageId, attachmentId) {
     }
 
     if (!attachmentMeta) {
-      throw new Error('Attachment not found');
+      throwServiceError('Attachment not found', {
+        statusCode: 404,
+        code: 'ATTACHMENT_NOT_FOUND',
+        expose: true,
+        details: { messageId, attachmentId }
+      });
     }
 
     // Check if attachment is blocked by security policy
     if (isBlocked(attachmentMeta)) {
-      const error = new Error(`Attachment blocked: ${attachmentMeta.filename} (security policy)`);
-      error.statusCode = 451;
-      error.code = 'ATTACHMENT_BLOCKED';
-      throw error;
+      throwServiceError(`Attachment blocked: ${attachmentMeta.filename} (security policy)`, {
+        statusCode: 451,
+        code: 'ATTACHMENT_BLOCKED',
+        expose: true,
+        details: { filename: attachmentMeta.filename, mimeType: attachmentMeta.mimeType }
+      });
     }
 
     // Generate signed URL with 1-hour expiration
@@ -3612,7 +3669,12 @@ async function createCalendarEvent(googleSub, eventData, options = {}) {
 
     const normalizeTimeForApi = (time, label) => {
       if (!time) {
-        throw new Error(`Event ${label} is required`);
+        throwServiceError(`Event ${label} is required`, {
+          statusCode: 400,
+          code: 'CALENDAR_EVENT_TIME_REQUIRED',
+          expose: true,
+          details: { field: label }
+        });
       }
 
       if (time.dateTime) {
@@ -3634,7 +3696,12 @@ async function createCalendarEvent(googleSub, eventData, options = {}) {
         return normalized;
       }
 
-      throw new Error(`Unsupported ${label} format. Provide dateTime or date`);
+      throwServiceError(`Unsupported ${label} format. Provide dateTime or date`, {
+        statusCode: 400,
+        code: 'CALENDAR_EVENT_TIME_UNSUPPORTED',
+        expose: true,
+        details: { field: label }
+      });
     };
 
     const event = {
@@ -3881,9 +3948,12 @@ async function downloadAttachment(googleSub, messageId, attachmentId) {
     }
 
     if (!attachmentInfo) {
-      const error = new Error('Attachment not found');
-      error.statusCode = 404;
-      throw error;
+      throwServiceError('Attachment not found', {
+        statusCode: 404,
+        code: 'ATTACHMENT_NOT_FOUND',
+        expose: true,
+        details: { messageId, attachmentId }
+      });
     }
 
     // Get attachment data

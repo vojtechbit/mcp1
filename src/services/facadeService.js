@@ -11,6 +11,7 @@ import * as gmailService from './googleApiService.js';
 import * as calendarService from './googleApiService.js';
 import * as contactsService from './contactsService.js';
 import * as tasksService from './tasksService.js';
+import { createServiceError, throwServiceError } from './serviceErrors.js';
 import { getUserByGoogleSub } from './databaseService.js';
 import { classifyEmailCategory } from './googleApiService.js';
 import {
@@ -43,6 +44,19 @@ export const EMAIL_QUICK_READ_FORMATS = Object.freeze([
   'metadata',
   'full'
 ]);
+
+const FACADE_VALIDATION_ERROR = 'FacadeValidationError';
+
+function throwFacadeValidationError(message, { code = 'INVALID_PARAM', details, cause } = {}) {
+  throwServiceError(message, {
+    name: FACADE_VALIDATION_ERROR,
+    statusCode: 400,
+    code,
+    details,
+    expose: true,
+    cause
+  });
+}
 
 /**
  * Selects the Gmail service implementation for the current runtime.
@@ -411,9 +425,16 @@ async function emailQuickRead(googleSub, params = {}) {
 
   // Validate format parameter
   if (resolvedFormat && !EMAIL_QUICK_READ_FORMATS.includes(resolvedFormat)) {
-    const error = new Error(`Invalid format: ${resolvedFormat}. Must be one of: ${EMAIL_QUICK_READ_FORMATS.join(', ')}`);
-    error.statusCode = 400;
-    throw error;
+    throwFacadeValidationError(
+      `Invalid format: ${resolvedFormat}. Must be one of: ${EMAIL_QUICK_READ_FORMATS.join(', ')}`,
+      {
+        code: 'EMAIL_QUICK_READ_FORMAT_INVALID',
+        details: {
+          allowed: EMAIL_QUICK_READ_FORMATS,
+          received: resolvedFormat
+        }
+      }
+    );
   }
 
   const gmail = resolveGmailService();
@@ -434,7 +455,9 @@ async function emailQuickRead(googleSub, params = {}) {
   }
 
   if (!messageIds || messageIds.length === 0) {
-    throw new Error('No message IDs provided or found');
+    throwFacadeValidationError('No message IDs provided or found', {
+      code: 'EMAIL_MESSAGE_IDS_MISSING'
+    });
   }
 
   // Decide single vs batch
@@ -805,18 +828,16 @@ function normalizeBriefingDateParts(dateValue) {
   }
 
   if (typeof dateValue !== 'string') {
-    const error = new Error('date must be a string in YYYY-MM-DD format.');
-    error.statusCode = 400;
-    error.code = 'INVALID_PARAM';
-    throw error;
+    throwFacadeValidationError('date must be a string in YYYY-MM-DD format.', {
+      details: { field: 'date', receivedType: typeof dateValue }
+    });
   }
 
   const trimmed = dateValue.trim();
   if (!/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
-    const error = new Error('date must use YYYY-MM-DD format.');
-    error.statusCode = 400;
-    error.code = 'INVALID_PARAM';
-    throw error;
+    throwFacadeValidationError('date must use YYYY-MM-DD format.', {
+      details: { field: 'date', value: trimmed }
+    });
   }
 
   const [yearStr, monthStr, dayStr] = trimmed.split('-');
@@ -825,10 +846,9 @@ function normalizeBriefingDateParts(dateValue) {
   const day = Number(dayStr);
 
   if (!Number.isInteger(year) || !Number.isInteger(month) || !Number.isInteger(day)) {
-    const error = new Error('date must represent a valid calendar day.');
-    error.statusCode = 400;
-    error.code = 'INVALID_PARAM';
-    throw error;
+    throwFacadeValidationError('date must represent a valid calendar day.', {
+      details: { field: 'date', value: trimmed }
+    });
   }
 
   const utcCandidate = new Date(Date.UTC(year, month - 1, day));
@@ -837,10 +857,9 @@ function normalizeBriefingDateParts(dateValue) {
     utcCandidate.getUTCMonth() + 1 !== month ||
     utcCandidate.getUTCDate() !== day
   ) {
-    const error = new Error('date must represent a valid calendar day.');
-    error.statusCode = 400;
-    error.code = 'INVALID_PARAM';
-    throw error;
+    throwFacadeValidationError('date must represent a valid calendar day.', {
+      details: { field: 'date', value: trimmed }
+    });
   }
 
   return { year, month, day };
@@ -855,10 +874,9 @@ function normalizeBriefingLookback(value) {
   const asInteger = Number.isFinite(parsed) ? Math.floor(parsed) : NaN;
 
   if (!Number.isFinite(asInteger) || asInteger < 1 || asInteger > 30) {
-    const error = new Error('lookbackDays must be an integer between 1 and 30.');
-    error.statusCode = 400;
-    error.code = 'INVALID_PARAM';
-    throw error;
+    throwFacadeValidationError('lookbackDays must be an integer between 1 and 30.', {
+      details: { field: 'lookbackDays', value }
+    });
   }
 
   return asInteger;
@@ -879,17 +897,15 @@ function normalizeBriefingKeywordHints(hints) {
   }
 
   if (!Array.isArray(hints)) {
-    const error = new Error('globalKeywordHints must be an array of strings.');
-    error.statusCode = 400;
-    error.code = 'INVALID_PARAM';
-    throw error;
+    throwFacadeValidationError('globalKeywordHints must be an array of strings.', {
+      details: { field: 'globalKeywordHints' }
+    });
   }
 
   if (hints.length > 10) {
-    const error = new Error('globalKeywordHints may include at most 10 entries.');
-    error.statusCode = 400;
-    error.code = 'INVALID_PARAM';
-    throw error;
+    throwFacadeValidationError('globalKeywordHints may include at most 10 entries.', {
+      details: { field: 'globalKeywordHints', count: hints.length }
+    });
   }
 
   const normalized = [];
@@ -897,25 +913,22 @@ function normalizeBriefingKeywordHints(hints) {
 
   for (const hint of hints) {
     if (typeof hint !== 'string') {
-      const error = new Error('globalKeywordHints entries must be strings.');
-      error.statusCode = 400;
-      error.code = 'INVALID_PARAM';
-      throw error;
+      throwFacadeValidationError('globalKeywordHints entries must be strings.', {
+        details: { field: 'globalKeywordHints', invalidEntry: hint }
+      });
     }
 
     const trimmed = hint.trim();
     if (trimmed.length === 0) {
-      const error = new Error('globalKeywordHints entries must not be empty.');
-      error.statusCode = 400;
-      error.code = 'INVALID_PARAM';
-      throw error;
+      throwFacadeValidationError('globalKeywordHints entries must not be empty.', {
+        details: { field: 'globalKeywordHints' }
+      });
     }
 
     if (trimmed.length > 80) {
-      const error = new Error('globalKeywordHints entries must be 80 characters or fewer.');
-      error.statusCode = 400;
-      error.code = 'INVALID_PARAM';
-      throw error;
+      throwFacadeValidationError('globalKeywordHints entries must be 80 characters or fewer.', {
+        details: { field: 'globalKeywordHints', length: trimmed.length }
+      });
     }
 
     const signature = trimmed.toLowerCase();
@@ -1377,9 +1390,9 @@ async function calendarPlan(googleSub, params) {
   // Validate scope parameter
   const validScopes = ['daily', 'weekly'];
   if (!validScopes.includes(scope)) {
-    const error = new Error(`Invalid scope: ${scope}. Must be one of: ${validScopes.join(', ')}`);
-    error.statusCode = 400;
-    throw error;
+    throwFacadeValidationError(`Invalid scope: ${scope}. Must be one of: ${validScopes.join(', ')}`, {
+      details: { field: 'scope', allowed: validScopes, received: scope }
+    });
   }
   
   // Parse date and calculate range using Prague timezone
@@ -1502,25 +1515,25 @@ async function calendarSchedule(googleSub, params) {
 
   // Validate attendees parameter
   if (attendees && attendees.length > 20) {
-    const error = new Error('Too many attendees. Maximum 20 allowed.');
-    error.statusCode = 400;
-    throw error;
+    throwFacadeValidationError('Too many attendees. Maximum 20 allowed.', {
+      details: { field: 'attendees', count: attendees.length }
+    });
   }
 
   // Validate reminders parameter
   if (reminders && reminders.length > 0) {
     if (reminders.length > 5) {
-      const error = new Error('Too many reminders. Maximum 5 allowed.');
-      error.statusCode = 400;
-      throw error;
+      throwFacadeValidationError('Too many reminders. Maximum 5 allowed.', {
+        details: { field: 'reminders', count: reminders.length }
+      });
     }
-    
+
     for (const reminder of reminders) {
       const value = parseInt(reminder);
       if (isNaN(value) || value < 1 || value > 1440) {
-        const error = new Error(`Invalid reminder value: ${reminder}. Must be between 1-1440 minutes.`);
-        error.statusCode = 400;
-        throw error;
+        throwFacadeValidationError(`Invalid reminder value: ${reminder}. Must be between 1-1440 minutes.`, {
+          details: { field: 'reminders', value: reminder }
+        });
       }
     }
   }
@@ -1566,21 +1579,28 @@ async function calendarSchedule(googleSub, params) {
     
     // If all proposals have conflicts, return 409 with alternatives
     if (availableProposals.length === 0) {
-      const error = new Error('All proposed times conflict with existing events');
-      error.statusCode = 409;
-      error.alternatives = conflictResults.map(r => ({
+      const alternatives = conflictResults.map(r => ({
         proposal: r.proposal,
-        conflicts: r.conflicts
+        conflicts: r.conflicts || []
       }));
-      throw error;
+
+      const conflictError = createServiceError('All proposed times conflict with existing events', {
+        name: FACADE_VALIDATION_ERROR,
+        statusCode: 409,
+        code: 'CALENDAR_PROPOSALS_CONFLICT',
+        details: { alternatives }
+      });
+
+      conflictError.alternatives = alternatives;
+      throw conflictError;
     }
-    
+
     // Use first available proposal
     timeSlot = availableProposals[0];
   } else {
-    const invalidWhenError = new Error('Invalid when: must provide fixed or proposals');
-    invalidWhenError.statusCode = 400;
-    throw invalidWhenError;
+    throwFacadeValidationError('Invalid when: must provide fixed or proposals', {
+      details: { field: 'when' }
+    });
   }
 
   // ========== STEP 1: Check for enrichment opportunities ==========
@@ -1678,16 +1698,16 @@ async function calendarSchedule(googleSub, params) {
     normalizedStart = normalizeCalendarTime(timeSlot.start, slotTimeZone);
     normalizedEnd = normalizeCalendarTime(timeSlot.end, slotTimeZone);
   } catch (error) {
-    const invalidTimeError = new Error('Invalid time slot provided');
-    invalidTimeError.statusCode = 400;
-    invalidTimeError.cause = error;
-    throw invalidTimeError;
+    throwFacadeValidationError('Invalid time slot provided', {
+      details: { field: 'when', timeZone: slotTimeZone },
+      cause: error
+    });
   }
 
   if (!normalizedStart || !normalizedEnd) {
-    const invalidTimeError = new Error('Invalid time slot provided');
-    invalidTimeError.statusCode = 400;
-    throw invalidTimeError;
+    throwFacadeValidationError('Invalid time slot provided', {
+      details: { field: 'when', timeZone: slotTimeZone }
+    });
   }
 
   const eventData = {
@@ -1785,7 +1805,10 @@ async function completeCalendarScheduleEnrichment(
   }
 
   if (confirmation.type !== 'enrichment') {
-    throw new Error('Invalid confirmation type');
+    throwFacadeValidationError('Invalid confirmation type', {
+      code: 'CONFIRMATION_TYPE_INVALID',
+      details: { expected: 'enrichment', actual: confirmation.type }
+    });
   }
 
   await confirmPendingConfirmation(confirmToken, action);
@@ -1824,16 +1847,16 @@ async function completeCalendarScheduleEnrichment(
     normalizedStart = normalizeCalendarTime(updatedEventData.when.start, confirmTimeZone);
     normalizedEnd = normalizeCalendarTime(updatedEventData.when.end, confirmTimeZone);
   } catch (error) {
-    const invalidTimeError = new Error('Invalid time slot provided');
-    invalidTimeError.statusCode = 400;
-    invalidTimeError.cause = error;
-    throw invalidTimeError;
+    throwFacadeValidationError('Invalid time slot provided', {
+      details: { field: 'when', timeZone: confirmTimeZone },
+      cause: error
+    });
   }
 
   if (!normalizedStart || !normalizedEnd) {
-    const invalidTimeError = new Error('Invalid time slot provided');
-    invalidTimeError.statusCode = 400;
-    throw invalidTimeError;
+    throwFacadeValidationError('Invalid time slot provided', {
+      details: { field: 'when', timeZone: confirmTimeZone }
+    });
   }
 
   const event = await calendarService.createCalendarEvent(googleSub, {
@@ -1900,9 +1923,9 @@ async function contactsSafeAdd(googleSub, params) {
   const { entries, dedupeStrategy = 'ask' } = params;
 
   if (!entries || !Array.isArray(entries) || entries.length === 0) {
-    const error = new Error('entries parameter required: array of {name, email, phone?, notes?, realestate?}');
-    error.statusCode = 400;
-    throw error;
+    throwFacadeValidationError('entries parameter required: array of {name, email, phone?, notes?, realestate?}', {
+      details: { field: 'entries' }
+    });
   }
 
   const normalizedStrategy = normalizeDedupeStrategy(dedupeStrategy);
@@ -2027,13 +2050,17 @@ async function completeContactsDeduplication(
   const confirmation = await getPendingConfirmation(confirmToken);
 
   if (!confirmation) {
-    const error = new Error('Confirmation expired or not found');
-    error.statusCode = 400;
-    throw error;
+    throwFacadeValidationError('Confirmation expired or not found', {
+      code: 'CONFIRMATION_NOT_FOUND',
+      details: { confirmToken }
+    });
   }
 
   if (confirmation.type !== 'deduplication') {
-    throw new Error('Invalid confirmation type');
+    throwFacadeValidationError('Invalid confirmation type', {
+      code: 'CONFIRMATION_TYPE_INVALID',
+      details: { expected: 'deduplication', actual: confirmation.type }
+    });
   }
 
   const { entriesToAdd, duplicateFindings } = confirmation.data;
@@ -2061,9 +2088,9 @@ async function tasksOverview(googleSub, params) {
   // Validate scope parameter
   const validScopes = ['daily', 'weekly'];
   if (!validScopes.includes(scope)) {
-    const error = new Error(`Invalid scope: ${scope}. Must be one of: ${validScopes.join(', ')}`);
-    error.statusCode = 400;
-    throw error;
+    throwFacadeValidationError(`Invalid scope: ${scope}. Must be one of: ${validScopes.join(', ')}`, {
+      details: { field: 'scope', allowed: validScopes, received: scope }
+    });
   }
   
   // Calculate date range based on scope
@@ -2203,26 +2230,27 @@ async function calendarReminderDrafts(googleSub, params) {
   // Validate window parameter
   const validWindows = ['today', 'nextHours'];
   if (!validWindows.includes(window)) {
-    const error = new Error(`Invalid window: ${window}. Must be one of: ${validWindows.join(', ')}`);
-    error.statusCode = 400;
-    throw error;
+    throwFacadeValidationError(`Invalid window: ${window}. Must be one of: ${validWindows.join(', ')}`, {
+      details: { field: 'window', allowed: validWindows, received: window }
+    });
   }
 
   const validPerAttendeeModes = ['separate', 'combined'];
   if (!validPerAttendeeModes.includes(perAttendee)) {
-    const error = new Error(
-      `Invalid perAttendee mode: ${perAttendee}. Must be one of: ${validPerAttendeeModes.join(', ')}`
+    throwFacadeValidationError(
+      `Invalid perAttendee mode: ${perAttendee}. Must be one of: ${validPerAttendeeModes.join(', ')}`,
+      {
+        details: { field: 'perAttendee', allowed: validPerAttendeeModes, received: perAttendee }
+      }
     );
-    error.statusCode = 400;
-    throw error;
   }
-  
+
   // Validate hours parameter when window='nextHours'
   if (window === 'nextHours') {
     if (!hours || typeof hours !== 'number' || hours < 1 || hours > 24) {
-      const error = new Error('hours parameter must be between 1-24 when window=nextHours');
-      error.statusCode = 400;
-      throw error;
+      throwFacadeValidationError('hours parameter must be between 1-24 when window=nextHours', {
+        details: { field: 'hours', value: hours }
+      });
     }
   }
   
@@ -2376,21 +2404,36 @@ async function createReminderDraft(googleSub, shouldCreate, { to, subject, body,
 
     if (!draft) {
       console.error(`❌ [DRAFT_VALIDATION] Draft object is null/undefined for ${logLabel}`);
-      throw new Error('Gmail API returned null draft');
+      throwServiceError('Gmail API returned null draft', {
+        name: 'DraftValidationError',
+        statusCode: 502,
+        code: 'GMAIL_DRAFT_INVALID',
+        details: { logLabel }
+      });
     }
 
     if (!draft.id) {
       console.error(`❌ [DRAFT_VALIDATION] Draft ID is missing for ${logLabel}`);
       console.error('Draft object keys:', Object.keys(draft));
       console.error('Full draft:', JSON.stringify(draft, null, 2));
-      throw new Error('Draft created but missing ID field');
+      throwServiceError('Draft created but missing ID field', {
+        name: 'DraftValidationError',
+        statusCode: 502,
+        code: 'GMAIL_DRAFT_INVALID',
+        details: { logLabel }
+      });
     }
 
     if (typeof draft.id !== 'string') {
       console.error(
         `⚠️ [DRAFT_VALIDATION] Draft ID type is ${typeof draft.id}, expected string: ${draft.id}`
       );
-      throw new Error(`Invalid draft ID type: ${typeof draft.id}`);
+      throwServiceError(`Invalid draft ID type: ${typeof draft.id}`, {
+        name: 'DraftValidationError',
+        statusCode: 502,
+        code: 'GMAIL_DRAFT_INVALID',
+        details: { logLabel, type: typeof draft.id }
+      });
     }
 
     console.log(`✅ [DRAFT_SUCCESS] Draft created with ID: ${draft.id} for ${logLabel}`);
@@ -3221,7 +3264,13 @@ async function performContactsBulkAdd(accessToken, entries, duplicateFindings, s
       continue;
     }
 
-    const unsupportedError = new Error(`Unsupported dedupe strategy: ${strategy}`);
+    const unsupportedError = createServiceError(`Unsupported dedupe strategy: ${strategy}`, {
+      name: FACADE_VALIDATION_ERROR,
+      statusCode: 400,
+      code: 'DEDUPE_STRATEGY_UNSUPPORTED',
+      expose: true,
+      details: { strategy }
+    });
     console.error(unsupportedError.message);
     throw unsupportedError;
   }
@@ -3245,11 +3294,13 @@ function normalizeDedupeStrategy(strategy) {
   }
 
   if (!allowedStrategies.includes(normalized)) {
-    const error = new Error(
-      `Invalid dedupe strategy: ${strategy}. Must be one of: ${allowedStrategies.join(', ')}`
+    throwFacadeValidationError(
+      `Invalid dedupe strategy: ${strategy}. Must be one of: ${allowedStrategies.join(', ')}`,
+      {
+        code: 'DEDUPE_STRATEGY_UNSUPPORTED',
+        details: { allowed: allowedStrategies, received: strategy }
+      }
     );
-    error.statusCode = 400;
-    throw error;
   }
 
   return normalized;
