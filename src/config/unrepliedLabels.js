@@ -1,14 +1,20 @@
+import { GMAIL_LABEL_PRESETS } from './gmailColorPalette.js';
+
 export const UNREPLIED_LABEL_NAME = 'nevyřízeno';
-export const UNREPLIED_LABEL_COLOR = '#d93025';
-export const UNREPLIED_LABEL_TEXT_COLOR = '#ffffff';
+// Gmail API supported color - dark red (closest to original #d93025)
+export const UNREPLIED_LABEL_COLOR = GMAIL_LABEL_PRESETS.RED_DARK; // #cc3a21
+export const UNREPLIED_LABEL_TEXT_COLOR = GMAIL_LABEL_PRESETS.WHITE; // #ffffff
 
 export const TRACKING_LABEL_NAME = 'meta_seen';
-export const TRACKING_LABEL_COLOR = '#5f6368';
-export const TRACKING_LABEL_TEXT_COLOR = '#ffffff';
+// Gmail API supported color - gray (closest to original #5f6368)
+export const TRACKING_LABEL_COLOR = GMAIL_LABEL_PRESETS.GRAY_DARK; // #666666
+export const TRACKING_LABEL_TEXT_COLOR = GMAIL_LABEL_PRESETS.WHITE; // #ffffff
 
 export const FOLLOWUP_LABEL_NAME = 'Follow-up';
-export const FOLLOWUP_LABEL_COLOR = '#fbbc05';
-export const FOLLOWUP_LABEL_TEXT_COLOR = '#202124';
+// Gmail API supported color - yellow (closest to original #fbbc05)
+export const FOLLOWUP_LABEL_COLOR = GMAIL_LABEL_PRESETS.YELLOW; // #fad165
+// Gmail API supported color - black text for better contrast on yellow
+export const FOLLOWUP_LABEL_TEXT_COLOR = GMAIL_LABEL_PRESETS.BLACK; // #000000
 
 export const UNREPLIED_LABEL_DEFAULTS = {
   name: UNREPLIED_LABEL_NAME,

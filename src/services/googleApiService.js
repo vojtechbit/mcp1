@@ -17,6 +17,11 @@ import {
   FOLLOWUP_LABEL_NAME,
   FOLLOWUP_LABEL_DEFAULTS
 } from '../config/unrepliedLabels.js';
+import {
+  isGmailColorSupported,
+  findClosestGmailColor,
+  GMAIL_LABEL_PRESETS
+} from '../config/gmailColorPalette.js';
 // pdf-parse má problém s importem - načteme až když je potřeba
 import XLSX from 'xlsx-js-style';
 
@@ -2728,9 +2733,31 @@ async function createLabel(googleSub, options = {}) {
     };
 
     if (color && typeof color === 'object') {
+      let backgroundColor = color.backgroundColor || GMAIL_LABEL_PRESETS.RED_DARK;
+      let textColor = color.textColor || GMAIL_LABEL_PRESETS.WHITE;
+
+      // Validate and auto-correct unsupported colors
+      if (!isGmailColorSupported(backgroundColor)) {
+        const originalColor = backgroundColor;
+        backgroundColor = findClosestGmailColor(backgroundColor);
+        console.warn(
+          `[createLabel] Background color ${originalColor} is not supported by Gmail API. ` +
+          `Auto-corrected to closest supported color: ${backgroundColor}`
+        );
+      }
+
+      if (!isGmailColorSupported(textColor)) {
+        const originalColor = textColor;
+        textColor = findClosestGmailColor(textColor);
+        console.warn(
+          `[createLabel] Text color ${originalColor} is not supported by Gmail API. ` +
+          `Auto-corrected to closest supported color: ${textColor}`
+        );
+      }
+
       requestBody.color = {
-        backgroundColor: color.backgroundColor || '#d93025',
-        textColor: color.textColor || '#ffffff'
+        backgroundColor,
+        textColor
       };
     }
 
