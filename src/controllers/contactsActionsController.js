@@ -59,8 +59,9 @@ async function modifyContact(req, res) {
 }
 
 async function deleteContact(req, res) {
+  const { email, name } = req.body || {};
+
   try {
-    const { email, name } = req.body || {};
 
     if (!email && !name) {
       throwValidationError({
