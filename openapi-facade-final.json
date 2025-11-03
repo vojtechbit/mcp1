@@ -3835,99 +3835,180 @@
                       {
                         "type": "object",
                         "title": "Labels ops",
-                        "description": "List or modify labels (op=labels)",
-                        "properties": {
-                          "list": {
-                            "type": "boolean"
-                          },
-                          "includeMatchesFor": {
-                            "oneOf": [
-                              {
-                                "type": "string"
-                              },
-                              {
-                                "type": "array",
-                                "items": {
-                                  "type": "string"
-                                }
-                              }
-                            ],
-                            "description": "Optional array (or single string) of label names provided by the user. When present, the server performs fuzzy matching and returns resolution metadata alongside the label list."
-                          },
-                          "search": {
-                            "oneOf": [
-                              {
-                                "type": "string"
-                              },
-                              {
-                                "type": "array",
-                                "items": {
-                                  "type": "string"
-                                }
-                              }
-                            ],
-                            "description": "Alias for includeMatchesFor. Accepts a single string or array for backwards compatibility."
-                          },
-                          "lookup": {
-                            "oneOf": [
-                              {
-                                "type": "string"
-                              },
-                              {
-                                "type": "array",
-                                "items": {
-                                  "type": "string"
-                                }
-                              }
-                            ],
-                            "description": "Another alias for includeMatchesFor used by some orchestrators."
-                          },
-                          "resolve": {
-                            "oneOf": [
-                              {
-                                "type": "string"
-                              },
-                              {
-                                "type": "array",
-                                "items": {
-                                  "type": "string"
-                                }
-                              }
-                            ],
-                            "description": "Resolve label strings without returning the full label directory. Returns the same resolution object used by macros."
-                          },
-                          "forceRefresh": {
-                            "type": "boolean",
-                            "description": "When true, bypasses the 5-minute label cache before resolving/listing."
-                          },
-                          "modify": {
-                            "type": "object",
+                        "description": "List, resolve, modify, or create labels (op=labels). Must specify exactly one operation: list, resolve, modify, or create. NOTE: 'Follow-up' label is system-managed and should ONLY be used via /gmail/followups endpoint, not added manually to arbitrary messages.",
+                        "oneOf": [
+                          {
+                            "title": "List labels",
+                            "required": ["list"],
                             "properties": {
-                              "messageId": {
-                                "type": "string"
+                              "list": {
+                                "type": "boolean",
+                                "const": true,
+                                "description": "Set to true to list all labels"
                               },
-                              "ids": {
-                                "type": "array",
-                                "items": {
-                                  "type": "string"
+                              "includeMatchesFor": {
+                                "oneOf": [
+                                  {
+                                    "type": "string"
+                                  },
+                                  {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "string"
+                                    }
+                                  }
+                                ],
+                                "description": "Optional: label names for fuzzy matching"
+                              },
+                              "search": {
+                                "oneOf": [
+                                  {
+                                    "type": "string"
+                                  },
+                                  {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "string"
+                                    }
+                                  }
+                                ],
+                                "description": "Alias for includeMatchesFor"
+                              },
+                              "lookup": {
+                                "oneOf": [
+                                  {
+                                    "type": "string"
+                                  },
+                                  {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "string"
+                                    }
+                                  }
+                                ],
+                                "description": "Another alias for includeMatchesFor"
+                              },
+                              "forceRefresh": {
+                                "type": "boolean",
+                                "description": "Bypass 5-minute label cache"
+                              }
+                            },
+                            "additionalProperties": false
+                          },
+                          {
+                            "title": "Resolve labels",
+                            "required": ["resolve"],
+                            "properties": {
+                              "resolve": {
+                                "oneOf": [
+                                  {
+                                    "type": "string"
+                                  },
+                                  {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "string"
+                                    }
+                                  }
+                                ],
+                                "description": "Label name(s) to resolve to IDs"
+                              },
+                              "forceRefresh": {
+                                "type": "boolean",
+                                "description": "Bypass 5-minute label cache"
+                              }
+                            },
+                            "additionalProperties": false
+                          },
+                          {
+                            "title": "Modify message labels",
+                            "required": ["modify"],
+                            "properties": {
+                              "modify": {
+                                "type": "object",
+                                "description": "Modify labels on a message",
+                                "properties": {
+                                  "messageId": {
+                                    "type": "string",
+                                    "description": "Gmail message ID"
+                                  },
+                                  "ids": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "string"
+                                    },
+                                    "description": "Alternative to messageId (uses first ID)"
+                                  },
+                                  "add": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "string"
+                                    },
+                                    "description": "Label names to add (e.g., ['IMPORTANT', 'Projects/ClientA']). System-managed labels ('Follow-up', 'nevyřízeno', 'meta_seen') are auto-created if missing - use 'Follow-up' ONLY via /gmail/followups macro, not manually."
+                                  },
+                                  "remove": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "string"
+                                    },
+                                    "description": "Label names to remove"
+                                  }
                                 },
-                                "description": "Alternative to messageId. When provided, modifies first id only (matches service)."
-                              },
-                              "add": {
-                                "type": "array",
-                                "items": {
-                                  "type": "string"
-                                }
-                              },
-                              "remove": {
-                                "type": "array",
-                                "items": {
-                                  "type": "string"
+                                "anyOf": [
+                                  {
+                                    "required": ["messageId"]
+                                  },
+                                  {
+                                    "required": ["ids"]
+                                  }
+                                ]
+                              }
+                            },
+                            "additionalProperties": false
+                          },
+                          {
+                            "title": "Create label",
+                            "required": ["create"],
+                            "properties": {
+                              "create": {
+                                "type": "object",
+                                "required": ["name"],
+                                "description": "Create a new Gmail label",
+                                "properties": {
+                                  "name": {
+                                    "type": "string",
+                                    "description": "Label name"
+                                  },
+                                  "color": {
+                                    "type": "object",
+                                    "description": "Label colors (must use Gmail-supported hex codes)",
+                                    "properties": {
+                                      "backgroundColor": {
+                                        "type": "string",
+                                        "description": "Background color (hex, e.g., '#c9daf8' for light blue)"
+                                      },
+                                      "textColor": {
+                                        "type": "string",
+                                        "description": "Text color (hex, typically '#000000' or '#ffffff')"
+                                      }
+                                    }
+                                  },
+                                  "labelListVisibility": {
+                                    "type": "string",
+                                    "enum": ["labelShow", "labelHide"],
+                                    "description": "Visibility in label list"
+                                  },
+                                  "messageListVisibility": {
+                                    "type": "string",
+                                    "enum": ["show", "hide"],
+                                    "description": "Visibility in message list"
+                                  }
                                 }
                               }
-                            }
+                            },
+                            "additionalProperties": false
                           }
-                        }
+                        ]
                       },
                       {
                         "type": "object",
@@ -3999,6 +4080,43 @@
                     "op": "labels",
                     "params": {
                       "list": true
+                    }
+                  }
+                },
+                "createLabel": {
+                  "summary": "Create a new Gmail label",
+                  "value": {
+                    "op": "labels",
+                    "params": {
+                      "create": {
+                        "name": "Projects/ClientA",
+                        "color": {
+                          "backgroundColor": "#a479e2",
+                          "textColor": "#ffffff"
+                        }
+                      }
+                    }
+                  }
+                },
+                "modifyLabels": {
+                  "summary": "Add Important label to a message",
+                  "value": {
+                    "op": "labels",
+                    "params": {
+                      "modify": {
+                        "messageId": "1890de2cafe3a3b7",
+                        "add": ["IMPORTANT"],
+                        "remove": []
+                      }
+                    }
+                  }
+                },
+                "resolveLabels": {
+                  "summary": "Resolve label names to IDs",
+                  "value": {
+                    "op": "labels",
+                    "params": {
+                      "resolve": ["IMPORTANT", "INBOX"]
                     }
                   }
                 }

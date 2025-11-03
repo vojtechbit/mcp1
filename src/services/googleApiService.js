@@ -2735,6 +2735,8 @@ async function prepareLabelModificationRequest(googleSub, { add = [], remove = [
   };
 
   if (requestedAdd.length === 0 && requestedRemove.length === 0) {
+    // Mark that no labels were actually requested
+    details.noLabelsRequested = true;
     return {
       addLabelIds: [],
       removeLabelIds: [],
@@ -2850,12 +2852,26 @@ async function prepareLabelModificationRequest(googleSub, { add = [], remove = [
 
           registerManagedLabel(targetLabel, managedDefinition);
         } catch (creationError) {
-          console.warn(
-            `⚠️ Unable to auto-create managed label ${managedDefinition.fallbackName}:`,
+          console.error(
+            `❌ Failed to auto-create managed label "${managedDefinition.fallbackName}":`,
             creationError.message
           );
-          details.unmatched.add.push(input);
-          continue;
+
+          // Throw a more specific error for managed label creation failure
+          throwServiceError(
+            `Failed to create label "${managedDefinition.fallbackName}". ${creationError.message || 'Unknown error during label creation.'}`,
+            {
+              statusCode: creationError.statusCode || 500,
+              code: 'MANAGED_LABEL_CREATION_FAILED',
+              expose: true,
+              details: {
+                labelName: managedDefinition.fallbackName,
+                managedType: managedDefinition.key,
+                originalError: creationError.message,
+                suggestion: `The system attempted to automatically create the "${managedDefinition.fallbackName}" label but failed. Please check your Gmail permissions or try creating the label manually.`
+              }
+            }
+          );
         }
       }
     }
@@ -2908,22 +2924,35 @@ async function prepareLabelModificationRequest(googleSub, { add = [], remove = [
 
   if (details.unmatched.add.length > 0 || details.unmatched.remove.length > 0) {
     const unmatchedMessages = [];
+    const unmatchedLabels = [];
+
     if (details.unmatched.add.length > 0) {
       unmatchedMessages.push(`add [${details.unmatched.add.join(', ')}]`);
+      unmatchedLabels.push(...details.unmatched.add);
     }
     if (details.unmatched.remove.length > 0) {
       unmatchedMessages.push(`remove [${details.unmatched.remove.join(', ')}]`);
+      unmatchedLabels.push(...details.unmatched.remove);
     }
+
+    const availableLabelNames = availableLabels
+      .filter(l => l.name)
+      .map(l => l.name)
+      .slice(0, 10);
 
     throwServiceError(
       unmatchedMessages.length > 0
-        ? `Unable to resolve some labels: ${unmatchedMessages.join('; ')}`
+        ? `Label(s) not found: ${unmatchedLabels.join(', ')}. These labels don't exist in your Gmail account. Please create them first or use an existing label.`
         : 'Some labels could not be resolved',
       {
         statusCode: 400,
-        code: 'LABEL_RESOLUTION_FAILED',
+        code: 'LABEL_NOT_FOUND',
         expose: true,
-        details
+        details: {
+          ...details,
+          suggestion: `Labels "${unmatchedLabels.join('", "')}" do not exist. ${availableLabelNames.length > 0 ? `Available labels include: ${availableLabelNames.join(', ')}${availableLabels.length > 10 ? ', ...' : ''}` : 'No custom labels found.'}`,
+          action: 'Create the label first using the "labels" operation with params.create, or use an existing label name.'
+        }
       }
     );
   }
@@ -3167,7 +3196,7 @@ async function modifyMessageLabels(googleSub, messageId, { add = [], remove = []
     };
   }
 
-  return {
+  const response = {
     success: true,
     labelUpdates: {
       ...details,
@@ -3175,6 +3204,14 @@ async function modifyMessageLabels(googleSub, messageId, { add = [], remove = []
       appliedRemoveLabelIds: expectedRemove
     }
   };
+
+  // Add warning if no labels were actually requested
+  if (details.noLabelsRequested === true) {
+    response.warning = 'No labels were specified in the modify request. No changes were made.';
+    response.labelUpdates.noLabelsRequested = true;
+  }
+
+  return response;
 }
 
 /**
@@ -3277,7 +3314,7 @@ async function modifyThreadLabels(googleSub, threadId, { add = [], remove = [] }
     };
   }
 
-  return {
+  const response = {
     success: true,
     labelUpdates: {
       ...details,
@@ -3285,6 +3322,14 @@ async function modifyThreadLabels(googleSub, threadId, { add = [], remove = [] }
       appliedRemoveLabelIds: expectedRemove
     }
   };
+
+  // Add warning if no labels were actually requested
+  if (details.noLabelsRequested === true) {
+    response.warning = 'No labels were specified in the modify request. No changes were made.';
+    response.labelUpdates.noLabelsRequested = true;
+  }
+
+  return response;
 }
 
 async function fetchUserAddressDirectory(googleSub) {

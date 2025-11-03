@@ -11,9 +11,9 @@ export const TRACKING_LABEL_COLOR = GMAIL_LABEL_PRESETS.GRAY_DARK; // #666666
 export const TRACKING_LABEL_TEXT_COLOR = GMAIL_LABEL_PRESETS.WHITE; // #ffffff
 
 export const FOLLOWUP_LABEL_NAME = 'Follow-up';
-// Gmail API supported color - yellow (closest to original #fbbc05)
-export const FOLLOWUP_LABEL_COLOR = GMAIL_LABEL_PRESETS.YELLOW; // #fad165
-// Gmail API supported color - black text for better contrast on yellow
+// Gmail API supported color - light blue for better visibility
+export const FOLLOWUP_LABEL_COLOR = GMAIL_LABEL_PRESETS.BLUE_LIGHT; // #c9daf8
+// Gmail API supported color - black text for better contrast on light blue
 export const FOLLOWUP_LABEL_TEXT_COLOR = GMAIL_LABEL_PRESETS.BLACK; // #000000
 
 export const UNREPLIED_LABEL_DEFAULTS = {

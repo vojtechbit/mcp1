@@ -400,6 +400,18 @@ async function mailRpc(req, res) {
           );
         } else if (params.create) {
           result = await gmailSvc.createLabel(req.user.googleSub, params.create);
+        } else {
+          return res.status(400).json({
+            error: 'Bad request',
+            message: 'labels operation requires one of: params.list, params.resolve, params.modify, or params.create',
+            code: 'INVALID_PARAM',
+            expectedFormat: {
+              list: { op: 'labels', params: { list: true } },
+              resolve: { op: 'labels', params: { resolve: ['label1', 'label2'] } },
+              modify: { op: 'labels', params: { modify: { messageId: 'id', add: ['label'], remove: [] } } },
+              create: { op: 'labels', params: { create: { name: 'LabelName' } } }
+            }
+          });
         }
         break;
       }
@@ -411,12 +423,22 @@ async function mailRpc(req, res) {
           code: 'INVALID_PARAM'
         });
     }
-    
+
+    // Safety check: result should never be undefined after successful operation
+    if (result === undefined) {
+      console.error(`⚠️ Mail RPC operation "${op}" completed but result is undefined`);
+      return res.status(500).json({
+        error: 'Internal server error',
+        message: `Operation "${op}" completed but produced no result. This may indicate a configuration issue.`,
+        code: 'UNDEFINED_RESULT'
+      });
+    }
+
     res.json({
       ok: true,
       data: result
     });
-    
+
   } catch (error) {
     console.error('❌ Mail RPC failed:', error.message);
 
