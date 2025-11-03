@@ -1,3 +1,5 @@
+import { getDefaultStatus } from './errorCatalog.js';
+
 const STATUS_TITLES = {
   400: 'Bad Request',
   401: 'Unauthorized',
@@ -60,7 +62,8 @@ class ApiError extends Error {
     super(message || options.defaultMessage || 'An unexpected error occurred');
 
     this.name = options.name || 'ApiError';
-    this.statusCode = options.statusCode || options.status || 500;
+    const statusFromOptions = options.statusCode || options.status || getDefaultStatus(options.code);
+    this.statusCode = statusFromOptions || 500;
     this.code = options.code;
     this.details = options.details;
     this.requiresReauth = options.requiresReauth === true;
@@ -76,12 +79,21 @@ class ApiError extends Error {
     const responseDetails = extractFromResponse(error);
 
     if (error instanceof Error) {
+      const code = error.code || responseDetails.code || defaults.code;
+      const statusFromError =
+        error.statusCode ||
+        error.status ||
+        responseDetails.statusCode ||
+        defaults.statusCode ||
+        undefined;
+      const statusCode = statusFromError || getDefaultStatus(code) || 500;
+
       return new ApiError(
         error.message || defaults.message || 'An unexpected error occurred',
         {
           name: error.name || defaults.name,
-          statusCode: error.statusCode || error.status || responseDetails.statusCode || defaults.statusCode || 500,
-          code: error.code || responseDetails.code || defaults.code,
+          statusCode,
+          code,
           details: error.details || responseDetails.details || defaults.details,
           requiresReauth: error.requiresReauth === true || responseDetails.requiresReauth === true,
           expose: error.expose,
@@ -91,12 +103,21 @@ class ApiError extends Error {
     }
 
     if (error && typeof error === 'object') {
+      const code = error.code || responseDetails.code || defaults.code;
+      const statusFromError =
+        error.statusCode ||
+        error.status ||
+        responseDetails.statusCode ||
+        defaults.statusCode ||
+        undefined;
+      const statusCode = statusFromError || getDefaultStatus(code) || 500;
+
       return new ApiError(
         error.message || responseDetails.message || defaults.message || 'An unexpected error occurred',
         {
           name: error.name || defaults.name,
-          statusCode: error.statusCode || error.status || responseDetails.statusCode || defaults.statusCode || 500,
-          code: error.code || responseDetails.code || defaults.code,
+          statusCode,
+          code,
           details: error.details || responseDetails.details || defaults.details,
           requiresReauth: error.requiresReauth === true || responseDetails.requiresReauth === true,
           expose: error.expose,
@@ -107,7 +128,7 @@ class ApiError extends Error {
 
     return new ApiError(defaults.message || 'An unexpected error occurred', {
       name: defaults.name,
-      statusCode: defaults.statusCode || 500,
+      statusCode: defaults.statusCode || getDefaultStatus(defaults.code) || 500,
       code: defaults.code,
       details: defaults.details,
       requiresReauth: defaults.requiresReauth === true,
