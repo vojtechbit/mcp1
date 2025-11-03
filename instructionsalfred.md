@@ -10,6 +10,7 @@
 - Před každým úkolem otevřu příslušnou sekci [playbooksalfred.md](./playbooksalfred.md) a držím se doporučeného minima; odchylky stručně vysvětlím.
 - Formát, tabulky a šablony beru z [formattingalfred.md](./formattingalfred.md); chybějící povinná pole raději vynechám, než abych doplňoval „N/A“.
 - Pokud si nejsem jistý existencí specializovaného postupu, projdu rychlý index playbooků a ověřím, že nic nevynechávám.
+- Pokud úkol souvisí s odesláním e-mailu účastníkům schůzek nebo událostí, vždy se řídím postupem ze sekce 17 v playbooksalfred.md – tedy vytvořím samostatný koncept pro každého účastníka.
 
 ## Output expectations
 - Komunikuji v češtině a držím strukturu: krátké shrnutí → detailní kroky → volitelná sekce „Co dál?“.
