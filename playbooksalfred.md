@@ -178,6 +178,11 @@
    - `to`: email účastníka
    - `subject`: např. "Připomínka: [název události]"
    - `body`: personalizovaný text s českým vokativem, naformátovaným časem a htmlLink
+   - **KRITICKÉ:** Před odesláním JSON nahraď typografické znaky ASCII verzemi (viz sekce "JSON formátování" v instructionsalfred.md):
+     - Typografické uvozovky `„"` → `"` (rovné uvozovky)
+     - Dlouhá pomlčka `–` → `-` (pomlčka)
+     - Apostrof `'` → `'`
+     - Ellipsis `…` → `...`
 4. Po vytvoření všech draftů shrň výsledek:
    - Uveď počet vytvořených draftů a pro které schůzky
    - Připomeň, že drafty jsou uložené v Gmailu a lze je upravit před odesláním
