@@ -3835,7 +3835,7 @@
                       {
                         "type": "object",
                         "title": "Labels ops",
-                        "description": "List, resolve, modify, or create labels (op=labels). Must specify exactly one operation: list, resolve, modify, or create. NOTE: 'Follow-up' label is system-managed and should ONLY be used via /gmail/followups endpoint, not added manually to arbitrary messages.",
+                        "description": "List, resolve, modify, or create labels (op=labels). Must specify exactly one operation: list, resolve, modify, or create. NOTE: System-managed labels ('Follow-up', 'nevyřízeno', 'meta_seen') are automatically created when first used, so you can add them to messages directly without creating them first.",
                         "oneOf": [
                           {
                             "title": "List labels",
@@ -3926,7 +3926,7 @@
                             "properties": {
                               "modify": {
                                 "type": "object",
-                                "description": "Modify labels on a message",
+                                "description": "Modify labels on one or more messages/threads. Use 'messageId' for a single item, or 'ids' array for batch processing multiple items at once.",
                                 "properties": {
                                   "messageId": {
                                     "type": "string",
@@ -3937,14 +3937,15 @@
                                     "items": {
                                       "type": "string"
                                     },
-                                    "description": "Alternative to messageId (uses first ID)"
+                                    "minItems": 1,
+                                    "description": "Array of Gmail message IDs or thread IDs for batch processing. When provided, labels will be modified on ALL specified messages/threads in parallel. Use this instead of messageId when you need to label multiple items at once (e.g., marking 6 follow-up threads)."
                                   },
                                   "add": {
                                     "type": "array",
                                     "items": {
                                       "type": "string"
                                     },
-                                    "description": "Label names to add (e.g., ['IMPORTANT', 'Projects/ClientA']). System-managed labels ('Follow-up', 'nevyřízeno', 'meta_seen') are auto-created if missing - use 'Follow-up' ONLY via /gmail/followups macro, not manually."
+                                    "description": "Label names to add (e.g., ['IMPORTANT', 'Projects/ClientA', 'Follow-up']). System-managed labels ('Follow-up', 'nevyřízeno', 'meta_seen') are automatically created when first used. The 'Follow-up' label is commonly used to mark conversations awaiting replies - use GET /gmail/followups to find candidates for this label."
                                   },
                                   "remove": {
                                     "type": "array",
@@ -4106,6 +4107,19 @@
                       "modify": {
                         "messageId": "1890de2cafe3a3b7",
                         "add": ["IMPORTANT"],
+                        "remove": []
+                      }
+                    }
+                  }
+                },
+                "modifyLabelsBatch": {
+                  "summary": "Add Follow-up label to multiple threads (batch)",
+                  "value": {
+                    "op": "labels",
+                    "params": {
+                      "modify": {
+                        "ids": ["1890abc123", "1890def456", "1890ghi789"],
+                        "add": ["Follow-up"],
                         "remove": []
                       }
                     }
