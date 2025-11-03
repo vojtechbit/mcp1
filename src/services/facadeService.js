@@ -2265,7 +2265,6 @@ async function calendarReminderDrafts(googleSub, params) {
     template,
     includeLocation = true,
     createDrafts = true,
-    perAttendee = 'separate',
     calendarId = 'primary'
   } = params;
 
@@ -2275,16 +2274,6 @@ async function calendarReminderDrafts(googleSub, params) {
     throwFacadeValidationError(`Invalid window: ${window}. Must be one of: ${validWindows.join(', ')}`, {
       details: { field: 'window', allowed: validWindows, received: window }
     });
-  }
-
-  const validPerAttendeeModes = ['separate', 'combined'];
-  if (!validPerAttendeeModes.includes(perAttendee)) {
-    throwFacadeValidationError(
-      `Invalid perAttendee mode: ${perAttendee}. Must be one of: ${validPerAttendeeModes.join(', ')}`,
-      {
-        details: { field: 'perAttendee', allowed: validPerAttendeeModes, received: perAttendee }
-      }
-    );
   }
 
   // Validate hours parameter when window='nextHours'
@@ -2340,40 +2329,7 @@ async function calendarReminderDrafts(googleSub, params) {
       event.end.dateTime || event.end.date
     );
 
-    if (perAttendee === 'combined') {
-      const recipientEmails = attendeesList.map(a => a.email).join(', ');
-      const recipientLabel = attendeesList
-        .map(a => a.displayName || a.email)
-        .filter(Boolean)
-        .join(', ') || 'všichni';
-
-      const body = buildReminderBody({
-        event,
-        template,
-        locationText,
-        timeRange,
-        recipientLabel,
-        isGroup: true
-      });
-
-      const draftId = await createReminderDraft(googleSub, createDrafts, {
-        to: recipientEmails,
-        subject,
-        body,
-        logLabel: recipientEmails
-      });
-
-      drafts.push({
-        draftId,
-        to: recipientEmails,
-        subject,
-        preview: body.substring(0, 200),
-        eventId: event.id
-      });
-
-      continue;
-    }
-
+    // Create personalized email for each attendee
     for (const attendee of attendeesList) {
       const recipientLabel = attendee.displayName || attendee.email;
       const body = buildReminderBody({
