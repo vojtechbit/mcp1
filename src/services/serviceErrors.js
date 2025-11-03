@@ -90,7 +90,17 @@ function mapGoogleApiError(error, options = {}) {
     cause: options.cause ?? error
   };
 
-  return ApiError.from(error, defaults);
+  const mappedError = ApiError.from(error, defaults);
+
+  if (defaults.requiresReauth !== undefined) {
+    mappedError.requiresReauth = defaults.requiresReauth === true;
+  }
+
+  if (defaults.expose !== undefined) {
+    mappedError.expose = defaults.expose;
+  }
+
+  return mappedError;
 }
 
 export { ApiError, createServiceError, throwServiceError, mapGoogleApiError };
