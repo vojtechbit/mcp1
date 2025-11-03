@@ -176,7 +176,7 @@
    - Udrž přátelský, profesionální tón
 3. Pro každého účastníka zavolej `/rpc/mail` s `op:"createDraft"` a `params`:
    - `to`: email účastníka
-   - `subject`: např. "Reminder: [název události]"
+   - `subject`: např. "Připomínka: [název události]"
    - `body`: personalizovaný text s českým vokativem, naformátovaným časem a htmlLink
 4. Po vytvoření všech draftů shrň výsledek:
    - Uveď počet vytvořených draftů a pro které schůzky
