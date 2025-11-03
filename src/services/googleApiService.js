@@ -402,6 +402,69 @@ function generateGmailLinks(threadId, messageId) {
   };
 }
 
+/**
+ * Generate Gmail links for drafts
+ * @param {string} draftId - The draft ID
+ * @param {string} messageId - The message ID (optional)
+ * @returns {object|null} Object with draft and message links, or null if draftId is missing
+ */
+function generateDraftLinks(draftId, messageId) {
+  if (!draftId) {
+    return null;
+  }
+
+  const draftLink = `https://mail.google.com/mail/u/0/#drafts/${draftId}`;
+  const messageLink = messageId
+    ? `${draftLink}?projector=1&messageId=${messageId}`
+    : null;
+
+  return {
+    draft: draftLink,
+    message: messageLink
+  };
+}
+
+/**
+ * Decorate a draft object with links
+ * @param {object} draft - The draft object from Gmail API
+ * @returns {object} Draft object with links added
+ */
+function decorateDraftWithLinks(draft) {
+  if (!draft || typeof draft !== 'object') {
+    return draft;
+  }
+
+  if (draft.links && typeof draft.links === 'object') {
+    return draft;
+  }
+
+  const draftId = draft.id;
+  const messageId = draft.message?.id;
+
+  const links = generateDraftLinks(draftId, messageId);
+  if (!links) {
+    return draft;
+  }
+
+  return {
+    ...draft,
+    links
+  };
+}
+
+/**
+ * Decorate an array of drafts with links
+ * @param {array} drafts - Array of draft objects
+ * @returns {array} Array of drafts with links added
+ */
+function decorateDraftsWithLinks(drafts) {
+  if (!Array.isArray(drafts)) {
+    return drafts;
+  }
+
+  return drafts.map(draft => decorateDraftWithLinks(draft));
+}
+
 function decorateMessageWithLinks(message, fallbackThreadId) {
   if (!message || typeof message !== 'object') {
     return message;
@@ -939,7 +1002,9 @@ async function sendEmail(googleSub, { to, subject, body, cc, bcc }) {
     });
 
     console.log('✅ Email sent:', result.data.id);
-    return result.data;
+
+    // Add links to sent message
+    return decorateMessageWithLinks(result.data);
   });
 }
 
@@ -1669,8 +1734,11 @@ async function replyToEmail(googleSub, messageId, { body }) {
       }
     });
 
+    // Add links to sent reply
+    const sentMessage = decorateMessageWithLinks(result.data);
+
     return {
-      ...result.data,
+      ...sentMessage,
       unrepliedLabelReminder
     };
   });
@@ -1745,7 +1813,9 @@ async function createDraft(googleSub, { to, subject, body, cc, bcc, threadId } =
       allKeys: Object.keys(result.data)
     });
     console.log(`✅ Using draft.id: ${result.data.id}`);
-    return result.data;
+
+    // Add links to draft
+    return decorateDraftWithLinks(result.data);
   });
 }
 
@@ -1797,8 +1867,12 @@ async function sendDraft(googleSub, draftId) {
     });
 
     console.log('✅ Draft sent:', draftId);
+
+    // Add links to sent message
+    const sentMessage = decorateMessageWithLinks(result.data);
+
     return {
-      ...result.data,
+      ...sentMessage,
       unrepliedLabelReminder
     };
   });
@@ -1844,7 +1918,8 @@ async function updateDraft(googleSub, draftId, { to, subject, body, cc, bcc, thr
       requestBody
     });
 
-    return result.data;
+    // Add links to draft
+    return decorateDraftWithLinks(result.data);
   });
 }
 
@@ -1865,6 +1940,12 @@ async function listDrafts(googleSub, { maxResults = 50, pageToken } = {}) {
     }
 
     const result = await gmail.users.drafts.list(params);
+
+    // Add links to all drafts
+    if (result.data.drafts && Array.isArray(result.data.drafts)) {
+      result.data.drafts = decorateDraftsWithLinks(result.data.drafts);
+    }
+
     return result.data;
   });
 }
@@ -1890,7 +1971,8 @@ async function getDraft(googleSub, draftId, { format = 'full' } = {}) {
       format: safeFormat
     });
 
-    return result.data;
+    // Add links to draft
+    return decorateDraftWithLinks(result.data);
   });
 }
 
@@ -3301,8 +3383,12 @@ async function replyToThread(googleSub, threadId, { body }) {
     });
 
     console.log('✅ Reply sent to thread:', threadId);
+
+    // Add links to sent reply
+    const sentMessage = decorateMessageWithLinks(result.data);
+
     return {
-      ...result.data,
+      ...sentMessage,
       unrepliedLabelReminder
     };
   });
