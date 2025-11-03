@@ -1857,6 +1857,42 @@ async function findDraftById(gmail, id, format, getWatchlistLabelContext = null,
   let draftData = null;
   let unrepliedLabelReminder = null;
 
+  const maybeFetchUnrepliedLabelReminder = async (message) => {
+    if (!getWatchlistLabelContext || !message) {
+      return null;
+    }
+
+    try {
+      const { unrepliedLabel } = await getWatchlistLabelContext(googleSub);
+      if (!unrepliedLabel) {
+        return null;
+      }
+
+      const threadId = message.threadId || null;
+      if (!threadId) {
+        return null;
+      }
+
+      const thread = await gmail.users.threads.get({
+        userId: 'me',
+        id: threadId,
+        format: 'metadata'
+      });
+
+      const messageIds = (thread.data?.messages || [])
+        .filter(msg => Array.isArray(msg.labelIds) && msg.labelIds.includes(unrepliedLabel.id))
+        .map(msg => msg.id);
+
+      return buildUnrepliedLabelReminderPayload(unrepliedLabel, {
+        messageIds,
+        threadId
+      });
+    } catch (watchlistError) {
+      console.warn('⚠️ Failed to fetch watchlist reminder data:', watchlistError.message);
+      return null;
+    }
+  };
+
   // Step 1: Try to get draft using ID as draft.id (fast path - O(1))
   try {
     const draft = await gmail.users.drafts.get({
@@ -1870,28 +1906,7 @@ async function findDraftById(gmail, id, format, getWatchlistLabelContext = null,
     console.log(`✅ Found draft using provided ID as draft.id`);
 
     // Check for unreplied label if needed
-    if (getWatchlistLabelContext) {
-      const { unrepliedLabel } = await getWatchlistLabelContext(googleSub);
-      if (unrepliedLabel) {
-        const threadId = draft.data?.message?.threadId || null;
-        if (threadId) {
-          const thread = await gmail.users.threads.get({
-            userId: 'me',
-            id: threadId,
-            format: 'metadata'
-          });
-
-          const messageIds = (thread.data?.messages || [])
-            .filter(msg => Array.isArray(msg.labelIds) && msg.labelIds.includes(unrepliedLabel.id))
-            .map(msg => msg.id);
-
-          unrepliedLabelReminder = buildUnrepliedLabelReminderPayload(unrepliedLabel, {
-            messageIds,
-            threadId
-          });
-        }
-      }
-    }
+    unrepliedLabelReminder = await maybeFetchUnrepliedLabelReminder(draft.data?.message);
 
     return { draft: draftData, actualDraftId, unrepliedLabelReminder };
   } catch (error) {
@@ -1933,28 +1948,7 @@ async function findDraftById(gmail, id, format, getWatchlistLabelContext = null,
           actualDraftId = fullDraft.data.id;
 
           // Check for unreplied label if needed
-          if (getWatchlistLabelContext) {
-            const { unrepliedLabel } = await getWatchlistLabelContext(googleSub);
-            if (unrepliedLabel) {
-              const threadId = fullDraft.data?.message?.threadId || null;
-              if (threadId) {
-                const thread = await gmail.users.threads.get({
-                  userId: 'me',
-                  id: threadId,
-                  format: 'metadata'
-                });
-
-                const messageIds = (thread.data?.messages || [])
-                  .filter(msg => Array.isArray(msg.labelIds) && msg.labelIds.includes(unrepliedLabel.id))
-                  .map(msg => msg.id);
-
-                unrepliedLabelReminder = buildUnrepliedLabelReminderPayload(unrepliedLabel, {
-                  messageIds,
-                  threadId
-                });
-              }
-            }
-          }
+          unrepliedLabelReminder = await maybeFetchUnrepliedLabelReminder(fullDraft.data?.message);
 
           return { draft: draftData, actualDraftId, unrepliedLabelReminder };
         }
