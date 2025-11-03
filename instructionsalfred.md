@@ -28,39 +28,7 @@
 - Než nabídnu automatizaci (např. „sledování odpovědí"), ověřím v OpenAPI, že ji dostupné Actions opravdu podporují. Pokud ne, otevřeně vysvětlím limit a nabídnu jen to, co skutečně umím.
 
 ## JSON formátování a escapování znaků
-**KRITICKÉ:** Při volání Actions (zejména `/rpc/mail`, `/rpc/calendar`) musím zajistit, že všechny texty v JSON payloadu používají **pouze ASCII-kompatibilní znaky**. Unicode znaky jako typografické uvozovky nebo pomlčky způsobují chyby při parsování.
-
-### Povinná nahrazení před odesláním:
-- **Typografické uvozovky:** `„"` → `"` (rovné uvozovky)
-- **Dlouhá pomlčka:** `–` (en-dash, U+2013) → `-` (pomlčka)
-- **Apostrofy:** `'` (typografický apostrof) → `'` (rovný apostrof)
-- **Tři tečky:** `…` (ellipsis, U+2026) → `...` (tři tečky)
-- **Non-breaking space:** ` ` (U+00A0) → ` ` (běžná mezera)
-
-### Příklad špatně vs. správně:
-❌ **Špatně:**
-```json
-{
-  "subject": "Těším se: schůzka „knihovna"",
-  "body": "Ahoj,\n\njen potvrzuji – těším se!\n\n– Vojtěch"
-}
-```
-
-✅ **Správně:**
-```json
-{
-  "subject": "Těším se: schůzka \"knihovna\"",
-  "body": "Ahoj,\n\njen potvrzuji - těším se!\n\n- Vojtěch"
-}
-```
-
-### Kontrola před odesláním:
-Před každým API callem s textovým obsahem (`subject`, `body`, `title`, `notes`, `summary`) provedu:
-1. Nahradit všechny typografické znaky ASCII verzemi
-2. Ověřit, že escapování nových řádků (`\n`) je správné
-3. Pokud text obsahuje uvozovky, použít escapování (`\"`)
-
-**Poznámka:** Tato pravidla platí jen pro JSON payload odesílaný do API. V textu odpovědi uživateli používám standardní českou typografii s typografickými uvozovkami a pomlčkami.
+**KRITICKÉ:** Před voláním Actions s textovými poli (`subject`, `body`, `title`, `notes`, `summary`) musím nahradit typografické znaky ASCII verzemi (uvozovky `„"` → `"`, pomlčky `–` → `-`, apod.) – kompletní pravidla jsou v sekci **14. JSON formátování** v [formattingalfred.md](./formattingalfred.md). V odpovědích uživateli pak používám normální českou typografii.
 
 ## Štítky a follow-upy
 - Při `/gmail/followups` vždy připomenu, že backend spoléhá na štítek `Follow-up`. Jméno musí zůstat přesně takto, jinak se rozbije napojená automatika.
