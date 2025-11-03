@@ -3,6 +3,7 @@ import { getUserByGoogleSub, updateTokens, updateLastUsed } from './databaseServ
 import { refreshAccessToken } from '../config/oauth.js';
 import dotenv from 'dotenv';
 import { wrapModuleFunctions } from '../utils/advancedDebugging.js';
+import { mapGoogleApiError, throwServiceError } from './serviceErrors.js';
 
 dotenv.config();
 
@@ -19,7 +20,11 @@ async function getValidAccessToken(googleSub) {
     const user = await getUserByGoogleSub(googleSub);
     
     if (!user) {
-      throw new Error('User not found in database');
+      throwServiceError('User not found in database', {
+        statusCode: 401,
+        code: 'TASKS_USER_NOT_FOUND',
+        requiresReauth: true
+      });
     }
 
     updateLastUsed(googleSub).catch(err => 
@@ -49,10 +54,12 @@ async function getValidAccessToken(googleSub) {
         return newTokens.access_token;
       } catch (refreshError) {
         console.error('❌ Token refresh failed - user needs to re-authenticate');
-        const authError = new Error('Authentication required - please log in again');
-        authError.code = 'AUTH_REQUIRED';
-        authError.statusCode = 401;
-        throw authError;
+        throwServiceError('Authentication required - please log in again', {
+          statusCode: 401,
+          code: 'GOOGLE_UNAUTHORIZED',
+          requiresReauth: true,
+          cause: refreshError
+        });
       }
     }
 
@@ -65,7 +72,11 @@ async function getValidAccessToken(googleSub) {
       errorCode: error.code,
       timestamp: new Date().toISOString()
     });
-    throw error;
+    throw mapGoogleApiError(error, {
+      message: 'Failed to get valid access token',
+      details: { googleSub },
+      cause: error
+    });
   }
 }
 
@@ -96,7 +107,11 @@ async function getTasksClient(googleSub) {
       errorMessage: error.message,
       timestamp: new Date().toISOString()
     });
-    throw error;
+    throw mapGoogleApiError(error, {
+      message: 'Failed to get Tasks client',
+      details: { googleSub },
+      cause: error
+    });
   }
 }
 
@@ -162,7 +177,17 @@ async function listTasks(googleSub, options = {}) {
       statusCode: error.response?.status,
       timestamp: new Date().toISOString()
     });
-    throw error;
+    throw mapGoogleApiError(error, {
+      message: 'Failed to list tasks',
+      details: {
+        googleSub,
+        tasklistId: options.tasklistId,
+        maxResults: options.maxResults,
+        showCompleted: options.showCompleted,
+        pageToken: options.pageToken ? 'present' : undefined
+      },
+      cause: error
+    });
   }
 }
 
@@ -170,6 +195,7 @@ async function listTasks(googleSub, options = {}) {
  * List all tasks from all task lists (legacy - for backward compatibility)
  */
 async function listAllTasks(googleSub) {
+  let taskLists = [];
   try {
     const tasks = await getTasksClient(googleSub);
 
@@ -178,7 +204,7 @@ async function listAllTasks(googleSub) {
       maxResults: 100
     });
 
-    const taskLists = taskListsResponse.data.items || [];
+    taskLists = taskListsResponse.data.items || [];
 
     if (taskLists.length === 0) {
       console.log('⚠️  No task lists found');
@@ -227,7 +253,15 @@ async function listAllTasks(googleSub) {
       errorData: error.response?.data,
       timestamp: new Date().toISOString()
     });
-    throw error;
+    throw mapGoogleApiError(error, {
+      message: 'Failed to list all tasks',
+      details: {
+        googleSub,
+        taskListsAttempted: taskLists.map(list => list?.id).filter(Boolean),
+        taskListCount: taskLists.length
+      },
+      cause: error
+    });
   }
 }
 
@@ -248,7 +282,11 @@ async function createTask(googleSub, taskData) {
     const taskLists = taskListsResponse.data.items || [];
 
     if (taskLists.length === 0) {
-      throw new Error('No task lists found. Please create a task list in Google Tasks first.');
+      throwServiceError('No task lists found. Please create a task list in Google Tasks first.', {
+        statusCode: 404,
+        code: 'TASK_LISTS_NOT_FOUND',
+        details: { googleSub }
+      });
     }
 
     const defaultTaskListId = taskLists[0].id;
@@ -311,7 +349,14 @@ async function createTask(googleSub, taskData) {
       errorData: error.response?.data,
       timestamp: new Date().toISOString()
     });
-    throw error;
+    throw mapGoogleApiError(error, {
+      message: 'Failed to create task',
+      details: {
+        googleSub,
+        title: taskData?.title
+      },
+      cause: error
+    });
   }
 }
 

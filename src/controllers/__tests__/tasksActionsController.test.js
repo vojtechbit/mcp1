@@ -93,7 +93,7 @@ test('createTask enforces title requirement', async () => {
   await createTask(request, response);
 
   assert.equal(response.statusCode, 400);
-  assert.equal(response.body.code, 'INVALID_PARAM');
+  assert.equal(response.body.code, 'TASK_TITLE_REQUIRED');
   assert.equal(calls.create.length, 1);
 });
 
@@ -140,7 +140,7 @@ test('modifyTask requires identifiers and at least one field', async () => {
   const responseMissingIds = new MockResponse();
   await modifyTask(requestMissingIds, responseMissingIds);
   assert.equal(responseMissingIds.statusCode, 400);
-  assert.equal(responseMissingIds.body.code, 'INVALID_PARAM');
+  assert.equal(responseMissingIds.body.code, 'TASK_IDENTIFIERS_REQUIRED');
 
   const requestMissingUpdates = {
     body: {
@@ -152,7 +152,7 @@ test('modifyTask requires identifiers and at least one field', async () => {
   const responseMissingUpdates = new MockResponse();
   await modifyTask(requestMissingUpdates, responseMissingUpdates);
   assert.equal(responseMissingUpdates.statusCode, 400);
-  assert.equal(responseMissingUpdates.body.code, 'INVALID_PARAM');
+  assert.equal(responseMissingUpdates.body.code, 'TASK_UPDATE_FIELDS_REQUIRED');
   assert.equal(calls.update.length, 1);
 });
 
@@ -193,6 +193,6 @@ test('deleteTask enforces identifiers', async () => {
   await deleteTask(request, response);
 
   assert.equal(response.statusCode, 400);
-  assert.equal(response.body.code, 'INVALID_PARAM');
+  assert.equal(response.body.code, 'TASK_IDENTIFIERS_REQUIRED');
   assert.equal(calls.delete.length, 1);
 });

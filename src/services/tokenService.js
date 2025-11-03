@@ -1,6 +1,7 @@
 import crypto from 'crypto';
 import dotenv from 'dotenv';
 import { wrapModuleFunctions } from '../utils/advancedDebugging.js';
+import { throwServiceError } from './serviceErrors.js';
 
 dotenv.config();
 
@@ -53,7 +54,11 @@ function encryptToken(token) {
       errorMessage: error.message,
       timestamp: new Date().toISOString()
     });
-    throw new Error('Token encryption failed');
+    throwServiceError('Token encryption failed', {
+      code: 'TOKEN_ENCRYPTION_FAILED',
+      statusCode: 500,
+      cause: error
+    });
   }
 }
 
@@ -87,7 +92,11 @@ function decryptToken(encryptedToken, iv, authTag) {
       authTagLength: authTag?.length,
       timestamp: new Date().toISOString()
     });
-    throw new Error('Token decryption failed - data may be corrupted');
+    throwServiceError('Token decryption failed - data may be corrupted', {
+      code: 'TOKEN_DECRYPTION_FAILED',
+      statusCode: 500,
+      cause: error
+    });
   }
 }
 

@@ -2,6 +2,7 @@ import crypto from 'crypto';
 import { getDatabase } from '../config/database.js';
 import { wrapModuleFunctions } from '../utils/advancedDebugging.js';
 import { summarizeSecret } from '../utils/redact.js';
+import { throwServiceError } from './serviceErrors.js';
 
 const HASH_SECRET = process.env.ACCESS_TOKEN_HASH_SECRET || process.env.ENCRYPTION_KEY;
 
@@ -75,7 +76,16 @@ function computeExpiresAt(expiryDate) {
 
 async function cacheAccessTokenIdentity({ accessToken, googleSub, email = null, expiryDate = null, source = 'unknown' }) {
   if (!accessToken || !googleSub) {
-    throw new Error('accessToken and googleSub are required to cache identity');
+    throwServiceError('accessToken and googleSub are required to cache identity', {
+      statusCode: 400,
+      code: 'ACCESS_TOKEN_CACHE_PARAMS_MISSING',
+      details: {
+        missing: [
+          ...(!accessToken ? ['accessToken'] : []),
+          ...(!googleSub ? ['googleSub'] : [])
+        ]
+      }
+    });
   }
 
   await ensureIndexes();

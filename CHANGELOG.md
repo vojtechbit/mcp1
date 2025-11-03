@@ -4,6 +4,10 @@ All notable changes to MCP1 OAuth Server will be documented in this file.
 
 ## [Unreleased]
 
+### Added
+- Centralized service error helper to emit structured `ApiError` instances with consistent codes.
+- Error code catalog documenting newly introduced service errors (`ERROR_CODE_CATALOG.md`).
+
 ### Removed
 - Deleted redundant OpenAPI schema backups to keep a single source of truth.
 - Removed legacy console `test-*.js` scripts that required hard-coded secrets.
