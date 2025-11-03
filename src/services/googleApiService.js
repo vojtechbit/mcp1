@@ -1992,7 +1992,7 @@ async function sendDraft(googleSub, draftId) {
     const gmail = google.gmail({ version: 'v1', auth: authClient });
 
     // Find the draft by ID (tries draft.id first, then message.id)
-    const { actualDraftId, unrepliedLabelReminder } = await findDraftById(
+    let { actualDraftId, unrepliedLabelReminder } = await findDraftById(
       gmail,
       draftId,
       'metadata',
@@ -2001,10 +2001,48 @@ async function sendDraft(googleSub, draftId) {
     );
 
     // Send the draft using the actual draft.id
-    const result = await gmail.users.drafts.send({
-      userId: 'me',
-      id: actualDraftId
-    });
+    let result;
+    try {
+      result = await gmail.users.drafts.send({
+        userId: 'me',
+        id: actualDraftId
+      });
+    } catch (sendError) {
+      // If draft is invalid (400), it may have been modified/deleted between findDraftById and send
+      // Retry by finding draft again using message.id fallback
+      const is400 = sendError.response?.status === 400 || sendError.statusCode === 400 || sendError.code === 400;
+      const isInvalidDraft = sendError.message?.toLowerCase().includes('invalid') ||
+                              sendError.response?.data?.error?.message?.toLowerCase().includes('invalid');
+
+      if (is400 && isInvalidDraft) {
+        console.warn(`⚠️ Draft send failed with "Invalid draft" (400), retrying with message.id fallback...`);
+
+        // Try to find draft again (will use message.id fallback if draft.id is stale)
+        const retryResult = await findDraftById(
+          gmail,
+          draftId,
+          'metadata',
+          getWatchlistLabelContext,
+          googleSub
+        );
+
+        actualDraftId = retryResult.actualDraftId;
+        unrepliedLabelReminder = retryResult.unrepliedLabelReminder;
+
+        console.log(`🔄 Retrying send with refreshed draft ID: ${actualDraftId}`);
+
+        // Retry send with the refreshed draft ID
+        result = await gmail.users.drafts.send({
+          userId: 'me',
+          id: actualDraftId
+        });
+
+        console.log('✅ Draft sent successfully after retry');
+      } else {
+        // Re-throw if it's not an "Invalid draft" error
+        throw sendError;
+      }
+    }
 
     console.log('✅ Draft sent:', actualDraftId);
 
