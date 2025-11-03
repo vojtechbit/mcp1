@@ -55,7 +55,8 @@ mcp1/
 │   ├── utils/
 │   │   ├── helpers.js                # parseRelativeTime() - timezone handling
 │   │   ├── signedUrlGenerator.js     # Signed URLs pro attachment downloads
-│   │   └── attachmentSecurity.js     # Blocked file detection
+│   │   ├── attachmentSecurity.js     # Blocked file detection
+│   │   └── errorCatalog.js           # Central catalog of API error codes & statuses
 │   ├── middleware/                   # Auth, rate limiting, etc.
 │   ├── config/                       # OAuth, limits, constants
 │   └── routes/                       # HTTP routes
@@ -63,6 +64,13 @@ mcp1/
 ├── package.json
 └── .env                              # OAuth credentials, MongoDB URI
 ```
+
+## 🧰 Error handling & katalog kódů
+
+- `src/utils/errorCatalog.js` drží **jediný zdroj pravdy** pro všechny API `code` hodnoty (včetně popisu a výchozího HTTP statusu).
+- `ApiError.from()` automaticky doplní status ze stejného katalogu, pokud kód zná.
+- Test `test/errorCatalog.test.js` hlídá, že každá reference na `code`/`defaultCode` v repo odpovídá položce v katalogu – nové kódy je nutné přidat sem.
+- Markdown tabulka `ERROR_CODE_CATALOG.md` se generuje přímo z katalogu a slouží jako rychlá reference pro tým.
 
 ### Custom GPT frontend assets
 
