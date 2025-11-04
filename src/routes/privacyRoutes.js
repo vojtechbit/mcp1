@@ -136,20 +136,21 @@ router.get('/privacy-policy', (req, res) => {
     <!-- ============================================ -->
     
     <h1>🔐 Zásady ochrany osobních údajů</h1>
-    <p class="last-updated">Poslední aktualizace: 26. října 2025</p>
+    <p class="last-updated">Poslední aktualizace: 4. listopadu 2025</p>
 
     <div class="highlight">
       <strong>Stručně:</strong> Přistupujeme k vašim datům Gmail, Google Kalendář, Google Tasks a Google Sheets pouze když to explicitně požadujete.
       Přílohy zpracováváme jen v paměti a stahování probíhá přes HMAC podepsané URL s expirací do 60 minut.
-      Všechny tokeny šifrujeme pomocí AES-256-GCM a nikdy je neprodáváme ani nepoužíváme pro jiné účely.
-      Přístup můžete kdykoliv zrušit přes nastavení Google účtu.
+      Všechny tokeny šifrujeme pomocí AES-256-GCM, OAuth autentizaci chráníme pomocí PKCE (RFC 7636) a whitelist validací redirect URI.
+      Nikdy data neprodáváme ani nepoužíváme pro jiné účely. Přístup můžete kdykoliv zrušit přes nastavení Google účtu.
     </div>
 
     <div class="section">
       <h2>1. Správce osobních údajů</h2>
       <p><strong>Správce:</strong> Vojtěch Brouček</p>
       <p><strong>Adresa:</strong> U Hvězdy 2292, Kladno, Česká republika</p>
-      <p><strong>Kontakt:</strong> GitHub: <a href="https://github.com/vojtechbit/mcp1" target="_blank">github.com/vojtechbit/mcp1</a></p>
+      <p><strong>E-mail:</strong> <a href="mailto:vojtech.brouc@gmail.com">vojtech.brouc@gmail.com</a></p>
+      <p><strong>GitHub:</strong> <a href="https://github.com/vojtechbit/mcp1" target="_blank">github.com/vojtechbit/mcp1</a></p>
       <p><strong>URL služby:</strong> <a href="https://mcp1-oauth-server.onrender.com">mcp1-oauth-server.onrender.com</a></p>
     </div>
 
@@ -321,7 +322,11 @@ router.get('/privacy-policy', (req, res) => {
         <li><strong>Data in Transit:</strong> Veškerá komunikace používá <strong>TLS 1.3</strong></li>
         <li><strong>Key Management:</strong> Šifrovací klíče uloženy odděleně od databáze</li>
         <li><strong>Access Control:</strong> Vícevrstvá autentizace (OAuth 2.0 + proxy token validation)</li>
+        <li><strong>PKCE (RFC 7636):</strong> Proof Key for Code Exchange - prevence OAuth authorization code interception a MITM útoků</li>
+        <li><strong>OAuth Redirect URI Validation:</strong> Whitelist povolených domén (ChatGPT), CSRF protection s timing-safe state validation</li>
         <li><strong>Rate Limiting:</strong> Max. 100 požadavků/hodinu/uživatel</li>
+        <li><strong>Exponential Backoff:</strong> Automatický retry s exponenciálním zpožděním (1s → 2s → 4s → 8s) při Google API výpadcích (429, 5xx)</li>
+        <li><strong>Structured Logging:</strong> Strukturované audit logy pro bezpečnostní monitoring a compliance</li>
       </ul>
 
       <h3>6.2 Místo uložení</h3>
@@ -549,6 +554,7 @@ router.get('/privacy-policy', (req, res) => {
       <ul>
         <li><strong>Správce:</strong> Vojtěch Brouček</li>
         <li><strong>Adresa:</strong> U Hvězdy 2292, Kladno, Česká republika</li>
+        <li><strong>E-mail:</strong> <a href="mailto:vojtech.brouc@gmail.com">vojtech.brouc@gmail.com</a></li>
         <li><strong>GitHub:</strong> <a href="https://github.com/vojtechbit/mcp1" target="_blank">github.com/vojtechbit/mcp1</a></li>
         <li><strong>Doba odpovědi:</strong> 30 dní</li>
       </ul>
@@ -560,19 +566,21 @@ router.get('/privacy-policy', (req, res) => {
 
     <div class="lang-divider">
       <h1>🔐 Privacy Policy</h1>
-      <p class="last-updated">Last Updated: October 26, 2025</p>
+      <p class="last-updated">Last Updated: November 4, 2025</p>
 
       <div class="highlight">
         <strong>TL;DR:</strong> We only access your Gmail, Calendar, Tasks, and Sheets data when you explicitly request it.
         Attachments are processed in-memory and downloads use HMAC signed URLs that expire within 60 minutes.
-        We encrypt all tokens with AES-256-GCM, never sell your data, and you can revoke access anytime.
+        We encrypt all tokens with AES-256-GCM, protect OAuth with PKCE (RFC 7636) and whitelist redirect URI validation.
+        We never sell your data, and you can revoke access anytime.
       </div>
 
       <div class="section">
         <h2>1. Data Controller</h2>
         <p><strong>Controller:</strong> Vojtěch Brouček</p>
         <p><strong>Address:</strong> U Hvězdy 2292, Kladno, Czech Republic</p>
-        <p><strong>Contact:</strong> <a href="https://github.com/vojtechbit/mcp1" target="_blank">github.com/vojtechbit/mcp1</a></p>
+        <p><strong>Email:</strong> <a href="mailto:vojtech.brouc@gmail.com">vojtech.brouc@gmail.com</a></p>
+        <p><strong>GitHub:</strong> <a href="https://github.com/vojtechbit/mcp1" target="_blank">github.com/vojtechbit/mcp1</a></p>
         <p><strong>Service URL:</strong> <a href="https://mcp1-oauth-server.onrender.com">mcp1-oauth-server.onrender.com</a></p>
       </div>
 
@@ -736,7 +744,11 @@ router.get('/privacy-policy', (req, res) => {
           <li><strong>Data in Transit:</strong> All communication uses <strong>TLS 1.3</strong></li>
           <li><strong>Key Management:</strong> Encryption keys stored separately from database</li>
           <li><strong>Access Control:</strong> Multi-layered authentication</li>
+          <li><strong>PKCE (RFC 7636):</strong> Proof Key for Code Exchange - prevents OAuth authorization code interception and MITM attacks</li>
+          <li><strong>OAuth Redirect URI Validation:</strong> Whitelisted domains (ChatGPT only), CSRF protection with timing-safe state validation</li>
           <li><strong>Rate Limiting:</strong> Max. 100 requests/hour/user</li>
+          <li><strong>Exponential Backoff:</strong> Automatic retry with exponential delays (1s → 2s → 4s → 8s) during Google API outages (429, 5xx)</li>
+          <li><strong>Structured Logging:</strong> Structured audit logs for security monitoring and compliance</li>
         </ul>
 
         <h3>6.2 Storage Location</h3>
@@ -956,6 +968,7 @@ router.get('/privacy-policy', (req, res) => {
         <ul>
           <li><strong>Controller:</strong> Vojtěch Brouček</li>
           <li><strong>Address:</strong> U Hvězdy 2292, Kladno, Czech Republic</li>
+          <li><strong>Email:</strong> <a href="mailto:vojtech.brouc@gmail.com">vojtech.brouc@gmail.com</a></li>
           <li><strong>GitHub:</strong> <a href="https://github.com/vojtechbit/mcp1" target="_blank">github.com/vojtechbit/mcp1</a></li>
           <li><strong>Response time:</strong> 30 days</li>
         </ul>
