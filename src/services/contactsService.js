@@ -355,10 +355,10 @@ async function searchContacts(accessToken, searchQuery) {
     });
 
     const rows = response.data.values || [];
-    if (rows.length === 0) return [];
+    if (rows.length === 0) return { contacts: [], spreadsheetId };
 
     const query = searchQuery.toLowerCase();
-    return rows
+    const contacts = rows
       .filter(row => {
         const name = (row[0] || '').toLowerCase();
         const email = (row[1] || '').toLowerCase();
@@ -376,6 +376,8 @@ async function searchContacts(accessToken, searchQuery) {
         realEstate: row[3] || '',
         notes: row[4] || ''
       }));
+
+    return { contacts, spreadsheetId };
 
   } catch (error) {
     console.error('❌ [SHEETS_ERROR] Failed to search contacts');
@@ -443,7 +445,7 @@ async function listAllContacts(accessToken) {
     });
 
     const rows = response.data.values || [];
-    return rows.map((row, index) => ({
+    const contacts = rows.map((row, index) => ({
       rowIndex: index + 2,
       name: row[0] || '',
       email: row[1] || '',
@@ -451,6 +453,8 @@ async function listAllContacts(accessToken) {
       realEstate: row[3] || '',
       notes: row[4] || ''
     }));
+
+    return { contacts, spreadsheetId };
 
   } catch (error) {
     console.error('❌ [SHEETS_ERROR] Failed to list contacts');
@@ -494,7 +498,7 @@ async function addContact(accessToken, contactData) {
       }
     });
 
-    const result = { name, email, phone: phone || '', realEstate: realEstate || '', notes: notes || '' };
+    const result = { name, email, phone: phone || '', realEstate: realEstate || '', notes: notes || '', spreadsheetId };
     if (duplicates.length > 0) result.duplicates = duplicates;
     return result;
 
@@ -560,7 +564,8 @@ async function bulkUpsert(accessToken, contacts) {
 
     return {
       inserted: contacts.length,
-      duplicates: duplicates.length > 0 ? duplicates : undefined
+      duplicates: duplicates.length > 0 ? duplicates : undefined,
+      spreadsheetId
     };
 
   } catch (error) {
@@ -612,6 +617,7 @@ async function bulkDelete(accessToken, { emails, rowIds }) {
     if (rowsToDelete.length === 0) {
       return {
         deleted: 0,
+        spreadsheetId,
         skipped: {
           reason: 'NO_MATCHING_ROWS',
           attemptedEmails: Array.isArray(emails) ? emails : undefined,
@@ -651,7 +657,7 @@ async function bulkDelete(accessToken, { emails, rowIds }) {
       requestBody: { requests }
     });
 
-    return { deleted: rowsToDelete.length };
+    return { deleted: rowsToDelete.length, spreadsheetId };
 
   } catch (error) {
     if (error.code === 'CONTACTS_SHEET_MISMATCH') {
@@ -721,7 +727,7 @@ async function updateContact(accessToken, contactData) {
       }
     });
 
-    return { name, email, phone: phone || '', realEstate: realEstate || '', notes: notes || '' };
+    return { name, email, phone: phone || '', realEstate: realEstate || '', notes: notes || '', spreadsheetId };
 
   } catch (error) {
     console.error('❌ [SHEETS_ERROR] Failed to update contact');

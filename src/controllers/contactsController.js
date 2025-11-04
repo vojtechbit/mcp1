@@ -1,6 +1,6 @@
 import * as contactsService from '../services/contactsService.js';
 import { heavyLimiter } from '../server.js';
-import { computeETag, checkETagMatch } from '../utils/helpers.js';
+import { computeETag, checkETagMatch, generateSheetUrl } from '../utils/helpers.js';
 import { handleControllerError } from '../utils/errors.js';
 import { wrapModuleFunctions } from '../utils/advancedDebugging.js';
 
@@ -26,10 +26,10 @@ async function searchContacts(req, res) {
       });
     }
 
-    const results = await contactsService.searchContacts(req.user.accessToken, query);
+    const { contacts, spreadsheetId } = await contactsService.searchContacts(req.user.accessToken, query);
 
     // ETag support
-    const etag = computeETag(results);
+    const etag = computeETag(contacts);
     if (checkETagMatch(req.headers['if-none-match'], etag)) {
       return res.status(304).end();
     }
@@ -37,8 +37,8 @@ async function searchContacts(req, res) {
     res.setHeader('ETag', etag);
     res.json({
       success: true,
-      count: results.length,
-      contacts: results
+      count: contacts.length,
+      contacts
     });
 
   } catch (error) {
@@ -100,7 +100,7 @@ async function getAddressSuggestions(req, res) {
  */
 async function listContacts(req, res) {
   try {
-    const contacts = await contactsService.listAllContacts(req.user.accessToken);
+    const { contacts, spreadsheetId } = await contactsService.listAllContacts(req.user.accessToken);
 
     // ETag support
     const etag = computeETag(contacts);
@@ -112,7 +112,7 @@ async function listContacts(req, res) {
     res.json({
       success: true,
       count: contacts.length,
-      contacts: contacts,
+      contacts,
       hasMore: false // Contacts always returns all items
     });
 
@@ -156,7 +156,8 @@ async function addContact(req, res) {
     const response = {
       success: true,
       message: 'Contact added successfully',
-      contact: result
+      contact: result,
+      sheetUrl: generateSheetUrl(result.spreadsheetId)
     };
 
     // If duplicates exist, inform the assistant
@@ -217,7 +218,8 @@ async function bulkUpsertContacts(req, res) {
       const response = {
         success: true,
         inserted: result.inserted,
-        message: `${result.inserted} contact(s) added successfully`
+        message: `${result.inserted} contact(s) added successfully`,
+        sheetUrl: generateSheetUrl(result.spreadsheetId)
       };
 
       if (result.duplicates) {
@@ -260,7 +262,8 @@ async function bulkDeleteContacts(req, res) {
       res.json({
         success: true,
         deleted: result.deleted,
-        message: `${result.deleted} contact(s) deleted successfully`
+        message: `${result.deleted} contact(s) deleted successfully`,
+        sheetUrl: generateSheetUrl(result.spreadsheetId)
       });
 
     } catch (error) {
@@ -296,7 +299,8 @@ async function updateContact(req, res) {
     res.json({
       success: true,
       message: 'Contact updated successfully',
-      contact: contact
+      contact,
+      sheetUrl: generateSheetUrl(contact.spreadsheetId)
     });
 
   } catch (error) {
@@ -342,7 +346,8 @@ async function deleteContact(req, res) {
     res.json({
       success: true,
       message: 'Contact deleted successfully',
-      deleted: result.deleted
+      deleted: result.deleted,
+      sheetUrl: generateSheetUrl(result.sheet?.spreadsheetId)
     });
 
   } catch (error) {

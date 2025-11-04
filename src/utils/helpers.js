@@ -509,3 +509,13 @@ export function checkETagMatch(requestETag, computedETag) {
   if (!requestETag || !computedETag) return false;
   return requestETag === computedETag;
 }
+
+/**
+ * Generate Google Sheets URL from spreadsheet ID
+ * @param {string} spreadsheetId - Google Sheets spreadsheet ID
+ * @returns {string} Full URL to the Google Sheet
+ */
+export function generateSheetUrl(spreadsheetId) {
+  if (!spreadsheetId) return null;
+  return `https://docs.google.com/spreadsheets/d/${spreadsheetId}/edit`;
+}

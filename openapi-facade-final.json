@@ -5812,8 +5812,15 @@
               },
               "params": {
                 "type": "object",
-                "description": "No params required. Omit entirely or send {}.",
-                "maxProperties": 0
+                "description": "Optional params for list operation.",
+                "properties": {
+                  "includeSheetUrl": {
+                    "type": "boolean",
+                    "description": "When true, includes a direct link to the Google Sheet in the response. Use this when the user explicitly asks to see or access the contacts sheet (e.g., 'show me the sheet', 'link to contacts'). Default: false.",
+                    "default": false
+                  }
+                },
+                "additionalProperties": false
               }
             }
           }
@@ -5860,6 +5867,11 @@
                   "query": {
                     "type": "string",
                     "description": "Search expression for contact sheet rows."
+                  },
+                  "includeSheetUrl": {
+                    "type": "boolean",
+                    "description": "When true, includes a direct link to the Google Sheet in the response. Use this when the user explicitly asks to see or access the contacts sheet (e.g., 'show me the sheet', 'link to contacts'). Default: false.",
+                    "default": false
                   }
                 },
                 "additionalProperties": false

@@ -9,6 +9,7 @@ import { wrapModuleFunctions } from '../utils/advancedDebugging.js';
 
 import * as contactsService from '../services/contactsService.js';
 import { ApiError, handleControllerError, throwValidationError } from '../utils/errors.js';
+import { generateSheetUrl } from '../utils/helpers.js';
 
 const overrides = globalThis.__CONTACTS_ACTIONS_TEST_OVERRIDES || {};
 const contactsSvc = overrides.contactsService || contactsService;
@@ -46,7 +47,8 @@ async function modifyContact(req, res) {
     return res.json({
       ok: true,
       contact,
-      message: 'Contact updated successfully'
+      message: 'Contact updated successfully',
+      sheetUrl: generateSheetUrl(contact.spreadsheetId)
     });
 
   } catch (error) {
@@ -78,7 +80,8 @@ async function deleteContact(req, res) {
     return res.json({
       ok: true,
       deleted: result.deleted,
-      message: 'Contact deleted successfully'
+      message: 'Contact deleted successfully',
+      sheetUrl: generateSheetUrl(result.sheet?.spreadsheetId)
     });
 
   } catch (error) {
