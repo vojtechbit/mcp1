@@ -454,8 +454,23 @@ async function mailRpc(req, res) {
   } catch (error) {
     console.error('❌ Mail RPC failed:', error.message);
 
+    // Check if error requires re-authentication
+    if (error.requiresReauth === true ||
+        error.code === 'GOOGLE_UNAUTHORIZED' ||
+        error.statusCode === 401 ||
+        error.statusCode === 403) {
+      return res.status(401).json({
+        ok: false,
+        error: 'Authentication required',
+        message: error.message || 'You need to re-authenticate to access Gmail.',
+        code: error.code || 'GOOGLE_UNAUTHORIZED',
+        details: error.details,
+        requiresReauth: true
+      });
+    }
+
     const status = typeof error.statusCode === 'number' ? error.statusCode : 500;
-    const code = error.code || (status === 401 ? 'REAUTH_REQUIRED' : status === 451 ? 'ATTACHMENT_BLOCKED' : 'SERVER_ERROR');
+    const code = error.code || (status === 451 ? 'ATTACHMENT_BLOCKED' : 'SERVER_ERROR');
 
     const payload = {
       ok: false,
@@ -625,28 +640,37 @@ async function calendarRpc(req, res) {
     
   } catch (error) {
     console.error('❌ Calendar RPC failed:', error.message);
-    
-    if (error.statusCode === 401) {
+
+    // Check if error requires re-authentication
+    if (error.requiresReauth === true ||
+        error.code === 'GOOGLE_UNAUTHORIZED' ||
+        error.statusCode === 401 ||
+        error.statusCode === 403) {
       return res.status(401).json({
+        ok: false,
         error: 'Authentication required',
-        message: error.message,
-        code: 'REAUTH_REQUIRED'
+        message: error.message || 'You need to re-authenticate to access Google Calendar.',
+        code: error.code || 'GOOGLE_UNAUTHORIZED',
+        details: error.details,
+        requiresReauth: true
       });
     }
-    
+
     if (error.statusCode === 409) {
       return res.status(409).json({
+        ok: false,
         error: 'Conflict',
         message: error.message,
         code: 'CONFLICT',
         alternatives: error.alternatives || []
       });
     }
-    
-    res.status(500).json({
+
+    const statusCode = typeof error.statusCode === 'number' ? error.statusCode : 500;
+    res.status(statusCode).json({
       ok: false,
-      error: error.message,
-      code: 'SERVER_ERROR'
+      error: error.message || 'Calendar operation failed',
+      code: error.code || 'CALENDAR_ERROR'
     });
   }
 }
@@ -795,19 +819,30 @@ async function contactsRpc(req, res) {
     
   } catch (error) {
     console.error('❌ Contacts RPC failed:', error.message);
-    
-    if (error.statusCode === 401) {
+
+    // Check if error requires re-authentication (via requiresReauth flag or specific codes)
+    if (error.requiresReauth === true ||
+        error.code === 'GOOGLE_UNAUTHORIZED' ||
+        error.statusCode === 401 ||
+        error.statusCode === 403) {
       return res.status(401).json({
+        ok: false,
         error: 'Authentication required',
-        message: error.message,
-        code: 'REAUTH_REQUIRED'
+        message: error.message || 'You need to re-authenticate to access Google Sheets and Drive.',
+        code: error.code || 'GOOGLE_UNAUTHORIZED',
+        details: error.details,
+        requiresReauth: true,
+        hint: 'User needs to re-authenticate via OAuth to grant necessary scopes (Drive/Sheets access).'
       });
     }
-    
-    res.status(500).json({
+
+    // Return error with proper status code and details
+    const statusCode = typeof error.statusCode === 'number' ? error.statusCode : 500;
+    res.status(statusCode).json({
       ok: false,
-      error: error.message,
-      code: 'SERVER_ERROR'
+      error: error.message || 'Contacts operation failed',
+      code: error.code || 'CONTACTS_ERROR',
+      details: error.details
     });
   }
 }
@@ -918,19 +953,27 @@ async function tasksRpc(req, res) {
     
   } catch (error) {
     console.error('❌ Tasks RPC failed:', error.message);
-    
-    if (error.statusCode === 401) {
+
+    // Check if error requires re-authentication
+    if (error.requiresReauth === true ||
+        error.code === 'GOOGLE_UNAUTHORIZED' ||
+        error.statusCode === 401 ||
+        error.statusCode === 403) {
       return res.status(401).json({
+        ok: false,
         error: 'Authentication required',
-        message: error.message,
-        code: 'REAUTH_REQUIRED'
+        message: error.message || 'You need to re-authenticate to access Google Tasks.',
+        code: error.code || 'GOOGLE_UNAUTHORIZED',
+        details: error.details,
+        requiresReauth: true
       });
     }
-    
-    res.status(500).json({
+
+    const statusCode = typeof error.statusCode === 'number' ? error.statusCode : 500;
+    res.status(statusCode).json({
       ok: false,
-      error: error.message,
-      code: 'SERVER_ERROR'
+      error: error.message || 'Tasks operation failed',
+      code: error.code || 'TASKS_ERROR'
     });
   }
 }

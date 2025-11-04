@@ -2,6 +2,7 @@ import { google } from 'googleapis';
 import { refreshAccessToken } from '../config/oauth.js';
 import dotenv from 'dotenv';
 import { wrapModuleFunctions } from '../utils/advancedDebugging.js';
+import { mapGoogleApiError } from './serviceErrors.js';
 
 dotenv.config();
 
@@ -37,7 +38,10 @@ async function getSheetsClient(accessToken) {
 
   } catch (error) {
     console.error('❌ [SHEETS_ERROR] Failed to get Sheets client');
-    throw error;
+    throw mapGoogleApiError(error, {
+      message: 'Failed to get Sheets client - check Google API credentials and scopes',
+      details: { operation: 'getSheetsClient' }
+    });
   }
 }
 
@@ -58,7 +62,10 @@ async function getDriveClient(accessToken) {
 
   } catch (error) {
     console.error('❌ [DRIVE_ERROR] Failed to get Drive client');
-    throw error;
+    throw mapGoogleApiError(error, {
+      message: 'Failed to get Drive client - check Google API credentials and scopes',
+      details: { operation: 'getDriveClient' }
+    });
   }
 }
 
@@ -79,7 +86,14 @@ async function findContactsSheet(accessToken) {
 
   } catch (error) {
     console.error('❌ [DRIVE_ERROR] Failed to find contacts sheet');
-    throw error;
+    throw mapGoogleApiError(error, {
+      message: 'Failed to find contacts sheet in Google Drive. You may need to re-authorize to grant Drive access.',
+      details: {
+        operation: 'findContactsSheet',
+        sheetName: CONTACTS_SHEET_NAME,
+        hint: 'This error often occurs when the access token lacks Drive API scopes. User needs to re-authenticate.'
+      }
+    });
   }
 }
 
@@ -135,7 +149,13 @@ async function createContactsSheet(accessToken) {
 
   } catch (error) {
     console.error('❌ [SHEETS_ERROR] Failed to create contacts sheet');
-    throw error;
+    throw mapGoogleApiError(error, {
+      message: 'Failed to create contacts sheet. You may need to re-authorize to grant Sheets access.',
+      details: {
+        operation: 'createContactsSheet',
+        sheetName: CONTACTS_SHEET_NAME
+      }
+    });
   }
 }
 
@@ -381,7 +401,10 @@ async function searchContacts(accessToken, searchQuery) {
 
   } catch (error) {
     console.error('❌ [SHEETS_ERROR] Failed to search contacts');
-    throw error;
+    throw mapGoogleApiError(error, {
+      message: 'Failed to search contacts. You may need to re-authorize.',
+      details: { operation: 'searchContacts', query: searchQuery }
+    });
   }
 }
 
@@ -427,7 +450,10 @@ async function getAddressSuggestions(accessToken, query) {
 
   } catch (error) {
     console.error('❌ [SHEETS_ERROR] Failed to get address suggestions');
-    throw error;
+    throw mapGoogleApiError(error, {
+      message: 'Failed to get address suggestions. You may need to re-authorize.',
+      details: { operation: 'getAddressSuggestions', query }
+    });
   }
 }
 
@@ -458,7 +484,13 @@ async function listAllContacts(accessToken) {
 
   } catch (error) {
     console.error('❌ [SHEETS_ERROR] Failed to list contacts');
-    throw error;
+    throw mapGoogleApiError(error, {
+      message: 'Failed to list contacts. You may need to re-authorize to grant access to Google Sheets and Drive.',
+      details: {
+        operation: 'listAllContacts',
+        hint: 'This error typically occurs when your access token lacks the necessary scopes (Drive/Sheets). Please re-authenticate.'
+      }
+    });
   }
 }
 
@@ -504,7 +536,10 @@ async function addContact(accessToken, contactData) {
 
   } catch (error) {
     console.error('❌ [SHEETS_ERROR] Failed to add contact');
-    throw error;
+    throw mapGoogleApiError(error, {
+      message: 'Failed to add contact. You may need to re-authorize.',
+      details: { operation: 'addContact', email: contactData.email }
+    });
   }
 }
 
@@ -570,7 +605,10 @@ async function bulkUpsert(accessToken, contacts) {
 
   } catch (error) {
     console.error('❌ [SHEETS_ERROR] Failed to bulk upsert contacts');
-    throw error;
+    throw mapGoogleApiError(error, {
+      message: 'Failed to bulk upsert contacts. You may need to re-authorize.',
+      details: { operation: 'bulkUpsert', count: contacts.length }
+    });
   }
 }
 
@@ -674,7 +712,10 @@ async function bulkDelete(accessToken, { emails, rowIds }) {
       });
     }
     console.error('❌ [SHEETS_ERROR] Failed to bulk delete contacts');
-    throw error;
+    throw mapGoogleApiError(error, {
+      message: 'Failed to bulk delete contacts. You may need to re-authorize.',
+      details: { operation: 'bulkDelete', emails, rowIds }
+    });
   }
 }
 
@@ -731,7 +772,10 @@ async function updateContact(accessToken, contactData) {
 
   } catch (error) {
     console.error('❌ [SHEETS_ERROR] Failed to update contact');
-    throw error;
+    throw mapGoogleApiError(error, {
+      message: 'Failed to update contact. You may need to re-authorize.',
+      details: { operation: 'updateContact', email: contactData.email }
+    });
   }
 }
 
@@ -941,7 +985,10 @@ async function deleteContact(accessToken, { email, name }) {
       });
     }
     console.error('❌ [SHEETS_ERROR] Failed to delete contact');
-    throw error;
+    throw mapGoogleApiError(error, {
+      message: 'Failed to delete contact. You may need to re-authorize.',
+      details: { operation: 'deleteContact', email, name }
+    });
   }
 }
 
@@ -988,7 +1035,10 @@ async function findDuplicates(accessToken) {
 
   } catch (error) {
     console.error('❌ Failed to find duplicates:', error.message);
-    throw error;
+    throw mapGoogleApiError(error, {
+      message: 'Failed to find duplicates. You may need to re-authorize.',
+      details: { operation: 'findDuplicates' }
+    });
   }
 }
 

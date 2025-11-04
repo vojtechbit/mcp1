@@ -13,27 +13,29 @@ import { wrapModuleFunctions } from './advancedDebugging.js';
 const ERROR_CATALOG_ALFRED = {
   // Authentication & Authorization
   GOOGLE_UNAUTHORIZED: {
-    title: 'Session Expired',
-    message: 'Your Google session has expired. Please re-authenticate.',
+    title: 'Authentication Required',
+    message: 'Your Google authentication has expired or lacks necessary permissions. You need to re-authenticate.',
     actionable: {
       suggestedAction: 'reauth',
-      hint: 'Řekni uživateli, že se potřebuje znovu přihlásit přes Google OAuth.',
-      alfredResponse: 'Bohužel ti s tím momentálně nemůžu pomoct, protože tvoje přihlášení k Googlu vypršelo. Prosím, přihlas se znovu a pak to zkusíme znovu.'
+      hint: 'User needs to re-authenticate via OAuth. NEVER ask for consent in chat. Direct user to OAuth URL.',
+      alfredResponse: 'Nepodařilo se načíst seznam kontaktů — server vrátil chybu „Invalid Credentials". Znamená to, že potřebuji nové oprávnění k tvému účtu Google.\n\n👉 Prosím otevři tento odkaz a přihlas se znovu: [URL k přihlášení]\n\nPo přihlášení budu moct pokračovat.'
     },
     severity: 'high',
-    requiresReauth: true
+    requiresReauth: true,
+    authUrl: '/auth/google'
   },
 
   TOKEN_REFRESH_FAILED: {
     title: 'Token Refresh Failed',
-    message: 'Failed to refresh your access token. You may need to re-authenticate.',
+    message: 'Failed to refresh your access token. You need to re-authenticate.',
     actionable: {
       suggestedAction: 'reauth',
-      hint: 'Google odmítl obnovit autentikaci. Uživatel musí provést OAuth znovu.',
-      alfredResponse: 'Nastal problém s obnovením tvého přihlášení. Zkus se prosím odhlásit a znovu přihlásit přes Google.'
+      hint: 'Google refused to refresh the token. User must complete OAuth flow again. NEVER ask for consent in chat.',
+      alfredResponse: 'Nastal problém s obnovením tvého přihlášení. Potřebuji, abys se znovu autorizoval.\n\n👉 Prosím otevři tento odkaz a přihlas se: [URL k přihlášení]'
     },
     severity: 'high',
-    requiresReauth: true
+    requiresReauth: true,
+    authUrl: '/auth/google'
   },
 
   AUTH_REQUIRED: {
@@ -41,10 +43,11 @@ const ERROR_CATALOG_ALFRED = {
     message: 'You need to authenticate with Google first.',
     actionable: {
       suggestedAction: 'auth',
-      hint: 'Uživatel není přihlášený. Nasměruj ho na OAuth flow.',
-      alfredResponse: 'Než budu moct pokračovat, potřebuji přístup k tvému Gmail účtu. Prosím, autorizuj mě přes tento odkaz: [OAuth URL]'
+      hint: 'User is not logged in. Direct them to OAuth flow. NEVER ask for consent in chat.',
+      alfredResponse: 'Než budu moct pokračovat, potřebuji přístup k tvému Google účtu.\n\n👉 Prosím otevři tento odkaz a přihlas se: [URL k přihlášení]\n\nPo přihlášení budu moct pokračovat.'
     },
-    severity: 'high'
+    severity: 'high',
+    authUrl: '/auth/google'
   },
 
   // Gmail API Errors
