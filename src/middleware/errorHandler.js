@@ -1,6 +1,7 @@
 import dotenv from 'dotenv';
 import { ApiError, resolveStatusTitle } from '../utils/errors.js';
 import { wrapModuleFunctions } from '../utils/advancedDebugging.js';
+import { formatErrorForAlfred } from '../utils/alfredErrorMessages.js';
 
 dotenv.config();
 
@@ -42,6 +43,17 @@ function errorHandler(err, req, res, next) {
 
   if (!responsePayload.error) {
     responsePayload.error = resolveStatusTitle(apiError.statusCode);
+  }
+
+  // Add Alfred-friendly error messages
+  try {
+    const alfredError = formatErrorForAlfred(apiError, {
+      includeDetails: process.env.NODE_ENV === 'development'
+    });
+    responsePayload.alfred = alfredError;
+  } catch (alfredEnrichmentError) {
+    // If Alfred enrichment fails, log but don't break the response
+    console.warn('⚠️  Failed to enrich error for Alfred:', alfredEnrichmentError.message);
   }
 
   res.status(apiError.statusCode).json(responsePayload);
