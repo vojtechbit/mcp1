@@ -141,8 +141,8 @@ router.get('/privacy-policy', (req, res) => {
     <div class="highlight">
       <strong>Stručně:</strong> Přistupujeme k vašim datům Gmail, Google Kalendář, Google Tasks a Google Sheets pouze když to explicitně požadujete.
       Přílohy zpracováváme jen v paměti a stahování probíhá přes HMAC podepsané URL s expirací do 60 minut.
-      Všechny tokeny šifrujeme pomocí AES-256-GCM a nikdy je neprodáváme ani nepoužíváme pro jiné účely.
-      Přístup můžete kdykoliv zrušit přes nastavení Google účtu.
+      Všechny tokeny šifrujeme pomocí AES-256-GCM, OAuth autentizaci chráníme pomocí PKCE (RFC 7636) a whitelist validací redirect URI.
+      Nikdy data neprodáváme ani nepoužíváme pro jiné účely. Přístup můžete kdykoliv zrušit přes nastavení Google účtu.
     </div>
 
     <div class="section">
@@ -322,7 +322,11 @@ router.get('/privacy-policy', (req, res) => {
         <li><strong>Data in Transit:</strong> Veškerá komunikace používá <strong>TLS 1.3</strong></li>
         <li><strong>Key Management:</strong> Šifrovací klíče uloženy odděleně od databáze</li>
         <li><strong>Access Control:</strong> Vícevrstvá autentizace (OAuth 2.0 + proxy token validation)</li>
+        <li><strong>PKCE (RFC 7636):</strong> Proof Key for Code Exchange - prevence OAuth authorization code interception a MITM útoků</li>
+        <li><strong>OAuth Redirect URI Validation:</strong> Whitelist povolených domén (ChatGPT), CSRF protection s timing-safe state validation</li>
         <li><strong>Rate Limiting:</strong> Max. 100 požadavků/hodinu/uživatel</li>
+        <li><strong>Exponential Backoff:</strong> Automatický retry s exponenciálním zpožděním (1s → 2s → 4s → 8s) při Google API výpadcích (429, 5xx)</li>
+        <li><strong>Structured Logging:</strong> Strukturované audit logy pro bezpečnostní monitoring a compliance</li>
       </ul>
 
       <h3>6.2 Místo uložení</h3>
@@ -567,7 +571,8 @@ router.get('/privacy-policy', (req, res) => {
       <div class="highlight">
         <strong>TL;DR:</strong> We only access your Gmail, Calendar, Tasks, and Sheets data when you explicitly request it.
         Attachments are processed in-memory and downloads use HMAC signed URLs that expire within 60 minutes.
-        We encrypt all tokens with AES-256-GCM, never sell your data, and you can revoke access anytime.
+        We encrypt all tokens with AES-256-GCM, protect OAuth with PKCE (RFC 7636) and whitelist redirect URI validation.
+        We never sell your data, and you can revoke access anytime.
       </div>
 
       <div class="section">
@@ -739,7 +744,11 @@ router.get('/privacy-policy', (req, res) => {
           <li><strong>Data in Transit:</strong> All communication uses <strong>TLS 1.3</strong></li>
           <li><strong>Key Management:</strong> Encryption keys stored separately from database</li>
           <li><strong>Access Control:</strong> Multi-layered authentication</li>
+          <li><strong>PKCE (RFC 7636):</strong> Proof Key for Code Exchange - prevents OAuth authorization code interception and MITM attacks</li>
+          <li><strong>OAuth Redirect URI Validation:</strong> Whitelisted domains (ChatGPT only), CSRF protection with timing-safe state validation</li>
           <li><strong>Rate Limiting:</strong> Max. 100 requests/hour/user</li>
+          <li><strong>Exponential Backoff:</strong> Automatic retry with exponential delays (1s → 2s → 4s → 8s) during Google API outages (429, 5xx)</li>
+          <li><strong>Structured Logging:</strong> Structured audit logs for security monitoring and compliance</li>
         </ul>
 
         <h3>6.2 Storage Location</h3>
