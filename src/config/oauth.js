@@ -37,21 +37,39 @@ function createOAuthClient() {
   );
 }
 
-function getAuthUrl(state) {
+function getAuthUrl(state, pkceParams = {}) {
   const client = createOAuthClient();
-  return client.generateAuthUrl({
+
+  const authParams = {
     access_type: 'offline',
     scope: SCOPES,
     prompt: 'consent', // Force consent to ensure refresh token
     state: state || 'default_state',
     include_granted_scopes: true
-  });
+  };
+
+  // Add PKCE parameters if provided (RFC 7636)
+  if (pkceParams.code_challenge) {
+    authParams.code_challenge = pkceParams.code_challenge;
+    authParams.code_challenge_method = pkceParams.code_challenge_method || 'S256';
+  }
+
+  return client.generateAuthUrl(authParams);
 }
 
-async function getTokensFromCode(code) {
+async function getTokensFromCode(code, codeVerifier = null) {
   try {
     const client = createOAuthClient();
-    const { tokens } = await client.getToken(code);
+
+    // Prepare token request options
+    const tokenOptions = { code };
+
+    // Add PKCE code_verifier if provided (RFC 7636)
+    if (codeVerifier) {
+      tokenOptions.code_verifier = codeVerifier;
+    }
+
+    const { tokens } = await client.getToken(tokenOptions);
     return tokens;
   } catch (error) {
     console.error('❌ [OAUTH_ERROR] Failed to exchange authorization code for tokens');

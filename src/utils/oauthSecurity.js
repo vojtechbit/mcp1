@@ -9,12 +9,20 @@ import { wrapModuleFunctions } from './advancedDebugging.js';
 /**
  * Allowed redirect URIs (whitelist)
  * Add your production domains here
+ *
+ * To add your ChatGPT GPT ID, set CHATGPT_GPT_ID in .env
+ * Example: CHATGPT_GPT_ID=g-abc123xyz
  */
+const CHATGPT_GPT_ID = process.env.CHATGPT_GPT_ID; // Optional: specific GPT ID
+
 const ALLOWED_REDIRECT_URIS = [
-  'https://chat.openai.com/aip/g-<your-gpt-id>/oauth/callback',
-  'https://chatgpt.com/aip/g-<your-gpt-id>/oauth/callback',
-  'http://localhost:3000/auth/callback', // Development only
-  process.env.CHATGPT_REDIRECT_URI // From .env
+  // Specific GPT redirect URI (if configured in .env)
+  CHATGPT_GPT_ID ? `https://chat.openai.com/aip/${CHATGPT_GPT_ID}/oauth/callback` : null,
+  CHATGPT_GPT_ID ? `https://chatgpt.com/aip/${CHATGPT_GPT_ID}/oauth/callback` : null,
+  // Alternative: from .env
+  process.env.CHATGPT_REDIRECT_URI,
+  // Development only
+  process.env.NODE_ENV === 'development' ? 'http://localhost:3000/auth/callback' : null
 ].filter(Boolean); // Remove undefined
 
 /**

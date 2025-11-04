@@ -11,6 +11,9 @@ import { google } from 'googleapis';
 import dotenv from 'dotenv';
 import { wrapModuleFunctions } from '../utils/advancedDebugging.js';
 import { sanitizeForLog, summarizeSecret } from '../utils/redact.js';
+import { generatePKCEPair } from '../utils/pkce.js';
+import { validateRedirectUri } from '../utils/oauthSecurity.js';
+import { determineExpiryDate } from '../utils/tokenExpiry.js';
 
 
 dotenv.config();
@@ -49,12 +52,12 @@ async function authorize(req, res) {
       });
     }
 
-    // Validate redirect_uri
-    if (!redirect_uri || !redirect_uri.startsWith('https://chat.openai.com/aip/')) {
+    // Validate redirect_uri with whitelist
+    if (!validateRedirectUri(redirect_uri)) {
       console.error('❌ Invalid redirect_uri:', redirect_uri);
       return res.status(400).json({
         error: 'invalid_request',
-        error_description: 'Invalid redirect_uri'
+        error_description: 'Invalid redirect_uri - must be ChatGPT callback URL'
       });
     }
 
@@ -67,20 +70,25 @@ async function authorize(req, res) {
       });
     }
 
-    // Store state temporarily (we'll need it in callback)
-    // In production, use Redis or session storage
-    // For now, we'll pass it through Google OAuth flow
+    // Generate PKCE pair for secure OAuth flow (RFC 7636)
+    const { codeVerifier, codeChallenge } = generatePKCEPair();
+
+    // Store state + PKCE verifier (we'll need it in callback)
     const stateData = {
       chatgpt_state: state,
       chatgpt_redirect_uri: redirect_uri,
+      code_verifier: codeVerifier, // Store for callback
       timestamp: Date.now()
     };
-    
+
     // Encode state data to pass through Google OAuth
     const encodedState = Buffer.from(JSON.stringify(stateData)).toString('base64url');
 
-    // Get Google OAuth URL with our encoded state
-    const googleAuthUrl = getAuthUrl(encodedState);
+    // Get Google OAuth URL with our encoded state and PKCE challenge
+    const googleAuthUrl = getAuthUrl(encodedState, {
+      code_challenge: codeChallenge,
+      code_challenge_method: 'S256'
+    });
 
     console.log('✅ Redirecting to Google OAuth...');
 
@@ -165,9 +173,24 @@ async function callback(req, res) {
 
     console.log('✅ State decoded');
 
-    // Exchange Google authorization code for tokens
-    console.log('🔄 Exchanging Google code for tokens...');
-    const tokens = await getTokensFromCode(code);
+    // Exchange Google authorization code for tokens with PKCE verifier
+    console.log('🔄 Exchanging Google code for tokens (with PKCE)...');
+    const codeVerifier = stateData.code_verifier;
+
+    if (!codeVerifier) {
+      console.error('❌ Missing code_verifier in state (PKCE required)');
+      return res.status(400).send(`
+        <html>
+          <head><title>PKCE Verification Failed</title></head>
+          <body style="font-family: Arial; padding: 50px; text-align: center;">
+            <h1>❌ Security Verification Failed</h1>
+            <p>PKCE code verifier missing. Please restart the authentication flow.</p>
+          </body>
+        </html>
+      `);
+    }
+
+    const tokens = await getTokensFromCode(code, codeVerifier);
 
     if (!tokens.access_token || !tokens.refresh_token) {
       throw new Error('Access token or refresh token missing from Google response');
@@ -186,20 +209,8 @@ async function callback(req, res) {
 
     console.log('✅ User info retrieved:', userInfo.email);
 
-    // Calculate token expiry
-    // Google OAuth2 returns expiry_date as Unix timestamp in milliseconds
-    // and expires_in in seconds
-    let expiryDate;
-    if (tokens.expiry_date) {
-      // expiry_date is already a Unix timestamp in milliseconds
-      expiryDate = new Date(tokens.expiry_date);
-    } else if (tokens.expires_in) {
-      // expires_in is in seconds, convert to milliseconds
-      expiryDate = new Date(Date.now() + (tokens.expires_in * 1000));
-    } else {
-      // Default: 1 hour from now
-      expiryDate = new Date(Date.now() + 3600 * 1000);
-    }
+    // Calculate token expiry using shared utility
+    const expiryDate = determineExpiryDate(tokens);
 
     // Save user to database with encrypted Google tokens
     await saveUser({
