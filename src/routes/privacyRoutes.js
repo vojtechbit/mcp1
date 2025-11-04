@@ -136,7 +136,7 @@ router.get('/privacy-policy', (req, res) => {
     <!-- ============================================ -->
     
     <h1>🔐 Zásady ochrany osobních údajů</h1>
-    <p class="last-updated">Poslední aktualizace: 26. října 2025</p>
+    <p class="last-updated">Poslední aktualizace: 4. listopadu 2025</p>
 
     <div class="highlight">
       <strong>Stručně:</strong> Přistupujeme k vašim datům Gmail, Google Kalendář, Google Tasks a Google Sheets pouze když to explicitně požadujete.
@@ -149,7 +149,8 @@ router.get('/privacy-policy', (req, res) => {
       <h2>1. Správce osobních údajů</h2>
       <p><strong>Správce:</strong> Vojtěch Brouček</p>
       <p><strong>Adresa:</strong> U Hvězdy 2292, Kladno, Česká republika</p>
-      <p><strong>Kontakt:</strong> GitHub: <a href="https://github.com/vojtechbit/mcp1" target="_blank">github.com/vojtechbit/mcp1</a></p>
+      <p><strong>E-mail:</strong> <a href="mailto:vojtech.brouc@gmail.com">vojtech.brouc@gmail.com</a></p>
+      <p><strong>GitHub:</strong> <a href="https://github.com/vojtechbit/mcp1" target="_blank">github.com/vojtechbit/mcp1</a></p>
       <p><strong>URL služby:</strong> <a href="https://mcp1-oauth-server.onrender.com">mcp1-oauth-server.onrender.com</a></p>
     </div>
 
@@ -549,6 +550,7 @@ router.get('/privacy-policy', (req, res) => {
       <ul>
         <li><strong>Správce:</strong> Vojtěch Brouček</li>
         <li><strong>Adresa:</strong> U Hvězdy 2292, Kladno, Česká republika</li>
+        <li><strong>E-mail:</strong> <a href="mailto:vojtech.brouc@gmail.com">vojtech.brouc@gmail.com</a></li>
         <li><strong>GitHub:</strong> <a href="https://github.com/vojtechbit/mcp1" target="_blank">github.com/vojtechbit/mcp1</a></li>
         <li><strong>Doba odpovědi:</strong> 30 dní</li>
       </ul>
@@ -560,7 +562,7 @@ router.get('/privacy-policy', (req, res) => {
 
     <div class="lang-divider">
       <h1>🔐 Privacy Policy</h1>
-      <p class="last-updated">Last Updated: October 26, 2025</p>
+      <p class="last-updated">Last Updated: November 4, 2025</p>
 
       <div class="highlight">
         <strong>TL;DR:</strong> We only access your Gmail, Calendar, Tasks, and Sheets data when you explicitly request it.
@@ -572,7 +574,8 @@ router.get('/privacy-policy', (req, res) => {
         <h2>1. Data Controller</h2>
         <p><strong>Controller:</strong> Vojtěch Brouček</p>
         <p><strong>Address:</strong> U Hvězdy 2292, Kladno, Czech Republic</p>
-        <p><strong>Contact:</strong> <a href="https://github.com/vojtechbit/mcp1" target="_blank">github.com/vojtechbit/mcp1</a></p>
+        <p><strong>Email:</strong> <a href="mailto:vojtech.brouc@gmail.com">vojtech.brouc@gmail.com</a></p>
+        <p><strong>GitHub:</strong> <a href="https://github.com/vojtechbit/mcp1" target="_blank">github.com/vojtechbit/mcp1</a></p>
         <p><strong>Service URL:</strong> <a href="https://mcp1-oauth-server.onrender.com">mcp1-oauth-server.onrender.com</a></p>
       </div>
 
@@ -956,6 +959,7 @@ router.get('/privacy-policy', (req, res) => {
         <ul>
           <li><strong>Controller:</strong> Vojtěch Brouček</li>
           <li><strong>Address:</strong> U Hvězdy 2292, Kladno, Czech Republic</li>
+          <li><strong>Email:</strong> <a href="mailto:vojtech.brouc@gmail.com">vojtech.brouc@gmail.com</a></li>
           <li><strong>GitHub:</strong> <a href="https://github.com/vojtechbit/mcp1" target="_blank">github.com/vojtechbit/mcp1</a></li>
           <li><strong>Response time:</strong> 30 days</li>
         </ul>
