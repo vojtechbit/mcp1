@@ -65,8 +65,9 @@ async function getTokensFromCode(code, codeVerifier = null) {
     const tokenOptions = { code };
 
     // Add PKCE code_verifier if provided (RFC 7636)
+    // Note: Google OAuth2 client expects 'codeVerifier' (camelCase), not 'code_verifier'
     if (codeVerifier) {
-      tokenOptions.code_verifier = codeVerifier;
+      tokenOptions.codeVerifier = codeVerifier;
     }
 
     const { tokens } = await client.getToken(tokenOptions);
