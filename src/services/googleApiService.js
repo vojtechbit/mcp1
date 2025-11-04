@@ -8,8 +8,8 @@ import { REFERENCE_TIMEZONE } from '../config/limits.js';
 import { debugStep, wrapModuleFunctions } from '../utils/advancedDebugging.js';
 import { logDuration, startTimer } from '../utils/performanceLogger.js';
 import dotenv from 'dotenv';
-import { determineExpiryDate, isTokenExpired } from './utils/tokenExpiry.js';
-import { retryWithExponentialBackoff, isRetryableError } from './utils/exponentialBackoff.js';
+import { determineExpiryDate, isTokenExpired } from '../utils/tokenExpiry.js';
+import { retryWithExponentialBackoff, isRetryableError } from '../utils/exponentialBackoff.js';
 import { mapGoogleApiError, throwServiceError } from './serviceErrors.js';
 import {
   UNREPLIED_LABEL_NAME,
