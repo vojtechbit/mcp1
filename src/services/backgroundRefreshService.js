@@ -1,4 +1,5 @@
 import { getUserByGoogleSub, updateTokens } from './databaseService.js';
+import { determineExpiryDate } from '../utils/tokenExpiry.js';
 import { refreshAccessToken } from '../config/oauth.js';
 import { getDatabase } from '../config/database.js';
 import { wrapModuleFunctions } from '../utils/advancedDebugging.js';
@@ -13,17 +14,7 @@ const TEN_MINUTES_MS = 10 * 60 * 1000;
 const STARTUP_REFRESH_THRESHOLD_MS = parseInt(process.env.STARTUP_REFRESH_THRESHOLD_MS || '') || TEN_MINUTES_MS;
 const BACKGROUND_REFRESH_THRESHOLD_MS = parseInt(process.env.BACKGROUND_REFRESH_THRESHOLD_MS || '') || TEN_MINUTES_MS;
 
-function determineExpiryDate(newTokens) {
-  if (newTokens.expiry_date) {
-    return new Date(newTokens.expiry_date);
-  }
-
-  if (newTokens.expires_in) {
-    return new Date(Date.now() + newTokens.expires_in * 1000);
-  }
-
-  return new Date(Date.now() + 3600 * 1000);
-}
+// determineExpiryDate now imported from shared utility
 
 async function delay(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));

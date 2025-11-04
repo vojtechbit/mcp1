@@ -8,6 +8,8 @@ import { REFERENCE_TIMEZONE } from '../config/limits.js';
 import { debugStep, wrapModuleFunctions } from '../utils/advancedDebugging.js';
 import { logDuration, startTimer } from '../utils/performanceLogger.js';
 import dotenv from 'dotenv';
+import { determineExpiryDate, isTokenExpired } from './utils/tokenExpiry.js';
+import { retryWithExponentialBackoff, isRetryableError } from './utils/exponentialBackoff.js';
 import { mapGoogleApiError, throwServiceError } from './serviceErrors.js';
 import {
   UNREPLIED_LABEL_NAME,
@@ -254,10 +256,7 @@ async function getValidAccessToken(googleSub, forceRefresh = false) {
       console.error('Failed to update last_used:', err.message)
     );
 
-    const now = new Date();
-    const expiry = new Date(user.tokenExpiry);
-    const bufferTime = 5 * 60 * 1000;
-    const isExpired = now >= (expiry.getTime() - bufferTime);
+    const isExpired = isTokenExpired(user.tokenExpiry);
 
     if (forceRefresh || isExpired) {
       debugStep('Access token requires refresh', {
@@ -282,13 +281,7 @@ async function getValidAccessToken(googleSub, forceRefresh = false) {
           const newTokens = await refreshAccessToken(user.refreshToken);
           logDuration('google.refreshAccessToken', refreshTimer, { googleSub });
 
-          let expiryDate;
-          const expiryValue = newTokens.expiry_date || 3600;
-          if (expiryValue > 86400) {
-            expiryDate = new Date(expiryValue * 1000);
-          } else {
-            expiryDate = new Date(Date.now() + (expiryValue * 1000));
-          }
+          const expiryDate = determineExpiryDate(newTokens);
 
           await updateTokens(googleSub, {
             accessToken: newTokens.access_token,
