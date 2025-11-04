@@ -38,8 +38,7 @@ async function searchContacts(req, res) {
     res.json({
       success: true,
       count: contacts.length,
-      contacts,
-      sheetUrl: generateSheetUrl(spreadsheetId)
+      contacts
     });
 
   } catch (error) {
@@ -114,8 +113,7 @@ async function listContacts(req, res) {
       success: true,
       count: contacts.length,
       contacts,
-      hasMore: false, // Contacts always returns all items
-      sheetUrl: generateSheetUrl(spreadsheetId)
+      hasMore: false // Contacts always returns all items
     });
 
   } catch (error) {
