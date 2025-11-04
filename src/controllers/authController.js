@@ -1,6 +1,7 @@
 import { getAuthUrl, getTokensFromCode } from '../config/oauth.js';
 import { saveUser } from '../services/databaseService.js';
 import { handleControllerError } from '../utils/errors.js';
+import { determineExpiryDate } from '../utils/tokenExpiry.js';
 import dotenv from 'dotenv';
 import { wrapModuleFunctions } from '../utils/advancedDebugging.js';
 
@@ -100,20 +101,8 @@ async function handleCallback(req, res) {
 
     console.log('✅ User info retrieved:', userInfo.email);
 
-    // Calculate token expiry
-    // Google OAuth2 returns expiry_date as Unix timestamp in milliseconds
-    // and expires_in in seconds
-    let expiryDate;
-    if (tokens.expiry_date) {
-      // expiry_date is already a Unix timestamp in milliseconds
-      expiryDate = new Date(tokens.expiry_date);
-    } else if (tokens.expires_in) {
-      // expires_in is in seconds, convert to milliseconds
-      expiryDate = new Date(Date.now() + (tokens.expires_in * 1000));
-    } else {
-      // Default: 1 hour from now
-      expiryDate = new Date(Date.now() + 3600 * 1000);
-    }
+    // Calculate token expiry using shared utility
+    const expiryDate = determineExpiryDate(tokens);
 
     // Save user to database with encrypted tokens
     await saveUser({
