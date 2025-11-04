@@ -11,7 +11,7 @@ import * as gmailService from '../services/googleApiService.js';
 import * as calendarService from '../services/googleApiService.js';
 import * as contactsService from '../services/contactsService.js';
 import * as tasksService from '../services/tasksService.js';
-import { computeETag } from '../utils/helpers.js';
+import { computeETag, generateSheetUrl } from '../utils/helpers.js';
 
 const rpcTestOverrides = globalThis.__RPC_TEST_OVERRIDES || {};
 const gmailSvc = rpcTestOverrides.gmailService || gmailService;
@@ -674,7 +674,8 @@ async function contactsRpc(req, res) {
       const possibleParamKeys = [
         'email', 'name', 'phone', 'realestate', 'notes',
         'query', 'contacts', 'emails', 'rowIds',
-        'eventId', 'updates', 'taskListId', 'taskId'
+        'eventId', 'updates', 'taskListId', 'taskId',
+        'includeSheetUrl'
       ];
       
       for (const key of possibleParamKeys) {
@@ -703,10 +704,15 @@ async function contactsRpc(req, res) {
     };
 
     switch (op) {
-      case 'list':
-        result = await contactsSvc.listAllContacts(req.user.accessToken);
+      case 'list': {
+        const { contacts, spreadsheetId } = await contactsSvc.listAllContacts(req.user.accessToken);
+        result = { contacts };
+        if (params?.includeSheetUrl === true) {
+          result.sheetUrl = generateSheetUrl(spreadsheetId);
+        }
         break;
-        
+      }
+
       case 'search':
         if (!params || !params.query) {
           return res.status(400).json({
@@ -716,7 +722,13 @@ async function contactsRpc(req, res) {
             expectedFormat: { op: 'search', params: { query: 'string' } }
           });
         }
-        result = await contactsSvc.searchContacts(req.user.accessToken, params.query);
+        {
+          const { contacts, spreadsheetId } = await contactsSvc.searchContacts(req.user.accessToken, params.query);
+          result = { contacts };
+          if (params?.includeSheetUrl === true) {
+            result.sheetUrl = generateSheetUrl(spreadsheetId);
+          }
+        }
         break;
         
       case 'add':
