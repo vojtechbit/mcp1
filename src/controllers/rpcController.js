@@ -730,10 +730,11 @@ async function contactsRpc(req, res) {
     switch (op) {
       case 'list': {
         const { contacts, spreadsheetId } = await contactsSvc.listAllContacts(req.user.accessToken);
-        result = { contacts };
-        if (params?.includeSheetUrl === true) {
-          result.sheetUrl = generateSheetUrl(spreadsheetId);
-        }
+        result = {
+          contacts,
+          sheetUrl: generateSheetUrl(spreadsheetId),
+          assistantHint: "Link na Google Sheet poskytni uživateli JEN když explicitně chce vidět/procházet všechny kontakty. Pokud jen potřebuješ email pro jiný úkol (např. přidat attendee), link neukazuj."
+        };
         break;
       }
 
@@ -748,10 +749,11 @@ async function contactsRpc(req, res) {
         }
         {
           const { contacts, spreadsheetId } = await contactsSvc.searchContacts(req.user.accessToken, params.query);
-          result = { contacts };
-          if (params?.includeSheetUrl === true) {
-            result.sheetUrl = generateSheetUrl(spreadsheetId);
-          }
+          result = {
+            contacts,
+            sheetUrl: generateSheetUrl(spreadsheetId),
+            assistantHint: "Link na Google Sheet poskytni uživateli JEN když explicitně chce vidět výsledky vyhledávání v Sheets. Pokud jen potřebuješ najít email pro jiný úkol, link neukazuj."
+          };
         }
         break;
         
