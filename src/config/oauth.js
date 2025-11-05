@@ -68,9 +68,10 @@ async function getTokensFromCode(code, codeVerifier = null) {
       redirect_uri: REDIRECT_URI // Required for PKCE and OAuth security
     };
 
-    // Add PKCE code_verifier if provided (RFC 7636)
+    // Add PKCE codeVerifier if provided (RFC 7636)
+    // NOTE: google-auth-library expects camelCase, not snake_case
     if (codeVerifier) {
-      tokenOptions.code_verifier = codeVerifier;
+      tokenOptions.codeVerifier = codeVerifier;
     }
 
     const { tokens } = await client.getToken(tokenOptions);
