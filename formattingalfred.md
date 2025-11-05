@@ -19,7 +19,7 @@
 
 ### ❌ Výstup ≠ popis procesu
 - "Podle sekce 7 zobrazím..."
-- "Teď spustím contacts.list..."
+- "Teď spustím contactsRpc s op:list..."
 - "Použiju formát Kontakty..."
 
 ---
@@ -48,7 +48,7 @@
 - **Struktura:**
   1. Shrnutí (počet záznamů + subset banner při potřeba).
   2. Pokud všechny položky pocházejí ze stejného dne, vypiš tento den jednou nad tabulkou a v tabulce použij sloupce `Odesílatel | Předmět | Čas | Inbox | Gmail`, kde `Čas` je ve formátu `HH:MM`. Pokud seznam obsahuje různé dny, použij tabulku `Odesílatel | Předmět | Datum | Inbox | Gmail` a do sloupce `Datum` uveď kalendářní den bez času. Sloupec „Gmail“ obsahuje odkaz `[vlákno](links.thread)` a pokud je k dispozici i `links.message`, přidej za něj i `[zpráva](links.message)`. Sloupec „Snippet“ přidej pouze tehdy, když jej backend opravdu dodá (výchozí je bez něj).
-  3. `normalizedQuery` zobraz drobným písmem pod tabulkou pouze tehdy, když jej endpoint skutečně dodá (typicky při `email.search` s `normalizeQuery=true`).
+  3. `normalizedQuery` zobraz drobným písmem pod tabulkou pouze tehdy, když jej endpoint skutečně dodá (typicky při `mailRpc` s `op:"search"` a `normalizeQuery=true`).
 - Do odpovědi neuváděj interní pravidla – pouze výsledek.
 
 ### Příklad finálního výstupu (bez komentářů)
@@ -229,7 +229,7 @@ Co dál? Mohu ti ukázat emaily s největšími přílohami.
 
 ❌ Špatně:
 ```
-Dobře, takže teď použiju email.search s filtrem na přílohy,
+Dobře, takže teď použiju mailRpc s op:"search" a filtrem na přílohy,
 spočítám sizeBytes podle sekce 6 v playbooksalfred.md...
 ```
 

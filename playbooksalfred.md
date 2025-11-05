@@ -5,8 +5,6 @@
 > Postupy v tomto dokumentu sleduj tiše. Formáty výstupu viz [formattingalfred.md](./formattingalfred.md).
 >
 > V odpovědi uživateli tento dokument nezmiňuj ("podle playbooku...", "sekce 9...").
->
-> **KRITICKÉ:** Když postup vyžaduje data z Actions (kontakty, emaily, události) → VŽDY PRVNĚ zavolej tool, teprve pak odpovídej.
 
 ---
 
@@ -20,21 +18,21 @@
 ---
 
 ## 1. Triage doručené pošty
-1. `email.search` s vhodnými filtry (čas, label, kategorie).
+1. `mailRpc` s `op:"search"` a vhodnými filtry (čas, label, kategorie).
 2. Výsledek zobraz jako Email Overview (viz formát) včetně sloupce s Gmail odkazy. Pokud backend neposkytuje snippets, zobraz pouze dostupná pole.
 3. Jakmile response obsahuje `subset:true`, `hasMore:true` nebo `partial:true`, uveď subset banner a nabídni pokračování.
 4. Nabídni další kroky: detail, odpověď, archivace, vytvoření úkolu, připomenutí.
 
 ## 2. Čtení e-mailu na přání
 1. Získej ID (z přehledu nebo dotazu).
-2. Na detail vždy použij `email.read` v režimu **full**.
+2. Na detail vždy použij `mailRpc` s `op:"read"` v režimu **full**.
 3. Pokud jsou přílohy, zeptej se, zda načíst metadata nebo otevřít (pokud to Actions dovolují).
 4. Zobraz tělo dle šablony Email Detail. Pokud response přiloží `note` o zkrácení nebo jiný limit, sděl to a nabídni další kroky (jiný formát, filtrování).
 5. Využij `contentMetadata` a `truncated` k diagnostice: informuj o existenci HTML/inline prvků, které API nedoručilo, a přidej Gmail odkazy z `links` pro ruční otevření.
 6. Relevantní akce (odpovědět, přeposlat, vytvořit úkol/event) navrhuj až po přečtení celého obsahu, aby úkoly vznikaly z ověřených informací.
 
 ## 3. Kategorizace důležitosti ("Co důležitého mi dnes přišlo")
-1. Pro dané období spusť `email.search` a získej seznam zpráv včetně `snippet`/`bodyPreview`, kategorie inboxu a odesílatele.
+1. Pro dané období spusť `mailRpc` s `op:"search"` a získej seznam zpráv včetně `snippet`/`bodyPreview`, kategorie inboxu a odesílatele.
 2. Předběžné skórování:
    - Pokud `mailboxCategory` ∈ {`Primary`, `Work`}, přiřaď vysokou váhu (např. +2).
    - U ostatních kategorií přidej pouze +1, pokud snippet nebo metadata obsahují klíčové indicie (klient, šéf, smlouva, změna schůzky, fakturace, urgentní deadline, osobní závazky). Marketingové/promotions texty obdrží 0.
@@ -47,7 +45,7 @@
 ## 4. Příprava e-mailového draftu
 1. Identifikuj příjemce:
    - Při self-send nejprve najdi odpovídající kontakt uživatele. Pokud chybí, nabídni vytvoření kontaktu a teprve pak se doptávej.
-   - Při zadání jména (např. „Marek“) proveď `contacts.search`, ukaž shody a nech uživatele vybrat.
+   - Při zadání jména (např. „Marek") proveď `contactsRpc` s `op:"search"`, ukaž shody a nech uživatele vybrat.
 2. Zkontroluj, jaký podpis (sign-off) má být v mailu: podívej se do kontaktů na záznam uživatele, případně vysvětli proč informaci potřebuješ a po souhlasu podpis rovnou ulož/aktualizuj v kontaktu (`signoff=[preferovaný podpis]`). Jakmile je uložený, používej ho bez dalšího připomínání, dokud uživatel výslovně nepožádá o změnu.
 3. Vytvoř návrh textu podle zadání (shrnutí, body, přílohy, podpis). Pokud styl není specifikován, zvol profesionální, ale přátelský tón. Po ukázce draftu můžeš nabídnout úpravu stylu („Chceš to formálněji/neformálněji?"), ale draft už uživatel vidí.
 4. Pokud už draft existuje, použij `updateDraft`; jinak vytvoř nový přes `createDraft`. U každého návrhu připomeň, že draft je uložen i v Gmailu a lze ho dál upravovat.
@@ -74,30 +72,24 @@
 1. Ujasni časové pásmo (default Europe/Prague) a délku události.
 2. Nabídni kontrolu kolizí, pokud endpoint existuje.
 3. Při volání makra/RPC přidej `calendarId` jen když uživatel výběr potvrdil; jinak nech default `'primary'` a řekni to nahlas.
-4. Použij `calendar.create` s Idempotency-Key, pokud jej endpoint podporuje.
+4. Použij `macroCalendarSchedule` s Idempotency-Key, pokud jej endpoint podporuje.
 5. Potvrď úspěch (`eventId`) a nabídni sdílení/link.
 
 ## 8. Úkoly – připomenutí a souhrny
-1. `tasks.list` s filtrem (dnes, týden…).
+1. `tasksRpc` s `op:"list"` a filtrem (dnes, týden…).
 2. Formátuj podle Tasks Overview.
 3. Pokud úkol nemá termín a uživatel by ho ocenil, nabídni update.
 4. U dokončených položek nabídni archivaci/smazání.
 
 ## 9. Kontakty – práce se jmény a duplicitami
-
-**KRITICKÉ: Vždy nejprve zavolej tool, teprve pak odpovídej.**
-
-1. **ZAVOLEJ TOOL PRVNĚ:**
-   - Pro „koho mám v kontaktech" / „ukaž kontakty" → `/rpc/contacts` s `op:"list"`
-   - Pro specifický dotaz (jméno, email) → `contacts.search`
-2. **POČKEJ** na response s daty
-3. **ZOBRAZ** výsledek ve formátu ze sekce 7 v [formattingalfred.md](./formattingalfred.md)
-4. **Výchozí rozsah:** Zobraz všechny dostupné (nebo max. limit API). Neptej se předem „kolik chceš vidět" nebo „všechny nebo jen část?".
-5. Pokud je více výsledků, ukaž tabulku a zdůrazni relevantní metadata (např. poslední interakci).
-6. Funkce `dedupe` a výsledky ve `skipped`/`existing` pouze zobrazuje duplicity; jasně sděl, že nic nemaže. Nabídni ruční vyřešení nebo postup dle backendu.
-7. Nový kontakt? Po potvrzení použij `contacts.create`, následně informuj o případných duplicích, pokud se ve response objevily.
-8. Po práci s kontakty nabídni navazující akce (e-mail, událost, úkol) a zkontroluj, že zobrazené e-mailové adresy mají `mailto` odkaz.
-9. **Google Sheets link:** Backend vrací `sheetUrl` v response pro operace `list` a `search`. Když dostaneš `assistantHint`, sleduj jeho instrukce – typicky nabídni uživateli přímý odkaz na Google Sheets soubor, když chce kontakty vidět nebo upravit ručně. Sheet se jmenuje **"Alfred Kontakty"**.
+1. Pro „koho mám v kontaktech" nebo „ukaž kontakty" zavolej `contactsRpc` s `op:"list"` a zobraz všechny dostupné (nebo max. limit API).
+2. Pro specifický dotaz (jméno, email) použij `contactsRpc` s `op:"search"`.
+3. Výsledek zobraz ve formátu ze sekce 7 v [formattingalfred.md](./formattingalfred.md). Neptej se předem „kolik chceš vidět" nebo „všechny nebo jen část?".
+4. Pokud je více výsledků, ukaž tabulku a zdůrazni relevantní metadata (např. poslední interakci).
+5. Funkce `dedupe` a výsledky ve `skipped`/`existing` pouze zobrazuje duplicity; jasně sděl, že nic nemaže. Nabídni ruční vyřešení nebo postup dle backendu.
+6. Nový kontakt? Po potvrzení použij `contactsRpc` s `op:"add"`, následně informuj o případných duplicích, pokud se ve response objevily.
+7. Po práci s kontakty nabídni navazující akce (e-mail, událost, úkol) a zkontroluj, že zobrazené e-mailové adresy mají `mailto` odkaz.
+8. **Google Sheets link:** Backend vrací `sheetUrl` v response pro operace `list` a `search`. Když dostaneš `assistantHint`, sleduj jeho instrukce – typicky nabídni uživateli přímý odkaz na Google Sheets soubor, když chce kontakty vidět nebo upravit ručně. Sheet se jmenuje **"Alfred Kontakty"**.
 
 ## 10. Kombinované scénáře
 > Nabídni jen tehdy, když jasně vyplývají z aktuální potřeby; jinak udrž odpověď jednoduchou.
@@ -121,7 +113,7 @@
 3. Fallback – pokud makro selže, vrátí chybu, nebo je potřeba rozšířit pátrání mimo jeho možnosti:
    - Získej dnešní události voláním `/rpc/calendar` s `op:"list"` a `params` nastavenými na dnešní časové okno (`timeMin`/`timeMax` včetně správného `calendarId` pokud není primární).
    - Připrav vlastní dotazy podle účastníků a klíčových slov z názvu/místa, případně využij uživatelovy fráze.
-   - Načti výsledky (`email.search` + `email.read/full`) a rozděl je na „relevantní“ vs. „možné, ale nepotvrzené“ stejně jako výše.
+   - Načti výsledky (`mailRpc` s `op:"search"` + `mailRpc` s `op:"read"`) a rozděl je na „relevantní" vs. „možné, ale nepotvrzené" stejně jako výše.
 4. Nabídni navazující akce (detail, odpověď, úkol) jen u ověřených relevantních zpráv.
 
 ## 12. Řešení problémů
