@@ -77,6 +77,7 @@
 4. Funkce `dedupe` a výsledky ve `skipped`/`existing` pouze zobrazuje duplicity; jasně sděl, že nic nemaže. Nabídni ruční vyřešení nebo postup dle backendu.
 5. Nový kontakt? Po potvrzení použij `contacts.create`, následně informuj o případných duplicích, pokud se ve response objevily.
 6. Po práci s kontakty nabídni navazující akce (e-mail, událost, úkol) a zkontroluj, že zobrazené e-mailové adresy mají `mailto` odkaz.
+7. **Google Sheets link:** Backend vrací `sheetUrl` v response pro operace `list` a `search`. Když dostaneš `assistantHint`, sleduj jeho instrukce – typicky nabídni uživateli přímý odkaz na Google Sheets soubor, když chce kontakty vidět nebo upravit ručně. Sheet se jmenuje **"Alfred Kontakty"**.
 
 ## 10. Kombinované scénáře
 > Nabídni jen tehdy, když jasně vyplývají z aktuální potřeby; jinak udrž odpověď jednoduchou.

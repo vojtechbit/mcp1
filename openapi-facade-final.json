@@ -2662,6 +2662,53 @@
                       "additionalProperties": true
                     }
                   }
+                },
+                "examples": {
+                  "listContacts": {
+                    "summary": "List all contacts response",
+                    "value": {
+                      "ok": true,
+                      "data": {
+                        "contacts": [
+                          {
+                            "name": "Vojtěch Brouček",
+                            "email": "vojtech.brouc@gmail.com",
+                            "phone": "730684832",
+                            "realEstate": "",
+                            "notes": "Já"
+                          },
+                          {
+                            "name": "Maty Herm",
+                            "email": "matyherm04@gmail.com",
+                            "phone": "",
+                            "realEstate": "",
+                            "notes": ""
+                          }
+                        ],
+                        "sheetUrl": "https://docs.google.com/spreadsheets/d/1abc...xyz/edit",
+                        "assistantHint": "Pokud uživatel chce vidět kontakty přímo v Google Sheets, nabídni mu tento odkaz."
+                      }
+                    }
+                  },
+                  "searchContacts": {
+                    "summary": "Search contacts response",
+                    "value": {
+                      "ok": true,
+                      "data": {
+                        "contacts": [
+                          {
+                            "name": "Vojtěch Brouček",
+                            "email": "vojtech.brouc@gmail.com",
+                            "phone": "730684832",
+                            "realEstate": "",
+                            "notes": "Já"
+                          }
+                        ],
+                        "sheetUrl": "https://docs.google.com/spreadsheets/d/1abc...xyz/edit",
+                        "assistantHint": "Pokud uživatel chce vidět kontakty přímo v Google Sheets, nabídni mu tento odkaz."
+                      }
+                    }
+                  }
                 }
               }
             }
