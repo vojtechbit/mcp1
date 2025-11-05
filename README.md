@@ -67,8 +67,8 @@ git push origin main
 > vypne i při běhu testů, kdyby bylo potřeba otestovat tichý režim.
 
 ### 4. Nastav Custom GPT
-- **Instructions:** Uprav přímo v GPT editoru (soubor `GPT_CONFIG.md` jsme odstranili, aby nemátl). Využij aktuální produktové podklady nebo poslední export z GPT editoru.
-- **OAuth:** Viz `CUSTOM_GPT_SETUP.md`
+- **Instructions:** Uprav přímo v GPT editoru (využij aktuální produktové podklady nebo poslední export z GPT editoru)
+- **OAuth:** Nastav v GPT editoru (Client ID, Client Secret, Authorization URL, Token URL)
 - **Privacy:** `https://mcp1-oauth-server.onrender.com/privacy-policy`
 
 ## Development & Testing
@@ -154,11 +154,12 @@ neví.
 - Centrální handler chyb vypisuje status, kód a typ chyby (včetně 451 u příloh) do Render/console logů pro auditní stopu.
 - Detekce podezřelých příloh vrací HTTP 451 a díky `handleControllerError` je zanesena v konzolovém logu.
 
-## Soubory
+## Dokumentace
 
-- `GPT_CONFIG.md` - Instructions pro Custom GPT
-- `CUSTOM_GPT_SETUP.md` - Setup guide
-- `test-oauth-proxy.js` - Testing
+- `README.md` - Hlavní dokumentace
+- `CHANGELOG.md` - Historie změn
+- `ARCHITECTURE_GUIDE.md` - Architektura a vývojářský průvodce
+- `ERROR_CODE_CATALOG.md` - Katalog chybových kódů
 
 ## Privacy
 
