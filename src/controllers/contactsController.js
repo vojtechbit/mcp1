@@ -38,7 +38,9 @@ async function searchContacts(req, res) {
     res.json({
       success: true,
       count: contacts.length,
-      contacts
+      contacts,
+      sheetUrl: generateSheetUrl(spreadsheetId),
+      assistantHint: "Pokud uživatel chce vidět kontakty přímo v Google Sheets, nabídni mu tento odkaz."
     });
 
   } catch (error) {
@@ -46,7 +48,7 @@ async function searchContacts(req, res) {
       return res.status(404).json({
         error: 'Contact sheet not found',
         message: error.message,
-        instructions: 'Please create a Google Sheet named "MCP1 Contacts" with columns: Name | Email | Phone | RealEstate | Notes'
+        instructions: 'Please create a Google Sheet named "Alfred Kontakty" with columns: Name | Email | Phone | RealEstate | Notes'
       });
     }
 
@@ -113,7 +115,9 @@ async function listContacts(req, res) {
       success: true,
       count: contacts.length,
       contacts,
-      hasMore: false // Contacts always returns all items
+      hasMore: false, // Contacts always returns all items
+      sheetUrl: generateSheetUrl(spreadsheetId),
+      assistantHint: "Pokud uživatel chce vidět kontakty přímo v Google Sheets, nabídni mu tento odkaz."
     });
 
   } catch (error) {
@@ -121,7 +125,7 @@ async function listContacts(req, res) {
       return res.status(404).json({
         error: 'Contact sheet not found',
         message: error.message,
-        instructions: 'Please create a Google Sheet named "MCP1 Contacts" with columns: Name | Email | Phone | RealEstate | Notes'
+        instructions: 'Please create a Google Sheet named "Alfred Kontakty" with columns: Name | Email | Phone | RealEstate | Notes'
       });
     }
 
@@ -173,7 +177,7 @@ async function addContact(req, res) {
       return res.status(404).json({
         error: 'Contact sheet not found',
         message: error.message,
-        instructions: 'Please create a Google Sheet named "MCP1 Contacts" with columns: Name | Email | Phone | RealEstate | Notes'
+        instructions: 'Please create a Google Sheet named "Alfred Kontakty" with columns: Name | Email | Phone | RealEstate | Notes'
       });
     }
 
@@ -363,7 +367,7 @@ async function deleteContact(req, res) {
       return res.status(404).json({
         error: 'Contact sheet not found',
         message: error.message,
-        instructions: 'Please create a Google Sheet named "MCP1 Contacts" with columns: Name | Email | Phone | RealEstate | Notes'
+        instructions: 'Please create a Google Sheet named "Alfred Kontakty" with columns: Name | Email | Phone | RealEstate | Notes'
       });
     }
 
