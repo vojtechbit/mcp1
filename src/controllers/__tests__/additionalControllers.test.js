@@ -37,9 +37,9 @@ mock.module(databaseServicePath, {
 
 mock.module(contactsServicePath, {
   namedExports: {
-    searchContacts: mock.fn(async () => []),
+    searchContacts: mock.fn(async () => ({ contacts: [], spreadsheetId: 'test-id' })),
     getAddressSuggestions: mock.fn(async () => []),
-    listAllContacts: mock.fn(async () => []),
+    listAllContacts: mock.fn(async () => ({ contacts: [], spreadsheetId: 'test-id' })),
     addContact: mock.fn(async () => ({ success: true }))
   }
 });
