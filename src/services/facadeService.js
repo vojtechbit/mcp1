@@ -1976,10 +1976,11 @@ async function contactsSafeAdd(googleSub, params) {
   const normalizedStrategy = normalizeDedupeStrategy(dedupeStrategy);
 
   // ========== STEP 1: Get all existing contacts from Sheet ==========
-  
+
   let existingContacts = [];
   try {
-    existingContacts = await contactsService.listAllContacts(googleSub) || [];
+    const result = await contactsService.listAllContacts(googleSub);
+    existingContacts = result?.contacts || [];
   } catch (error) {
     console.warn('⚠️ Failed to list existing contacts:', error.message);
     existingContacts = [];
