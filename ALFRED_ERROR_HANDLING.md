@@ -42,7 +42,7 @@ When API returns authentication error, you'll receive:
   "hint": "User needs to re-authenticate via OAuth to grant necessary scopes (Drive/Sheets access).",
   "details": {
     "operation": "findContactsSheet",
-    "sheetName": "alfred contacts",
+    "sheetName": "Alfred Kontakty",
     "hint": "This error often occurs when the access token lacks Drive API scopes. User needs to re-authenticate."
   }
 }

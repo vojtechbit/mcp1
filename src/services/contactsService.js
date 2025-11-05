@@ -16,7 +16,7 @@ dotenv.config();
  * STRUCTURE: Name | Email | Phone | RealEstate | Notes
  */
 
-const CONTACTS_SHEET_NAME = 'alfred contacts';
+const CONTACTS_SHEET_NAME = 'Alfred Kontakty';
 const CONTACTS_RANGE = 'A2:E';
 const CONTACTS_EXPECTED_HEADERS = ['Name', 'Email', 'Phone', 'RealEstate', 'Notes'];
 const GPT_RETRY_EXAMPLE_EMAIL = 'alex@example.com';
