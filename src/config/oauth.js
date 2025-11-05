@@ -62,7 +62,11 @@ async function getTokensFromCode(code, codeVerifier = null) {
     const client = createOAuthClient();
 
     // Prepare token request options
-    const tokenOptions = { code };
+    // IMPORTANT: Must include redirect_uri for PKCE verification
+    const tokenOptions = {
+      code,
+      redirect_uri: REDIRECT_URI // Required for PKCE and OAuth security
+    };
 
     // Add PKCE code_verifier if provided (RFC 7636)
     if (codeVerifier) {
