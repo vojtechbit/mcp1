@@ -67,7 +67,16 @@ async function getTokensFromCode(code, codeVerifier = null) {
     // Add PKCE code_verifier if provided (RFC 7636)
     if (codeVerifier) {
       tokenOptions.code_verifier = codeVerifier;
+      console.log('🔐 [PKCE] Using code_verifier for token exchange');
+    } else {
+      console.log('⚠️ [PKCE] No code_verifier provided - using non-PKCE flow');
     }
+
+    console.log('🔄 [OAUTH] Calling Google token endpoint...', {
+      hasCode: !!code,
+      hasCodeVerifier: !!codeVerifier,
+      redirectUri: REDIRECT_URI
+    });
 
     const { tokens } = await client.getToken(tokenOptions);
     return tokens;
@@ -75,7 +84,9 @@ async function getTokensFromCode(code, codeVerifier = null) {
     console.error('❌ [OAUTH_ERROR] Failed to exchange authorization code for tokens');
     console.error('Details:', {
       errorMessage: error.message,
+      errorResponse: error.response?.data,
       code: error.code,
+      statusCode: error.response?.status,
       timestamp: new Date().toISOString()
     });
     throw error;

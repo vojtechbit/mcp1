@@ -172,6 +172,13 @@ async function callback(req, res) {
     }
 
     console.log('✅ State decoded');
+    console.log('🔍 State data:', {
+      hasCodeVerifier: !!stateData.code_verifier,
+      hasChatgptState: !!stateData.chatgpt_state,
+      hasChatgptRedirectUri: !!stateData.chatgpt_redirect_uri,
+      timestamp: stateData.timestamp,
+      ageMs: Date.now() - (stateData.timestamp || 0)
+    });
 
     // Exchange Google authorization code for tokens with PKCE verifier
     console.log('🔄 Exchanging Google code for tokens (with PKCE)...');
@@ -179,6 +186,7 @@ async function callback(req, res) {
 
     if (!codeVerifier) {
       console.error('❌ Missing code_verifier in state (PKCE required)');
+      console.error('State data keys:', Object.keys(stateData));
       return res.status(400).send(`
         <html>
           <head><title>PKCE Verification Failed</title></head>
@@ -190,7 +198,28 @@ async function callback(req, res) {
       `);
     }
 
-    const tokens = await getTokensFromCode(code, codeVerifier);
+    console.log('🔐 PKCE code_verifier extracted from state (length:', codeVerifier.length, ')');
+
+    // Try with PKCE first, fallback to non-PKCE if it fails with invalid_grant
+    let tokens;
+    try {
+      tokens = await getTokensFromCode(code, codeVerifier);
+    } catch (error) {
+      // If PKCE fails with invalid_grant, try without PKCE
+      if (error.message === 'invalid_grant') {
+        console.warn('⚠️ PKCE token exchange failed with invalid_grant, retrying without PKCE...');
+        console.warn('This may indicate Google OAuth client not configured for PKCE');
+        try {
+          tokens = await getTokensFromCode(code, null);
+          console.log('✅ Token exchange succeeded without PKCE (fallback)');
+        } catch (fallbackError) {
+          console.error('❌ Fallback without PKCE also failed:', fallbackError.message);
+          throw error; // Re-throw original error
+        }
+      } else {
+        throw error; // Re-throw if it's not invalid_grant
+      }
+    }
 
     if (!tokens.access_token || !tokens.refresh_token) {
       throw new Error('Access token or refresh token missing from Google response');
