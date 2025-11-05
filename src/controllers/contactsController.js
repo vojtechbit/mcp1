@@ -40,7 +40,7 @@ async function searchContacts(req, res) {
       count: contacts.length,
       contacts,
       sheetUrl: generateSheetUrl(spreadsheetId),
-      assistantHint: "Pokud uživatel chce vidět kontakty přímo v Google Sheets, nabídni mu tento odkaz."
+      assistantHint: "Link na Google Sheet poskytni uživateli JEN když explicitně chce vidět výsledky vyhledávání v Sheets. Pokud jen potřebuješ najít email pro jiný úkol, link neukazuj."
     });
 
   } catch (error) {
@@ -117,7 +117,7 @@ async function listContacts(req, res) {
       contacts,
       hasMore: false, // Contacts always returns all items
       sheetUrl: generateSheetUrl(spreadsheetId),
-      assistantHint: "Pokud uživatel chce vidět kontakty přímo v Google Sheets, nabídni mu tento odkaz."
+      assistantHint: "Link na Google Sheet poskytni uživateli JEN když explicitně chce vidět/procházet všechny kontakty. Pokud jen potřebuješ email pro jiný úkol (např. přidat attendee), link neukazuj."
     });
 
   } catch (error) {
