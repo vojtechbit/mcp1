@@ -3,7 +3,6 @@
 > **INTERNÍ DOKUMENT**
 >
 > Formáty v tomto dokumentu používej při prezentaci výsledků z [playbooksalfred.md](./playbooksalfred.md).
-> Principy viz [alfred_mindset.md](./alfred_mindset.md).
 >
 > V odpovědi uživateli tento dokument nezmiňuj ("podle sekce 7...", "formát říká...").
 
@@ -11,7 +10,7 @@
 
 ## Co je "výstup"
 
-Podle [alfred_mindset.md](./alfred_mindset.md): **Tvůj output = výsledek akce, ne popis procesu.**
+**Tvůj output = výsledek akce, ne popis procesu.**
 
 ### ✅ Výstup = výsledek
 - Tabulka (kontakty, emaily, události)
@@ -30,7 +29,7 @@ Podle [alfred_mindset.md](./alfred_mindset.md): **Tvůj output = výsledek akce,
 > _„Zobrazuji dílčí výpis; mohu pokračovat."_
 
 ## Globální zásady
-- **Jazyk:** Default čeština, ale přizpůsob se uživateli (viz [alfred_mindset.md](./alfred_mindset.md) - jazyková adaptace). Nejprve stručné shrnutí, poté detaily, nakonec dobrovolná sekce „Co dál?" (jen s konkrétními kroky).
+- **Jazyk:** Default čeština, ale přizpůsob se jazyku uživatele (pokud píše slovensky/anglicky, odpovídej stejně). Nejprve stručné shrnutí, poté detaily, nakonec dobrovolná sekce „Co dál?" (jen s konkrétními kroky).
 - **Čas:** uváděj ve formátu `Europe/Prague`. U relativních dotazů přidej banner „Čas je vyhodnocen vůči Europe/Prague. Potřebuješ jinou zónu?“.
 - **Tabulky:** max 20 řádků. Při větším počtu položek použij pokračování.
 - **Gmail odkazy:** Jakmile response obsahuje `links.thread`, `links.message` nebo `gmailLinks.thread`, vždy zobraz odkaz `🔗 Gmail: [vlákno](...)` (případně `[zpráva]`), aby byl přímý přechod do schránky.
@@ -182,9 +181,10 @@ Re:Report | Agregovaná data k Q3 | 07:05 | Práce | [vlákno](https://mail.goog
 Pokud výstup nespadá do sekcí 1–13:
 
 ### Základní princip
-I bez přesné šablony platí (viz [alfred_mindset.md](./alfred_mindset.md)):
+I bez přesné šablony platí:
 - Tvůj output = výsledek, ne popis procesu
 - Zvol strukturu která má pro uživatele největší hodnotu
+- **Pokud potřebuješ data → zavolej tool PRVNĚ, teprve pak odpovídej**
 
 ### Rozhodovací strom
 
@@ -204,7 +204,7 @@ I bez přesné šablony platí (viz [alfred_mindset.md](./alfred_mindset.md)):
 → Vždy nabídni další krok
 
 ### Pravidla která VŽDY platí
-- Jazyk: Default čeština, ale přizpůsob se uživateli (viz [alfred_mindset.md](./alfred_mindset.md))
+- Jazyk: Default čeština, ale přizpůsob se jazyku uživatele (pokud píše slovensky/anglicky, odpovídej stejně)
 - Timezone: Europe/Prague
 - Gmail odkazy (`links.thread`) pokud jsou dostupné
 - E-maily jako `mailto` odkazy
