@@ -66,7 +66,7 @@ async function getTokensFromCode(code, codeVerifier = null) {
 
     // Add PKCE code_verifier if provided (RFC 7636)
     if (codeVerifier) {
-      tokenOptions.code_verifier = codeVerifier;
+      tokenOptions.codeVerifier = codeVerifier;  // Use camelCase for googleapis library
     }
 
     const { tokens } = await client.getToken(tokenOptions);
