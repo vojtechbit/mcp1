@@ -260,8 +260,8 @@ router.get('/privacy-policy', (req, res) => {
           <li>Výpis všech kontaktů ze Sheets</li>
           <li>Přidávání nových kontaktů (jméno, email, poznámky)</li>
           <li>Aktualizace kontaktů (změna poznámek)</li>
-          <li>Vyhledávání Sheets s názvem "MCP1 Contacts" v Google Drive</li>
-          <li>Vytváření nového Sheets "MCP1 Contacts" pokud neexistuje</li>
+          <li>Vyhledávání Sheets s názvem "alfred contacts" v Google Drive</li>
+          <li>Vytváření nového Sheets "alfred contacts" pokud neexistuje</li>
         </ul>
       </div>
 
@@ -682,8 +682,8 @@ router.get('/privacy-policy', (req, res) => {
             <li>List all contacts from Sheets</li>
             <li>Add new contacts (name, email, notes)</li>
             <li>Update contacts (notes)</li>
-            <li>Search for "MCP1 Contacts" Sheets in Drive</li>
-            <li>Create new "MCP1 Contacts" Sheets if it doesn't exist</li>
+            <li>Search for "alfred contacts" Sheets in Drive</li>
+            <li>Create new "alfred contacts" Sheets if it doesn't exist</li>
           </ul>
         </div>
 
