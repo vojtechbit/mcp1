@@ -223,6 +223,14 @@ const errorCatalog = {
     status: 404,
     description: 'Gmail search query returned no matching messages.'
   },
+  EMAIL_THREAD_NOT_FOUND: {
+    status: 404,
+    description: 'Gmail thread not found or is empty.'
+  },
+  EMAIL_THREAD_LOAD_FAILED: {
+    status: 502,
+    description: 'Failed to load Gmail thread.'
+  },
   EMAIL_SEND_FAILED: {
     status: 502,
     description: 'Failed to send the requested Gmail message.'

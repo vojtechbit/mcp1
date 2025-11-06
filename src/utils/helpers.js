@@ -360,6 +360,17 @@ export function parseRelativeTime(relative, referenceDate = new Date()) {
       };
     }
 
+    case 'last3d': {
+      const threeDaysAgoPrague = addPragueDays(pragueNow, -3);
+      const start = getPragueMidnightUtc(threeDaysAgoPrague);
+      const end = getPragueEndOfDayUtc(pragueNow);
+
+      return {
+        after: toUnixSeconds(start),
+        before: toUnixSeconds(end)
+      };
+    }
+
     case 'last7d': {
       // FIX: Use Prague midnight (not UTC) - consistent with other relative filters
       // Calculate 7 days ago in Prague time
@@ -373,7 +384,29 @@ export function parseRelativeTime(relative, referenceDate = new Date()) {
         before: toUnixSeconds(end)
       };
     }
-    
+
+    case 'last14d': {
+      const fourteenDaysAgoPrague = addPragueDays(pragueNow, -14);
+      const start = getPragueMidnightUtc(fourteenDaysAgoPrague);
+      const end = getPragueEndOfDayUtc(pragueNow);
+
+      return {
+        after: toUnixSeconds(start),
+        before: toUnixSeconds(end)
+      };
+    }
+
+    case 'last30d': {
+      const thirtyDaysAgoPrague = addPragueDays(pragueNow, -30);
+      const start = getPragueMidnightUtc(thirtyDaysAgoPrague);
+      const end = getPragueEndOfDayUtc(pragueNow);
+
+      return {
+        after: toUnixSeconds(start),
+        before: toUnixSeconds(end)
+      };
+    }
+
     default:
       return null;
   }
