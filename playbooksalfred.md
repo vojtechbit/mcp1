@@ -17,13 +17,112 @@
 
 ---
 
-## 1. Triage doručené pošty
+## 1. Vyhledávání emailů (základní pravidla)
+
+### Progresivní časové hledání
+Když uživatel hledá email **BEZ specifikace časového rozsahu** (např. "najdi email od Ludmily", "hledej zprávu o pronájmu"):
+
+1. **První pokus: 3 dny** (`timeRange: {relative: "last3d"}`)
+   - Nejčastější use case - většina dotazů se týká nedávných emailů
+   - Rychlé a relevantní
+
+2. **Pokud nic nenajdeš → rozšiř na 7 dní** (`timeRange: {relative: "last7d"}`)
+   - Pokrývá poslední týden
+   - Stále relevantní pro běžné dotazy
+
+3. **Pokud stále nic → zkus 14 dní** (`timeRange: {relative: "last14d"}`)
+   - Dva týdny zpět
+   - Užitečné pro méně časté komunikace
+
+4. **Jako poslední pokus → 30 dní** (`timeRange: {relative: "last30d"}`)
+   - Měsíc zpět
+   - Maximum pro automatické rozšiřování
+
+5. **Pokud ani 30 dní nepomůže:**
+   - Zkus zjednodušit query (kratší subject, jen sender bez subject)
+   - Informuj uživatele: "Nenašel jsem nic ani za posledních 30 dní. Zkusil jsem i varianty [X, Y, Z]. Chceš hledat v celé historii nebo upřesnit kritéria?"
+
+**Kdy NEPOUŽÍVAT progresivní hledání:**
+- Uživatel explicitně řekl čas: "včerejší emaily", "dnešní pošta", "minulý týden"
+- Používáš `/macros/inbox/overview` nebo `/macros/inbox/snippets` s již specifikovaným `timeRange`
+- Hledáš v rámci specifického use case (follow-upy, unanswered)
+
+**Jak to implementovat:**
+- Backend má funkci `searchEmailsWithProgressiveTime()` která to dělá automaticky
+- NEBO ručně volej `/macros/inbox/overview` postupně s různými timeRange až najdeš výsledky
+- V odpovědi uživateli zmiň který časový rozsah použil: "Našel jsem za posledních 7 dní (3 dny nic neobsahovaly):"
+
+**Kombinace s dalšími filtry:**
+```json
+{
+  "timeRange": {"relative": "last3d"},
+  "filters": {
+    "from": "ludmila",
+    "sentOnly": true  // pokud hledáš odeslané
+  }
+}
+```
+
+### Hledání vláken
+Když uživatel řekne "projdi celé vlákno" nebo máš thread ID:
+
+**SPRÁVNĚ:** Použij thread ID přímo
+```json
+{
+  "searchQuery": "thread:19a54f65990ae536"
+}
+```
+- Backend automaticky detekuje thread: prefix
+- Načte všechny zprávy ve vlákně pomocí threads.get API
+- Vrátí kompletní konverzaci
+
+**ŠPATNĚ:** ❌ Nehledej thread pomocí subject
+- Pomalé a nespolehlivé
+- Může najít jiná vlákna se stejným subject
+
+### Hledání odeslaných emailů
+Když uživatel hledá "co jsem poslal", "emaily které jsem odeslal":
+
+```json
+{
+  "filters": {
+    "sentOnly": true
+  }
+}
+```
+
+**Kombinace:** "najdi emaily které jsem poslal Ludmile za poslední týden"
+```json
+{
+  "timeRange": {"relative": "last7d"},
+  "query": "ludmila",
+  "filters": {
+    "sentOnly": true
+  }
+}
+```
+
+### Hledání všech emailů (přijaté + odeslané)
+Když uživatel chce "všechny emaily o projektu X" (obousměrnou komunikaci):
+
+```json
+{
+  "query": "projekt X",
+  "filters": {
+    "includeSent": true  // hledá inbox + sent
+  }
+}
+```
+
+---
+
+## 2. Triage doručené pošty
 1. `mailRpc` s `op:"search"` a vhodnými filtry (čas, label, kategorie).
 2. Výsledek zobraz jako Email Overview (viz formát) včetně sloupce s Gmail odkazy. Pokud backend neposkytuje snippets, zobraz pouze dostupná pole.
 3. Jakmile response obsahuje `subset:true`, `hasMore:true` nebo `partial:true`, uveď subset banner a nabídni pokračování.
 4. Nabídni další kroky: detail, odpověď, archivace, vytvoření úkolu, připomenutí.
 
-## 2. Čtení e-mailu na přání
+## 3. Čtení e-mailu na přání
 1. Získej ID (z přehledu nebo dotazu).
 2. Na detail vždy použij `mailRpc` s `op:"read"` v režimu **full**.
 3. Pokud jsou přílohy, zeptej se, zda načíst metadata nebo otevřít (pokud to Actions dovolují).
@@ -31,7 +130,7 @@
 5. Využij `contentMetadata` a `truncated` k diagnostice: informuj o existenci HTML/inline prvků, které API nedoručilo, a přidej Gmail odkazy z `links` pro ruční otevření.
 6. Relevantní akce (odpovědět, přeposlat, vytvořit úkol/event) navrhuj až po přečtení celého obsahu, aby úkoly vznikaly z ověřených informací.
 
-## 3. Kategorizace důležitosti ("Co důležitého mi dnes přišlo")
+## 4. Kategorizace důležitosti ("Co důležitého mi dnes přišlo")
 1. Pro dané období spusť `mailRpc` s `op:"search"` a získej seznam zpráv včetně `snippet`/`bodyPreview`, kategorie inboxu a odesílatele.
 2. Předběžné skórování:
    - Pokud `mailboxCategory` ∈ {`Primary`, `Work`}, přiřaď vysokou váhu (např. +2).
@@ -42,7 +141,7 @@
 5. Zdůvodni klíčové rozhodnutí u hraničních položek (např. „Zařazeno jako důležité kvůli změně času schůzky od klienta“).
 6. Nabídni navazující akce (např. detail, odpověď, vytvořit úkol).
 
-## 4. Příprava e-mailového draftu
+## 5. Příprava e-mailového draftu
 1. Identifikuj příjemce:
    - Při self-send nejprve najdi odpovídající kontakt uživatele. Pokud chybí, nabídni vytvoření kontaktu a teprve pak se doptávej.
    - Při zadání jména (např. „Marek") proveď `contactsRpc` s `op:"search"`, ukaž shody a nech uživatele vybrat.
