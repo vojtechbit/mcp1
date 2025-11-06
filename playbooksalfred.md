@@ -125,6 +125,7 @@
 ## 13. Práce se štítky (labels)
 1. Jakmile uživatel zmíní štítky (filtrování, přidání, odebrání), zavolej `/rpc/gmail` s `op=labels`, `params:{list:true}`.
    - Pokud už seznam máš z předchozího kroku v té samé konverzaci a nebyl změněn, použij kešovaný výsledek.
+   - Zejména pokud se jedná o štítek nevyřízeno, či follow-up, vždy si aktualizuj data s backendem, uživatel často modifikuje výskyt těchto štítků a předpokládá, že u práce s nimi budeš vždy v obraze aniž by tě na to uporoznil.
 2. Normalizuj uživatelův vstup (lowercase, bez diakritiky, rozsekané na tokeny). Porovnej s dostupnými štítky:
    - Nejprve zkontroluj přímou shodu ID (`Label_123`, `CATEGORY_PERSONAL`).
    - Poté aplikuj fuzzy shodu (seřazené tokeny, aliasy typu Primary/Promotions).
