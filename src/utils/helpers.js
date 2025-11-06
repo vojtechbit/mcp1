@@ -366,7 +366,7 @@ export function parseRelativeTime(relative, referenceDate = new Date()) {
       const sevenDaysAgoPrague = addPragueDays(pragueNow, -7);
 
       const start = getPragueMidnightUtc(sevenDaysAgoPrague);
-      const end = getPragueEndOfDayUtc(addPragueDays(sevenDaysAgoPrague, 6));
+      const end = getPragueEndOfDayUtc(pragueNow); // Include today's full day
 
       return {
         after: toUnixSeconds(start),
