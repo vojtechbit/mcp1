@@ -219,6 +219,10 @@ const errorCatalog = {
     status: 502,
     description: 'Failed to execute the Gmail search request.'
   },
+  EMAIL_SEARCH_NO_RESULTS: {
+    status: 404,
+    description: 'Gmail search query returned no matching messages.'
+  },
   EMAIL_SEND_FAILED: {
     status: 502,
     description: 'Failed to send the requested Gmail message.'
