@@ -163,8 +163,16 @@ async function inboxOverview(googleSub, params = {}) {
   let labelResolution = null;
   let requestedLabelCount = 0;
 
-  // Exclude sent emails by default (only show received emails)
-  queryParts.push('-in:sent');
+  // Handle sent/inbox filter based on filters
+  // sentOnly: true → search only in sent folder
+  // includeSent: true → search everywhere (inbox + sent)
+  // default (both false) → search only inbox (exclude sent)
+  if (filters.sentOnly) {
+    queryParts.push('in:sent');
+  } else if (!filters.includeSent) {
+    queryParts.push('-in:sent');
+  }
+  // If includeSent: true and sentOnly: false, we don't add any sent filter
 
   if (typeof rawQuery === 'string' && rawQuery.trim()) {
     queryParts.push(rawQuery.trim());
@@ -419,10 +427,128 @@ async function inboxSnippets(googleSub, params = {}) {
 }
 
 /**
+ * Helper function to progressively simplify search queries when no results are found
+ * Returns array of search query attempts in order from most to least specific
+ */
+function generateFallbackSearchQueries(originalQuery) {
+  const queries = [originalQuery];
+
+  // Parse query to extract sender and subject filters
+  const senderMatch = originalQuery.match(/from:([^\s]+|"[^"]+")/);
+  const subjectMatch = originalQuery.match(/subject:([^\s]+|"[^"]+")/);
+
+  // If we have both sender and subject, try variations
+  if (senderMatch && subjectMatch) {
+    const sender = senderMatch[0];
+    const subject = subjectMatch[1].replace(/^"|"$/g, ''); // Remove quotes
+    const otherParts = originalQuery
+      .replace(senderMatch[0], '')
+      .replace(/subject:([^\s]+|"[^"]+")/g, '')
+      .trim();
+
+    // Try just sender (with other filters if any)
+    const senderOnly = [sender, otherParts].filter(p => p).join(' ');
+    if (senderOnly !== originalQuery) {
+      queries.push(senderOnly);
+    }
+
+    // Try progressively shorter subject strings
+    if (subject.length > 3) {
+      for (let len = Math.floor(subject.length * 0.7); len >= 3; len = Math.floor(len * 0.7)) {
+        const shortSubject = subject.substring(0, len);
+        queries.push(`subject:"${shortSubject}" ${sender} ${otherParts}`.trim());
+      }
+    }
+
+    // Try subject only (with other filters if any)
+    const subjectOnly = [`subject:"${subject}"`, otherParts].filter(p => p).join(' ');
+    if (subjectOnly !== originalQuery && !queries.includes(subjectOnly)) {
+      queries.push(subjectOnly);
+    }
+  } else if (subjectMatch) {
+    // Only subject filter exists, try progressively shorter versions
+    const subject = subjectMatch[1].replace(/^"|"$/g, '');
+    const otherParts = originalQuery
+      .replace(/subject:([^\s]+|"[^"]+")/g, '')
+      .trim();
+
+    if (subject.length > 3) {
+      for (let len = Math.floor(subject.length * 0.7); len >= 3; len = Math.floor(len * 0.7)) {
+        const shortSubject = subject.substring(0, len);
+        const newQuery = [`subject:"${shortSubject}"`, otherParts].filter(p => p).join(' ');
+        if (!queries.includes(newQuery)) {
+          queries.push(newQuery);
+        }
+      }
+    }
+  }
+
+  return queries;
+}
+
+/**
+ * Search emails with automatic fallback to less strict queries
+ * Returns { messages, query, attemptedQueries } where query is the successful query used
+ */
+async function searchEmailsWithFallback(googleSub, searchQuery, options = {}) {
+  const { maxResults = 50, pageToken, enableFallback = true } = options;
+  const gmail = resolveGmailService();
+
+  if (!enableFallback) {
+    // Just do a single search without fallback
+    const result = await gmail.searchEmails(googleSub, {
+      query: searchQuery,
+      maxResults,
+      pageToken
+    });
+    return {
+      messages: result?.messages || [],
+      nextPageToken: result?.nextPageToken || null,
+      query: searchQuery,
+      attemptedQueries: [searchQuery],
+      fallbackUsed: false
+    };
+  }
+
+  const fallbackQueries = generateFallbackSearchQueries(searchQuery);
+  const attemptedQueries = [];
+
+  for (const query of fallbackQueries) {
+    attemptedQueries.push(query);
+
+    const result = await gmail.searchEmails(googleSub, {
+      query,
+      maxResults,
+      pageToken
+    });
+
+    const messages = result?.messages || [];
+    if (messages.length > 0) {
+      return {
+        messages,
+        nextPageToken: result?.nextPageToken || null,
+        query,
+        attemptedQueries,
+        fallbackUsed: query !== searchQuery
+      };
+    }
+  }
+
+  // No results found even with fallback
+  return {
+    messages: [],
+    nextPageToken: null,
+    query: searchQuery,
+    attemptedQueries,
+    fallbackUsed: false
+  };
+}
+
+/**
  * Email Quick Read - single or batch read with attachments
  */
 async function emailQuickRead(googleSub, params = {}) {
-  const { ids, searchQuery, format, pageToken } = params;
+  const { ids, searchQuery, format, pageToken, enableFallback = true } = params;
 
   const resolvedFormat = format ?? 'full';
 
@@ -440,40 +566,78 @@ async function emailQuickRead(googleSub, params = {}) {
     );
   }
 
-  const gmail = resolveGmailService();
   let messageIds = ids;
   let nextPageToken = null;
   let subset = false;
+  let usedQuery = null;
+  let fallbackInfo = null;
 
-  // If searchQuery provided, get IDs first
+  // If searchQuery provided, get IDs first (with optional fallback)
   if (!messageIds && searchQuery) {
-    const searchResults = await gmail.searchEmails(googleSub, {
-      query: searchQuery,
+    const searchResult = await searchEmailsWithFallback(googleSub, searchQuery, {
       maxResults: 50,
-      pageToken
+      pageToken,
+      enableFallback
     });
-    messageIds = searchResults?.messages?.map(m => m.id) || [];
-    nextPageToken = searchResults?.nextPageToken || null;
+
+    messageIds = searchResult.messages.map(m => m.id);
+    nextPageToken = searchResult.nextPageToken;
     subset = Boolean(nextPageToken);
+    usedQuery = searchResult.query;
+
+    // If fallback was used, include info about it
+    if (searchResult.fallbackUsed) {
+      fallbackInfo = {
+        originalQuery: searchQuery,
+        usedQuery: searchResult.query,
+        attemptedQueries: searchResult.attemptedQueries
+      };
+    }
+
+    // If search returned no results even with fallback, throw error
+    if (!messageIds || messageIds.length === 0) {
+      throwFacadeValidationError(
+        `Search query returned no results: "${searchQuery}"`,
+        {
+          code: 'EMAIL_SEARCH_NO_RESULTS',
+          details: {
+            searchQuery,
+            attemptedQueries: searchResult.attemptedQueries,
+            suggestion: 'Try a different search query, or use message/thread IDs directly if available'
+          }
+        }
+      );
+    }
   }
 
   if (!messageIds || messageIds.length === 0) {
     throwFacadeValidationError('No message IDs provided or found', {
-      code: 'EMAIL_MESSAGE_IDS_MISSING'
+      code: 'EMAIL_MESSAGE_IDS_MISSING',
+      details: {
+        suggestion: 'Provide either "ids" array or "searchQuery" parameter'
+      }
     });
   }
+
+  const gmail = resolveGmailService();
 
   // Decide single vs batch
   if (messageIds.length === 1) {
     const message = await gmail.readEmail(googleSub, messageIds[0], { format: resolvedFormat });
     const enriched = enrichEmailWithAttachments(message, messageIds[0]);
 
-    return {
+    const result = {
       mode: 'single',
       item: enriched,
       subset,
       nextPageToken
     };
+
+    if (fallbackInfo) {
+      result.searchFallback = fallbackInfo;
+    }
+
+    return result;
   } else {
     const messages = await Promise.all(
       messageIds.map(id => gmail.readEmail(googleSub, id, { format: resolvedFormat }))
@@ -483,12 +647,18 @@ async function emailQuickRead(googleSub, params = {}) {
       enrichEmailWithAttachments(msg, messageIds[idx])
     );
 
-    return {
+    const result = {
       mode: 'batch',
       items: enriched,
       subset,
       nextPageToken
     };
+
+    if (fallbackInfo) {
+      result.searchFallback = fallbackInfo;
+    }
+
+    return result;
   }
 }
 
@@ -3607,4 +3777,6 @@ export const __facadeTestUtils = {
   resolveCalendarService,
   resolveContactsService,
   resolveCreatePendingConfirmation,
+  generateFallbackSearchQueries,
+  searchEmailsWithFallback,
 };

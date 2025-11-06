@@ -92,6 +92,16 @@
                           "type": "string"
                         },
                         "description": "Advanced filtering using raw Gmail label IDs (e.g., 'Label_123'). Useful for custom labels or saved Gmail filters."
+                      },
+                      "sentOnly": {
+                        "type": "boolean",
+                        "default": false,
+                        "description": "If true, search ONLY in sent emails (in:sent). Use when user asks 'what emails did I send?', 'show my sent emails', or 'emails I sent to John'. Mutually exclusive with includeSent."
+                      },
+                      "includeSent": {
+                        "type": "boolean",
+                        "default": false,
+                        "description": "If true, search in BOTH inbox and sent emails. Use when user asks 'show all emails about X' or 'find emails related to project' (both received and sent). If false (default), only inbox emails are shown. If sentOnly is true, this is ignored."
                       }
                     }
                   }
@@ -114,6 +124,29 @@
                     },
                     "filters": {
                       "from": "john"
+                    }
+                  }
+                },
+                "sentEmailsOnly": {
+                  "summary": "Emails I sent in last 7 days",
+                  "value": {
+                    "timeRange": {
+                      "relative": "last7d"
+                    },
+                    "filters": {
+                      "sentOnly": true
+                    }
+                  }
+                },
+                "allEmailsAboutProject": {
+                  "summary": "ALL emails (received + sent) about 'project X'",
+                  "value": {
+                    "timeRange": {
+                      "relative": "thisWeek"
+                    },
+                    "query": "project X",
+                    "filters": {
+                      "includeSent": true
                     }
                   }
                 },
@@ -513,6 +546,16 @@
                       "hasAttachment": {
                         "type": "boolean",
                         "description": "If true, ONLY emails with attachments. Use for 'show emails with files' queries. Omit for all emails."
+                      },
+                      "sentOnly": {
+                        "type": "boolean",
+                        "default": false,
+                        "description": "If true, search ONLY in sent emails. Use when user asks 'what did I send?', 'show my sent emails with previews'. Mutually exclusive with includeSent."
+                      },
+                      "includeSent": {
+                        "type": "boolean",
+                        "default": false,
+                        "description": "If true, search in BOTH inbox and sent emails. Use when user wants to see all communication about a topic (received and sent). If sentOnly is true, this is ignored."
                       }
                     }
                   }
