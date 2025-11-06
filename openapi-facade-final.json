@@ -1,9 +1,9 @@
 {
   "openapi": "3.1.0",
   "info": {
-    "title": "Alfred Assistant API",
+    "title": "Alfred Assistant API - REQUIRED for all email/calendar/tasks/contacts queries",
     "version": "2.1.0",
-    "description": "Complete API for managing Gmail, Google Calendar, Contacts, and Tasks. High-level macros for common workflows and low-level RPC for advanced control. All times use Europe/Prague timezone."
+    "description": "⚠️ CRITICAL: These actions MUST be called for ANY user query about their emails, calendar, tasks, or contacts. NEVER respond about user data without calling these APIs first. Text-only responses about user data = FABRICATION = WORST ERROR.\n\nComplete API for managing Gmail, Google Calendar, Contacts, and Tasks. High-level macros for common workflows and low-level RPC for advanced control. All times use Europe/Prague timezone.\n\nFor all instructions and operational procedures, see:\n- instructionsalfreden.md (core GPT instructions - English)\n- playbooksalfreden.md (operational playbooks - English)\n- formattingalfreden.md (output formatting - English)"
   },
   "servers": [
     {
