@@ -487,6 +487,170 @@ function generateFallbackSearchQueries(originalQuery) {
 }
 
 /**
+ * Search emails with progressive time range expansion
+ * Tries: 3 days → 7 days → 14 days → 30 days
+ * Returns { messages, timeRange, attemptedTimeRanges } where timeRange is the successful one
+ */
+async function searchEmailsWithProgressiveTime(googleSub, searchQuery, options = {}) {
+  const { maxResults = 50, pageToken, filters = {} } = options;
+  const gmail = resolveGmailService();
+
+  // Progressive time ranges to try
+  const timeRanges = [
+    { name: '3 days', relative: 'last3d', days: 3 },
+    { name: '7 days', relative: 'last7d', days: 7 },
+    { name: '14 days', relative: 'last14d', days: 14 },
+    { name: '30 days', relative: 'last30d', days: 30 }
+  ];
+
+  const attemptedTimeRanges = [];
+
+  for (const timeRange of timeRanges) {
+    attemptedTimeRanges.push(timeRange.name);
+
+    // Build query with time filter
+    const queryParts = [];
+
+    // Add sent/inbox filter
+    if (filters.sentOnly) {
+      queryParts.push('in:sent');
+    } else if (!filters.includeSent) {
+      queryParts.push('-in:sent');
+    }
+
+    // Add search query
+    if (searchQuery) {
+      queryParts.push(searchQuery);
+    }
+
+    // Add time filter
+    const times = parseRelativeTime(timeRange.relative);
+    if (times?.after && times?.before) {
+      queryParts.push(`after:${times.after}`);
+      queryParts.push(`before:${times.before}`);
+    }
+
+    // Add other filters
+    if (filters.from) {
+      const sanitizedFrom = filters.from.trim();
+      if (sanitizedFrom) {
+        const needsQuotes = /\s/.test(sanitizedFrom) && !/^".*"$/.test(sanitizedFrom);
+        const value = needsQuotes ? `"${sanitizedFrom}"` : sanitizedFrom;
+        queryParts.push(`from:${value}`);
+      }
+    }
+
+    if (filters.hasAttachment) {
+      queryParts.push('has:attachment');
+    }
+
+    const finalQuery = queryParts.join(' ');
+
+    const result = await gmail.searchEmails(googleSub, {
+      query: finalQuery,
+      maxResults,
+      pageToken
+    });
+
+    const messages = result?.messages || [];
+    if (messages.length > 0) {
+      return {
+        messages,
+        nextPageToken: result?.nextPageToken || null,
+        timeRange: timeRange.name,
+        timeRangeUsed: timeRange.relative,
+        attemptedTimeRanges,
+        progressiveSearchUsed: true
+      };
+    }
+  }
+
+  // No results found even with 30 days
+  return {
+    messages: [],
+    nextPageToken: null,
+    timeRange: null,
+    attemptedTimeRanges,
+    progressiveSearchUsed: true
+  };
+}
+
+/**
+ * Smart email search with progressive time expansion AND query fallback
+ * Combines both strategies:
+ * 1. First tries progressive time ranges (3d → 7d → 14d → 30d)
+ * 2. If still nothing, tries query fallback (simpler subject/sender)
+ *
+ * Returns comprehensive result with all attempted strategies
+ */
+async function searchEmailsSmart(googleSub, searchQuery, options = {}) {
+  const { maxResults = 50, pageToken, filters = {}, enableFallback = true } = options;
+
+  const attemptLog = {
+    timeRanges: [],
+    queries: [],
+    success: null
+  };
+
+  // Strategy 1: Try progressive time ranges with original query
+  if (enableFallback) {
+    const timeResult = await searchEmailsWithProgressiveTime(googleSub, searchQuery, {
+      maxResults,
+      pageToken,
+      filters
+    });
+
+    attemptLog.timeRanges = timeResult.attemptedTimeRanges;
+
+    if (timeResult.messages.length > 0) {
+      return {
+        messages: timeResult.messages,
+        nextPageToken: timeResult.nextPageToken,
+        strategy: 'progressive_time',
+        timeRangeUsed: timeResult.timeRange,
+        attemptedStrategies: attemptLog,
+        smartSearchUsed: true
+      };
+    }
+  }
+
+  // Strategy 2: If time expansion didn't help, try query fallback (without time limits)
+  if (enableFallback && searchQuery) {
+    const fallbackQueries = generateFallbackSearchQueries(searchQuery);
+    attemptLog.queries = fallbackQueries;
+
+    for (const query of fallbackQueries) {
+      const result = await searchEmailsWithFallback(googleSub, query, {
+        maxResults,
+        pageToken,
+        enableFallback: false // Don't recurse
+      });
+
+      if (result.messages.length > 0) {
+        return {
+          messages: result.messages,
+          nextPageToken: result.nextPageToken,
+          strategy: 'query_fallback',
+          queryUsed: query,
+          originalQuery: searchQuery,
+          attemptedStrategies: attemptLog,
+          smartSearchUsed: true
+        };
+      }
+    }
+  }
+
+  // Nothing found
+  return {
+    messages: [],
+    nextPageToken: null,
+    strategy: 'none',
+    attemptedStrategies: attemptLog,
+    smartSearchUsed: true
+  };
+}
+
+/**
  * Search emails with automatic fallback to less strict queries
  * Returns { messages, query, attemptedQueries } where query is the successful query used
  */
@@ -572,8 +736,49 @@ async function emailQuickRead(googleSub, params = {}) {
   let usedQuery = null;
   let fallbackInfo = null;
 
-  // If searchQuery provided, get IDs first (with optional fallback)
-  if (!messageIds && searchQuery) {
+  // Check if searchQuery is a thread ID (format: "thread:xxxxx")
+  const threadIdMatch = searchQuery?.match(/^thread:([a-f0-9]+)$/i);
+
+  if (threadIdMatch && !messageIds) {
+    // Load thread directly using threads.get API
+    const threadId = threadIdMatch[1];
+    const gmail = resolveGmailService();
+
+    try {
+      const thread = await gmail.getThread(googleSub, threadId);
+
+      if (thread && Array.isArray(thread.messages) && thread.messages.length > 0) {
+        messageIds = thread.messages.map(msg => msg.id);
+        usedQuery = `thread:${threadId}`;
+      } else {
+        throwFacadeValidationError(
+          `Thread not found or empty: "${threadId}"`,
+          {
+            code: 'EMAIL_THREAD_NOT_FOUND',
+            details: {
+              threadId,
+              suggestion: 'Thread may not exist or may have been deleted'
+            }
+          }
+        );
+      }
+    } catch (error) {
+      if (error.code === 'EMAIL_THREAD_NOT_FOUND') {
+        throw error;
+      }
+      throwFacadeValidationError(
+        `Failed to load thread: "${threadId}"`,
+        {
+          code: 'EMAIL_THREAD_LOAD_FAILED',
+          details: {
+            threadId,
+            error: error.message
+          }
+        }
+      );
+    }
+  } else if (!messageIds && searchQuery) {
+    // If searchQuery provided (but not thread ID), get IDs first (with optional fallback)
     const searchResult = await searchEmailsWithFallback(googleSub, searchQuery, {
       maxResults: 50,
       pageToken,
@@ -3779,4 +3984,6 @@ export const __facadeTestUtils = {
   resolveCreatePendingConfirmation,
   generateFallbackSearchQueries,
   searchEmailsWithFallback,
+  searchEmailsWithProgressiveTime,
+  searchEmailsSmart,
 };
