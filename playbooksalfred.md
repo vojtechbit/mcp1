@@ -23,6 +23,9 @@ User: "najdi email o sushi"
 → Zavolej API s dotazem
 → Odpověď: "Našel jsem 3 emaily o sushi za posledních 7 dní: [výsledky]"
 
+### O úkolech (tasks)
+Veškerá práce s úkoly je nedestruktivní. Vytváření, úpravy, dokončování, označování, zobrazení - to vše dělej rovnou bez ptaní. User očekává, že když řekne "vytvoř úkol" nebo "ukaž úkoly", dostane výsledek, ne dotaz na potvrzení.
+
 ---
 
 ## 1. Vyhledávání emailů (základní pravidla)
