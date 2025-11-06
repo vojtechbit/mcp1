@@ -163,8 +163,16 @@ async function inboxOverview(googleSub, params = {}) {
   let labelResolution = null;
   let requestedLabelCount = 0;
 
-  // Exclude sent emails by default (only show received emails)
-  queryParts.push('-in:sent');
+  // Handle sent/inbox filter based on filters
+  // sentOnly: true → search only in sent folder
+  // includeSent: true → search everywhere (inbox + sent)
+  // default (both false) → search only inbox (exclude sent)
+  if (filters.sentOnly) {
+    queryParts.push('in:sent');
+  } else if (!filters.includeSent) {
+    queryParts.push('-in:sent');
+  }
+  // If includeSent: true and sentOnly: false, we don't add any sent filter
 
   if (typeof rawQuery === 'string' && rawQuery.trim()) {
     queryParts.push(rawQuery.trim());
