@@ -348,14 +348,16 @@ async function batchRead(req, res) {
 async function searchEmails(req, res) {
   const runSearch = async (req, res) => {
     try {
-      let { 
-        query, 
-        maxResults, 
-        pageToken, 
-        aggregate, 
-        include, 
+      let {
+        query,
+        maxResults,
+        pageToken,
+        aggregate,
+        include,
         normalizeQuery: normalizeQueryFlag,
         relative,
+        after,
+        before,
         snapshotToken,
         label,
         labelIds
@@ -372,6 +374,8 @@ async function searchEmails(req, res) {
         labelFilter += ' ' + ids.map(id => `label:${id}`).join(' ');
       }
 
+      // Handle date filters
+      let dateFilter = '';
       if (relative) {
         const times = parseRelativeTime(relative);
         if (!times) {
@@ -380,10 +384,22 @@ async function searchEmails(req, res) {
             message: `Invalid relative time: ${relative}`
           });
         }
-        query = `${query || ''} ${labelFilter} after:${times.after} before:${times.before}`.trim();
+        dateFilter = `after:${times.after} before:${times.before}`;
       } else {
-        query = `${query || ''} ${labelFilter}`.trim();
+        // Support explicit after/before parameters (format: YYYY/MM/DD or YYYY-MM-DD)
+        if (after) {
+          const afterDate = after.replace(/-/g, '/');  // Convert YYYY-MM-DD to YYYY/MM/DD for Gmail
+          dateFilter += `after:${afterDate} `;
+        }
+        if (before) {
+          const beforeDate = before.replace(/-/g, '/');  // Convert YYYY-MM-DD to YYYY/MM/DD for Gmail
+          dateFilter += `before:${beforeDate}`;
+        }
+        dateFilter = dateFilter.trim();
       }
+
+      // Build final query
+      query = `${query || ''} ${labelFilter} ${dateFilter}`.trim();
 
       let originalQuery = query;
       if (normalizeQueryFlag === 'true') {
