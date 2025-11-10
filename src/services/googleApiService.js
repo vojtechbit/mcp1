@@ -1211,18 +1211,44 @@ async function getEmailPreview(googleSub, messageId, options = {}) {
   });
 }
 
-async function searchEmails(googleSub, { query, q, maxResults = 10, pageToken, labelIds } = {}) {
+async function searchEmails(googleSub, { query, q, maxResults = 10, pageToken, labelIds, relative, after, before } = {}) {
   return await handleGoogleApiCall(googleSub, async () => {
     const authClient = await getAuthenticatedClient(googleSub);
     const gmail = google.gmail({ version: 'v1', auth: authClient });
 
-    const finalQuery = typeof query === 'string' && query.trim().length > 0
+    let finalQuery = typeof query === 'string' && query.trim().length > 0
       ? query.trim()
-      : (typeof q === 'string' && q.trim().length > 0 ? q.trim() : undefined);
+      : (typeof q === 'string' && q.trim().length > 0 ? q.trim() : '');
+
+    // Handle date filters (same logic as gmailController)
+    let dateFilter = '';
+    if (relative) {
+      const { parseRelativeTime } = await import('../utils/helpers.js');
+      const times = parseRelativeTime(relative);
+      if (times) {
+        dateFilter = `after:${times.after} before:${times.before}`;
+      }
+    } else {
+      // Support explicit after/before parameters (format: YYYY/MM/DD or YYYY-MM-DD)
+      if (after) {
+        const afterDate = after.replace(/-/g, '/');  // Convert YYYY-MM-DD to YYYY/MM/DD for Gmail
+        dateFilter += `after:${afterDate} `;
+      }
+      if (before) {
+        const beforeDate = before.replace(/-/g, '/');  // Convert YYYY-MM-DD to YYYY/MM/DD for Gmail
+        dateFilter += `before:${beforeDate}`;
+      }
+      dateFilter = dateFilter.trim();
+    }
+
+    // Append date filter to query
+    if (dateFilter) {
+      finalQuery = `${finalQuery} ${dateFilter}`.trim();
+    }
 
     const params = {
       userId: 'me',
-      q: finalQuery,
+      q: finalQuery || undefined,
       maxResults
     };
 
