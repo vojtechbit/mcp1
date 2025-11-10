@@ -1019,6 +1019,43 @@ async function sendEmail(googleSub, { to, subject, body, cc, bcc }) {
 }
 
 /**
+ * Extract email metadata (from, subject, date) from Gmail message
+ * @param {object} messageData - Gmail message data with payload.headers
+ * @returns {object} Extracted metadata fields
+ */
+function extractEmailMetadata(messageData) {
+  const headers = messageData?.payload?.headers || [];
+  const fromHeader = headers.find(h => h.name.toLowerCase() === 'from')?.value || '';
+  const subjectHeader = headers.find(h => h.name.toLowerCase() === 'subject')?.value || '';
+
+  let from = fromHeader;
+  let fromEmail = fromHeader;
+  let fromName = '';
+
+  const emailMatch = fromHeader.match(/<(.+)>/);
+  if (emailMatch) {
+    fromEmail = emailMatch[1];
+    fromName = fromHeader.replace(/<.+>/, '').trim().replace(/^["']|["']$/g, '');
+  }
+
+  // FIX 20.10.2025: Return Prague local time with timezone offset, not UTC
+  // Reason: UTC without timezone info (11:02Z) gets displayed wrong by GPT
+  // Now: Prague local time (13:02+02:00) so GPT knows the timezone
+  const utcDate = new Date(parseInt(messageData.internalDate));
+  const offsetHours = getPragueOffsetHours(utcDate);
+  const pragueDate = new Date(utcDate.getTime() + offsetHours * 60 * 60 * 1000);
+  const pragueIso = pragueDate.toISOString().replace('Z', `+${String(offsetHours).padStart(2, '0')}:00`);
+
+  return {
+    from,
+    fromEmail,
+    fromName,
+    subject: subjectHeader,
+    date: pragueIso
+  };
+}
+
+/**
  * Read email with optional includeAttachments parameter
  * @param {string|object} options - format string OR options object
  */
@@ -1063,35 +1100,11 @@ async function readEmail(googleSub, messageId, options = {}) {
     }
 
     if (format === 'metadata') {
-      const headers = metadataResult.data.payload.headers;
-      const fromHeader = headers.find(h => h.name.toLowerCase() === 'from')?.value || '';
-      const subjectHeader = headers.find(h => h.name.toLowerCase() === 'subject')?.value || '';
-      
-      let from = fromHeader;
-      let fromEmail = fromHeader;
-      let fromName = '';
-      
-      const emailMatch = fromHeader.match(/<(.+)>/);
-      if (emailMatch) {
-        fromEmail = emailMatch[1];
-        fromName = fromHeader.replace(/<.+>/, '').trim().replace(/^["']|["']$/g, '');
-      }
-      
-      // FIX 20.10.2025: Return Prague local time with timezone offset, not UTC
-      // Reason: UTC without timezone info (11:02Z) gets displayed wrong by GPT
-      // Now: Prague local time (13:02+02:00) so GPT knows the timezone
-      const utcDate = new Date(parseInt(metadataResult.data.internalDate));
-      const offsetHours = getPragueOffsetHours(utcDate);
-      const pragueDate = new Date(utcDate.getTime() + offsetHours * 60 * 60 * 1000);
-      const pragueIso = pragueDate.toISOString().replace('Z', `+${String(offsetHours).padStart(2, '0')}:00`);
-      
+      const metadata = extractEmailMetadata(metadataResult.data);
+
       return {
         ...metadataResult.data,
-        from: from,
-        fromEmail: fromEmail,
-        fromName: fromName,
-        subject: subjectHeader,
-        date: pragueIso,
+        ...metadata,  // Add extracted from, subject, date fields
         snippet: snippet,
         readState: buildReadState(metadataResult.data.labelIds),
         links: generateGmailLinks(metadataResult.data.threadId, messageId)
@@ -1110,8 +1123,12 @@ async function readEmail(googleSub, messageId, options = {}) {
       const plainText = extractPlainText(fullResult.data.payload);
       const truncatedText = truncateText(plainText, EMAIL_SIZE_LIMITS.MAX_BODY_LENGTH);
 
+      // FIX: Extract metadata for truncated emails
+      const metadata = extractEmailMetadata(metadataResult.data);
+
       const response = {
         ...metadataResult.data,
+        ...metadata,  // Add extracted from, subject, date fields
         snippet: snippet,
         bodyPreview: truncatedText,
         truncated: true,
@@ -1142,8 +1159,12 @@ async function readEmail(googleSub, messageId, options = {}) {
       format: format === 'minimal' ? 'minimal' : 'full'
     });
 
+    // FIX: Extract metadata (from, subject, date) for full format
+    const metadata = extractEmailMetadata(result.data);
+
     const response = {
       ...result.data,
+      ...metadata,  // Add extracted from, subject, date fields
       truncated: false,
       readState: buildReadState(result.data.labelIds),
       links: generateGmailLinks(result.data.threadId, messageId)

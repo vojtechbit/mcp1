@@ -4122,6 +4122,29 @@
                     }
                   }
                 },
+                "searchEmailsByDate": {
+                  "summary": "Search emails sent on a specific date (e.g., 'what emails did I send on Nov 7?')",
+                  "value": {
+                    "op": "search",
+                    "params": {
+                      "query": "in:sent",
+                      "after": "2025-11-07",
+                      "before": "2025-11-08",
+                      "maxResults": 100
+                    }
+                  }
+                },
+                "searchEmailsDateRange": {
+                  "summary": "Search emails in a date range using relative time",
+                  "value": {
+                    "op": "search",
+                    "params": {
+                      "query": "subject:project",
+                      "relative": "last7d",
+                      "maxResults": 50
+                    }
+                  }
+                },
                 "sendDirectEmail": {
                   "summary": "Send email directly (FIXED: All fields required in params)",
                   "value": {
