@@ -188,31 +188,76 @@ When user wants "all emails about project X" (bidirectional communication):
 ### Searching by specific date
 When user asks for emails from a specific date ("what emails did I send on November 7?", "show me emails from yesterday"):
 
-**Use `after` and `before` parameters** to filter by date:
+**Two approaches available:**
 
+#### 1. Relative time parameter (PREFERRED for common cases)
 ```json
 {
   "op": "search",
   "params": {
     "query": "in:sent",
-    "after": "2025-11-07",
-    "before": "2025-11-08",
-    "maxResults": 100
+    "relative": "yesterday"
   }
 }
 ```
 
-**Important:**
-- Always use `after` and `before` together to define a single day
-- Format: `YYYY-MM-DD` (backend converts to Gmail's `YYYY/MM/DD` format)
-- For "today": use today's date for `after`, tomorrow for `before`
-- For "yesterday": use yesterday for `after`, today for `before`
-- Without date filtering, search returns only first page (default ~10-50 results)
-- **This ensures ALL emails from that date are retrieved**, not just first page
+**All supported relative values:**
+- **Days:** `today`, `yesterday`, `tomorrow`
+- **Time ranges:** `last3d`, `last7d`, `last14d`, `last30d`
+- **Hours:** `lasthour`, `last3h`, `last24h`
+- **Week:** `thisweek` (current week Monday-Sunday)
+
+**Use `relative` when:**
+- User says "today", "yesterday", "last week", "last 3 days"
+- You need Prague timezone-aware filtering
+- You want simplest, most readable code
+
+#### 2. Explicit after/before parameters
+```json
+{
+  "op": "search",
+  "params": {
+    "query": "in:sent",
+    "after": "2025-11-07",
+    "before": "2025-11-08"
+  }
+}
+```
+
+**Use `after`/`before` when:**
+- User specifies exact dates ("November 7, 2025")
+- You need custom date ranges that don't match relative values
+- You're building programmatic queries with calculated dates
+
+**Format:** `YYYY-MM-DD` (backend automatically converts to Gmail's `YYYY/MM/DD`)
+
+**Important precedence rule:**
+- **If both `relative` AND `after`/`before` are provided, `relative` takes precedence**
+- Backend ignores `after`/`before` when `relative` is present
+- Only provide one approach per query
 
 **Examples:**
+
 ```json
-// Emails sent on Nov 7, 2025
+// TODAY's emails (preferred)
+{
+  "op": "search",
+  "params": {
+    "query": "in:sent",
+    "relative": "today"
+  }
+}
+
+// YESTERDAY (preferred)
+{
+  "op": "search",
+  "params": {
+    "query": "in:sent",
+    "relative": "yesterday"
+  }
+}
+
+// SPECIFIC DATE (when relative doesn't fit)
 {
   "op": "search",
   "params": {
@@ -222,17 +267,7 @@ When user asks for emails from a specific date ("what emails did I send on Novem
   }
 }
 
-// All emails received on Nov 7, 2025
-{
-  "op": "search",
-  "params": {
-    "query": "in:inbox",
-    "after": "2025-11-07",
-    "before": "2025-11-08"
-  }
-}
-
-// Date range (Nov 5-10)
+// CUSTOM DATE RANGE (Nov 5-10)
 {
   "op": "search",
   "params": {
@@ -241,21 +276,18 @@ When user asks for emails from a specific date ("what emails did I send on Novem
     "before": "2025-11-11"
   }
 }
-```
 
-**Alternative: relative time parameter**
-For relative dates, you can use `relative` parameter instead:
-```json
+// LAST HOUR (for very recent emails)
 {
   "op": "search",
   "params": {
-    "query": "in:sent",
-    "relative": "last7d"  // last 7 days
+    "query": "from:urgent-alerts@example.com",
+    "relative": "lasthour"
   }
 }
 ```
 
-Supported relative values: `last3d`, `last7d`, `last14d`, `last30d`
+**Critical:** Without date filtering, search returns only first page (~10-50 results). Always add date filter to ensure ALL emails are retrieved
 
 ---
 

@@ -4135,13 +4135,33 @@
                   }
                 },
                 "searchEmailsDateRange": {
-                  "summary": "Search emails in a date range using relative time",
+                  "summary": "Search using relative time (supported: today, yesterday, tomorrow, last3d, last7d, last14d, last30d, lasthour, last3h, last24h, thisweek). NOTE: If both 'relative' and 'after'/'before' are provided, 'relative' takes precedence.",
                   "value": {
                     "op": "search",
                     "params": {
                       "query": "subject:project",
                       "relative": "last7d",
                       "maxResults": 50
+                    }
+                  }
+                },
+                "searchEmailsToday": {
+                  "summary": "Search today's emails (PREFERRED over after/before for common day queries)",
+                  "value": {
+                    "op": "search",
+                    "params": {
+                      "query": "in:sent",
+                      "relative": "today"
+                    }
+                  }
+                },
+                "searchEmailsYesterday": {
+                  "summary": "Search yesterday's emails using relative parameter",
+                  "value": {
+                    "op": "search",
+                    "params": {
+                      "query": "in:inbox",
+                      "relative": "yesterday"
                     }
                   }
                 },
