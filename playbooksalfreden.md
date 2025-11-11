@@ -191,17 +191,19 @@ When user asks for emails from a specific date ("what emails did I send on Novem
 
 **Endpoint Comparison:**
 
-| Feature | `/rpc/mail` (op=search) | `/macros/inbox/overview` |
-|---------|-------------------------|--------------------------|
-| **Returns** | Message IDs + thread IDs | Enriched metadata (sender, subject, date, snippet) |
-| **Speed** | Fast | Slower (fetches metadata) |
-| **Pagination** | Yes (default 10/page) | Yes (default 50/page) |
-| **Best for** | Bulk operations, selective fetching | Immediate display to user |
-| **Date filtering** | ✓ `relative`, `after`, `before` | ✓ `timeRange.relative` |
+| Feature | `/macros/inbox/overview` | `/macros/inbox/snippets` | `/rpc/mail` (op=search) |
+|---------|--------------------------|--------------------------|-------------------------|
+| **Returns** | Metadata + Gmail snippet (~160 chars) | Metadata + body preview (200-300 chars) + attachments | Message IDs only |
+| **Speed** | Moderate | Slower (body processing) | Fast |
+| **API calls** | 1 call with metadata | 1 call with full preview | 1 call for IDs (+ preview/read for metadata) |
+| **Pagination** | Yes (50/page) | Yes (50/page) | Yes (10/page) |
+| **Best for** | Viewing email lists, answering "who emailed?" | Reading email content, "what did X say?" | Getting IDs for selective processing |
+| **Date filtering** | ✓ `timeRange.relative` | ✓ `timeRange.relative` | ✓ `relative`, `after`, `before` |
 
-**Choose based on your use case:**
-- **RPC**: When you need IDs for further processing or selective fetching
-- **Macro**: When displaying results to user immediately with full context
+**When to use each:**
+- **overview**: You need to see sender/subject/date for emails (most common case)
+- **snippets**: You need to read email content previews or access attachments
+- **RPC search**: You need just message IDs for further selective processing
 
 **Both endpoints support date filtering with two approaches:**
 
