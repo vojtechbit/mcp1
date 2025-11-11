@@ -424,12 +424,9 @@ async function inboxSnippets(googleSub, params = {}) {
     nextPageToken: overview.nextPageToken
   };
 
-  // Pass through pagination warnings from overview
-  if (overview.warning) {
-    response.warning = overview.warning;
-  }
-  if (overview.assistantHint) {
-    response.assistantHint = overview.assistantHint;
+  // Pass through pagination hint from overview
+  if (overview.hint) {
+    response.hint = overview.hint;
   }
 
   if (overview.labelResolution) {
