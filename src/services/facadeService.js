@@ -364,7 +364,9 @@ async function inboxOverview(googleSub, params = {}) {
       inboxCategory: classifyEmailCategory(msg),
       snippet: msg.snippet || '',
       readState,
-      links
+      links,
+      // DEBUG: Include labelIds to diagnose category filtering issues
+      labelIds: msg.labelIds || []
     };
   });
   
