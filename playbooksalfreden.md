@@ -175,8 +175,11 @@ User said relative expression → use relative:
 **Technical notes:**
 - Backend interprets ISO dates in Prague timezone (Europe/Prague)
 - "2025-11-07" = full day from 00:00 to 23:59:59 Prague time
-- Currently we don't support hours in absolute dates (e.g., "until 11am")
-- For time ranges in hours, use relative: "last3h", "lastHour"
+- For time constraints within a day (e.g., "Nov 6 until 11am"):
+  - Send full day: `{start: "2025-11-06", end: "2025-11-06"}`
+  - You'll get all items from that day
+  - Return to user only those that fit within the time window (until 11am)
+- For time ranges in hours you can also use relative: "last3h", "lastHour"
 
 ### Thread search
 When user says "go through entire thread" or you have thread ID:

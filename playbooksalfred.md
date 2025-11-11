@@ -125,8 +125,11 @@ User řekl relativní výraz → použij relative:
 **Technické poznámky:**
 - Backend interpretuje ISO datumy v Prague timezone (Europe/Prague)
 - "2025-11-07" = celý den od 00:00 do 23:59:59 Prague time
-- Aktuálně nepodporujeme hodiny v absolute dates (např. "do 11:00")
-- Pro časové rozsahy v hodinách použij relative: "last3h", "lastHour"
+- Pro časové omezení v průběhu dne (např. "6.11. do 11:00"):
+  - Pošli celý den: `{start: "2025-11-06", end: "2025-11-06"}`
+  - Dostaneš všechny items z toho dne
+  - Userovi vrať pouze ty, které se vejdou do časového okna (do 11:00)
+- Pro časové rozsahy v hodinách můžeš použít i relative: "last3h", "lastHour"
 
 ### Hledání vláken
 Když uživatel řekne "projdi celé vlákno" nebo máš thread ID:
