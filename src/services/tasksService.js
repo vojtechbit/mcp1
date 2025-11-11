@@ -145,7 +145,7 @@ async function listTasks(googleSub, options = {}) {
     // List tasks with pagination
     const params = {
       tasklist: tasklistId,
-      maxResults: options.maxResults || 10,
+      maxResults: options.maxResults || 20,
       showCompleted: options.showCompleted !== undefined ? options.showCompleted : false,
       showHidden: false
     };

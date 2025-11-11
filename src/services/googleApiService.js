@@ -1211,7 +1211,7 @@ async function getEmailPreview(googleSub, messageId, options = {}) {
   });
 }
 
-async function searchEmails(googleSub, { query, q, maxResults = 10, pageToken, labelIds, relative, after, before } = {}) {
+async function searchEmails(googleSub, { query, q, maxResults = 100, pageToken, labelIds, relative, after, before } = {}) {
   return await handleGoogleApiCall(googleSub, async () => {
     const authClient = await getAuthenticatedClient(googleSub);
     const gmail = google.gmail({ version: 'v1', auth: authClient });
@@ -2145,12 +2145,12 @@ async function updateDraft(googleSub, draftId, { to, subject, body, cc, bcc, thr
   });
 }
 
-async function listDrafts(googleSub, { maxResults = 50, pageToken } = {}) {
+async function listDrafts(googleSub, { maxResults = 100, pageToken } = {}) {
   return await handleGoogleApiCall(googleSub, async () => {
     const authClient = await getAuthenticatedClient(googleSub);
     const gmail = google.gmail({ version: 'v1', auth: authClient });
 
-    const safeMaxResults = Math.min(100, Math.max(1, Number.isFinite(Number(maxResults)) ? Number(maxResults) : 50));
+    const safeMaxResults = Math.min(500, Math.max(1, Number.isFinite(Number(maxResults)) ? Number(maxResults) : 100));
 
     const params = {
       userId: 'me',
@@ -4148,7 +4148,7 @@ async function listCalendarEvents(googleSub, {
   calendarId = 'primary',
   timeMin,
   timeMax,
-  maxResults = 10,
+  maxResults = 250,
   query
 } = {}) {
   return await handleGoogleApiCall(googleSub, async () => {

@@ -75,6 +75,12 @@ function normalizeSearchResult(result) {
     payload.threads = cloneThreadsWithLinks(result.threads);
   }
 
+  // Add hint when more results are available
+  if (payload.nextPageToken) {
+    const messageCount = payload.messages?.length || 0;
+    payload.hint = `This response contains ${messageCount} message IDs. nextPageToken exists meaning the response is not complete. If user asks for summary or wants to see all matching emails, they usually expect complete data - it is recommended to call this function again with nextPageToken and continue until nextPageToken is null for complete results.`;
+  }
+
   return payload;
 }
 

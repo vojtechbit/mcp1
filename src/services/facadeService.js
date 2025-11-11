@@ -151,7 +151,7 @@ function resolveCreatePendingConfirmation() {
 async function inboxOverview(googleSub, params = {}) {
   const {
     timeRange,
-    maxItems = 50,
+    maxItems = 100,
     filters = {},
     pageToken,
     query: rawQuery
@@ -324,6 +324,11 @@ async function inboxOverview(googleSub, params = {}) {
     nextPageToken: searchResults.nextPageToken || null
   };
 
+  // Add hint when more results are available
+  if (hasMore) {
+    response.hint = `This response contains ${items.length} emails with metadata. nextPageToken exists meaning the response is not complete. If user asks for summary or wants to see all matching emails, they usually expect complete data - it is recommended to call this function again with nextPageToken and continue until nextPageToken is null for complete results.`;
+  }
+
   if (labelResolution) {
     response.labelResolution = {
       ...labelResolution,
@@ -419,6 +424,11 @@ async function inboxSnippets(googleSub, params = {}) {
     nextPageToken: overview.nextPageToken
   };
 
+  // Pass through pagination hint from overview
+  if (overview.hint) {
+    response.hint = overview.hint;
+  }
+
   if (overview.labelResolution) {
     response.labelResolution = overview.labelResolution;
   }
@@ -492,7 +502,7 @@ function generateFallbackSearchQueries(originalQuery) {
  * Returns { messages, timeRange, attemptedTimeRanges } where timeRange is the successful one
  */
 async function searchEmailsWithProgressiveTime(googleSub, searchQuery, options = {}) {
-  const { maxResults = 50, pageToken, filters = {} } = options;
+  const { maxResults = 100, pageToken, filters = {} } = options;
   const gmail = resolveGmailService();
 
   // Progressive time ranges to try
@@ -584,7 +594,7 @@ async function searchEmailsWithProgressiveTime(googleSub, searchQuery, options =
  * Returns comprehensive result with all attempted strategies
  */
 async function searchEmailsSmart(googleSub, searchQuery, options = {}) {
-  const { maxResults = 50, pageToken, filters = {}, enableFallback = true } = options;
+  const { maxResults = 100, pageToken, filters = {}, enableFallback = true } = options;
 
   const attemptLog = {
     timeRanges: [],
@@ -655,7 +665,7 @@ async function searchEmailsSmart(googleSub, searchQuery, options = {}) {
  * Returns { messages, query, attemptedQueries } where query is the successful query used
  */
 async function searchEmailsWithFallback(googleSub, searchQuery, options = {}) {
-  const { maxResults = 50, pageToken, enableFallback = true } = options;
+  const { maxResults = 100, pageToken, enableFallback = true } = options;
   const gmail = resolveGmailService();
 
   if (!enableFallback) {
@@ -780,7 +790,7 @@ async function emailQuickRead(googleSub, params = {}) {
   } else if (!messageIds && searchQuery) {
     // If searchQuery provided (but not thread ID), get IDs first (with optional fallback)
     const searchResult = await searchEmailsWithFallback(googleSub, searchQuery, {
-      maxResults: 50,
+      maxResults: 100,
       pageToken,
       enableFallback
     });

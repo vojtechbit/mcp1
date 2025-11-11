@@ -25,8 +25,8 @@
     "/macros/inbox/overview": {
       "post": {
         "operationId": "macroInboxOverview",
-        "summary": "Get lightweight inbox overview",
-        "description": "Quick inbox digest with sender, subject, timestamp, and Gmail snippet preview. Perfect for 'Who emailed me today?' Returns ALL emails in timeRange (up to 200).",
+        "summary": "Search emails with sender, subject, date, and snippet",
+        "description": "Returns emails with enriched metadata (sender, subject, date, read state, Gmail snippet) in single call. Efficient for answering 'who emailed me?', summaries, or displaying email lists. Paginated (default 100/page, max 200).",
         "requestBody": {
           "required": false,
           "content": {
@@ -59,8 +59,8 @@
                     "type": "integer",
                     "minimum": 1,
                     "maximum": 200,
-                    "default": 50,
-                    "description": "Maximum emails to return (1-200). Default 50 matches backend default and balances performance with coverage. Lower it only when the user explicitly asks for a smaller sample (e.g. \"last 5 emails\"). When more exist the response sets subset=true."
+                    "default": 100,
+                    "description": "Maximum emails to return (1-200). Default 100 matches Gmail API default. Reduces pagination - most queries need fewer roundtrips. Lower it only when user explicitly asks for smaller sample (e.g. \"last 5 emails\"). When more exist the response sets subset=true."
                   },
                   "filters": {
                     "type": "object",
@@ -264,7 +264,11 @@
                         "string",
                         "null"
                       ],
-                      "description": "Token for next page. Null if subset=false (all results included). If subset=true, inform user there are more emails and offer to fetch them."
+                      "description": "Token for next page of results. When present, additional emails matching the query exist. Use this token with the same query parameters to retrieve the next page. Null when all results have been returned."
+                    },
+                    "hint": {
+                      "type": "string",
+                      "description": "Present when nextPageToken exists. Provides context about pagination - the response is not complete when this field exists. If user asks for summary or wants to see all matching emails, they usually expect complete data, so it's recommended to continue fetching pages until nextPageToken is null."
                     },
                     "labelResolution": {
                       "type": "object",
@@ -495,7 +499,7 @@
       "post": {
         "operationId": "macroInboxSnippets",
         "summary": "Get inbox with email body snippets",
-        "description": "Emails WITH body preview (200-300 chars) and attachment URLs. Perfect for 'What did John say?' Returns ALL matching emails by default (up to 50). Attachment URLs expire 1 hour. For full bodies, use /macros/email/quickRead.",
+        "description": "Emails WITH body preview (200-300 chars) and attachment URLs. Perfect for 'What did John say?' Returns ALL matching emails by default (up to 100). Attachment URLs expire 1 hour. For full bodies, use /macros/email/quickRead.",
         "requestBody": {
           "required": false,
           "content": {
@@ -526,9 +530,9 @@
                   "maxItems": {
                     "type": "integer",
                     "minimum": 1,
-                    "maximum": 50,
-                    "default": 50,
-                    "description": "Max emails with snippets. Default 50 (max allowed) ensures complete results. Lower max than overview due to snippet processing. ONLY reduce if user explicitly wants fewer (e.g., 'show last 5 emails with preview'). When user asks 'what are today's emails about?', use default to get ALL."
+                    "maximum": 100,
+                    "default": 100,
+                    "description": "Max emails with snippets. Default 100 matches Gmail API default and reduces pagination roundtrips. ONLY reduce if user explicitly wants fewer (e.g., 'show last 5 emails with preview'). When user asks 'what are today's emails about?', use default to get results efficiently."
                   },
                   "includeAttachments": {
                     "type": "boolean",
@@ -3641,7 +3645,7 @@
       "post": {
         "operationId": "mailRpc",
         "summary": "Advanced mail operations",
-        "description": "Low-level Gmail RPC. Operations: search, preview, read, create drafts, send, reply, modify labels, preview attachments. Use macros for common tasks, RPC for advanced control. Returns ALL matching results (within op limits). Attachment URLs expire 1h.",
+        "description": "Low-level Gmail RPC. Operations: search (returns message IDs), preview (metadata for IDs), read (full email), drafts (create/update/list), send, reply, modify labels, attachment preview. Returns paginated results. Attachment URLs expire 1h.",
         "requestBody": {
           "required": true,
           "content": {
@@ -5368,11 +5372,11 @@
       },
       "MailRpcSearchResult": {
         "type": "object",
-        "description": "Payload returned by /rpc/mail op=search including Gmail web links for each message.",
+        "description": "Search results containing message IDs and thread IDs with Gmail web links. Returns paginated results (default 100 per page). Use preview/read operations to fetch full email data for specific IDs.",
         "properties": {
           "messages": {
             "type": "array",
-            "description": "Array of Gmail search results.",
+            "description": "Array of Gmail search results containing message IDs and thread IDs.",
             "items": {
               "$ref": "#/components/schemas/MailRpcSearchMessage"
             }
@@ -5382,7 +5386,11 @@
               "string",
               "null"
             ],
-            "description": "Token for fetching the next Gmail page."
+            "description": "Token for fetching the next page of results. When present, additional results are available. Use this token with the same query parameters to retrieve the next page. Null when all results have been returned."
+          },
+          "hint": {
+            "type": "string",
+            "description": "Present when nextPageToken exists. Provides context about pagination - the response is not complete when this field exists. If user asks for summary or wants to see all matching emails, they usually expect complete data, so it's recommended to continue fetching pages until nextPageToken is null."
           },
           "resultSizeEstimate": {
             "type": [

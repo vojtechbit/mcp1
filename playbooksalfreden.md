@@ -186,9 +186,26 @@ When user wants "all emails about project X" (bidirectional communication):
 ```
 
 ### Searching by specific date
-When user asks for emails from a specific date ("what emails did I send on November 7?", "show me emails from yesterday"):
 
-**Two approaches available:**
+When user asks for emails from a specific date ("what emails did I send on November 7?", "show me emails from yesterday"), you have two endpoint options:
+
+**Endpoint Comparison:**
+
+| Feature | `/macros/inbox/overview` | `/macros/inbox/snippets` | `/rpc/mail` (op=search) |
+|---------|--------------------------|--------------------------|-------------------------|
+| **Returns** | Metadata + Gmail snippet (~160 chars) | Metadata + body preview (200-300 chars) + attachments | Message IDs only |
+| **Speed** | Moderate | Slower (body processing) | Fast |
+| **API calls** | 1 call with metadata | 1 call with full preview | 1 call for IDs (+ preview/read for metadata) |
+| **Pagination** | Yes (100/page) | Yes (100/page) | Yes (100/page) |
+| **Best for** | Viewing email lists, answering "who emailed?" | Reading email content, "what did X say?" | Getting IDs for selective processing |
+| **Date filtering** | ✓ `timeRange.relative` | ✓ `timeRange.relative` | ✓ `relative`, `after`, `before` |
+
+**When to use each:**
+- **overview**: You need to see sender/subject/date for emails (most common case)
+- **snippets**: You need to read email content previews or access attachments
+- **RPC search**: You need just message IDs for further selective processing
+
+**Both endpoints support date filtering with two approaches:**
 
 #### 1. Relative time parameter (PREFERRED for common cases)
 ```json
@@ -236,7 +253,7 @@ When user asks for emails from a specific date ("what emails did I send on Novem
 - Backend ignores `after`/`before` when `relative` is present
 - Only provide one approach per query
 
-**Examples:**
+**Examples (RPC endpoint):**
 
 ```json
 // TODAY's emails (preferred)
@@ -287,7 +304,11 @@ When user asks for emails from a specific date ("what emails did I send on Novem
 }
 ```
 
-**Critical:** Without date filtering, search returns only first page (~10-50 results). Always add date filter to ensure ALL emails are retrieved
+**Pagination:**
+- Both endpoints return paginated results
+- When `nextPageToken` exists in response, additional results are available
+- Use the token with same parameters to fetch next page
+- If user requests summary/complete data, continue pagination until `nextPageToken` is null
 
 ---
 
