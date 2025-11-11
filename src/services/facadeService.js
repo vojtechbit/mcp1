@@ -194,18 +194,15 @@ async function inboxOverview(googleSub, params = {}) {
   }
 
   if (filters.category) {
-    const categoryMap = {
-      'primary': 'CATEGORY_PERSONAL',
-      'work': 'CATEGORY_PERSONAL',
-      'promotions': 'CATEGORY_PROMOTIONS',
-      'social': 'CATEGORY_SOCIAL',
-      'updates': 'CATEGORY_UPDATES',
-      'forums': 'CATEGORY_FORUMS'
-    };
+    // Gmail categories (Primary, Social, Promotions, Updates, Forums) are inbox tabs,
+    // not labels - use category: search syntax for all of them
+    const categoryLower = filters.category.toLowerCase();
+    const validCategories = ['primary', 'work', 'promotions', 'social', 'updates', 'forums'];
 
-    const labelId = categoryMap[filters.category.toLowerCase()];
-    if (labelId) {
-      queryParts.push(`label:${labelId}`);
+    if (validCategories.includes(categoryLower)) {
+      // 'work' is an alias for 'primary'
+      const categoryName = categoryLower === 'work' ? 'primary' : categoryLower;
+      queryParts.push(`category:${categoryName}`);
     }
   }
 
@@ -3033,14 +3030,14 @@ function buildFallbackSnippet(snippet = '') {
 
 function categorizeEmail(message) {
   const labels = message.labelIds || [];
-  
+
   if (labels.includes('CATEGORY_SOCIAL')) return 'social';
-  if (labels.includes('CATEGORY_PROMOTIONS')) return 'newsletters';
+  if (labels.includes('CATEGORY_PROMOTIONS')) return 'promotions';
   if (labels.includes('CATEGORY_UPDATES')) return 'updates';
   if (labels.includes('CATEGORY_FORUMS')) return 'forums';
-  if (labels.includes('IMPORTANT')) return 'alerts';
+  if (labels.includes('IMPORTANT')) return 'primary';
   if (labels.includes('INBOX')) return 'primary';
-  
+
   return 'other';
 }
 
@@ -3073,7 +3070,7 @@ function enrichEmailWithAttachments(message, messageId) {
     senderAddress: extractEmail(message.from),
     subject: message.subject || '(no subject)',
     receivedAt: message.internalDate ? new Date(parseInt(message.internalDate)).toISOString() : null,
-    inboxCategory: categorizeEmail(message),
+    inboxCategory: classifyEmailCategory(message),
     label: message.labelIds?.[0] || null,
     readState: buildReadStateFromLabels(message.labelIds),
     headers: {},

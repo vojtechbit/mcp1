@@ -18,20 +18,16 @@ export async function inboxOverview(googleSub, params) {
     query += 'has:attachment ';
   }
   
-  // Handle Primary/Promotions/etc category labels
+  // Handle Gmail category filters (Primary, Social, Promotions, Updates, Forums)
+  // These are inbox tabs, not labels - use category: search syntax
   if (filters.category) {
-    const categoryMap = {
-      'primary': 'CATEGORY_PERSONAL',
-      'work': 'CATEGORY_PERSONAL',
-      'promotions': 'CATEGORY_PROMOTIONS',
-      'social': 'CATEGORY_SOCIAL',
-      'updates': 'CATEGORY_UPDATES',
-      'forums': 'CATEGORY_FORUMS'
-    };
-    
-    const labelId = categoryMap[filters.category.toLowerCase()];
-    if (labelId) {
-      query += `label:${labelId} `;
+    const categoryLower = filters.category.toLowerCase();
+    const validCategories = ['primary', 'work', 'promotions', 'social', 'updates', 'forums'];
+
+    if (validCategories.includes(categoryLower)) {
+      // 'work' is an alias for 'primary'
+      const categoryName = categoryLower === 'work' ? 'primary' : categoryLower;
+      query += `category:${categoryName} `;
     }
   }
   
