@@ -192,7 +192,7 @@ async function startServer() {
     }
 
     // Start Express server
-    app.listen(PORT, () => {
+    serverInstance = app.listen(PORT, () => {
       console.log('\n' + '='.repeat(60));
       console.log('🚀 SERVER STARTED SUCCESSFULLY');
       console.log('='.repeat(60));
@@ -207,7 +207,7 @@ async function startServer() {
       console.log('📇 Contacts API: Ready');
       console.log('🛡️  Security: Enabled');
       console.log(`⚡ Rate limiting: ${RL_MAX_PER_IP}/15min (standard), ${RL_MAX_HEAVY_PER_IP}/15min (heavy)`);
-      
+
       // Start background token refresh (optional)
       const enableBackgroundRefresh = String(process.env.ENABLE_BACKGROUND_REFRESH || 'true').toLowerCase() !== 'false';
 
@@ -217,9 +217,11 @@ async function startServer() {
       } else {
         console.log('⚪ Background refresh: Disabled via configuration');
       }
-      
+
       console.log('='.repeat(60) + '\n');
     });
+
+    return serverInstance;
 
   } catch (error) {
     console.error('❌ Failed to start server');
@@ -242,16 +244,34 @@ process.on('uncaughtException', (error) => {
   process.exit(1);
 });
 
-// Graceful shutdown
-process.on('SIGTERM', () => {
-  console.log('🛑 SIGTERM signal received: closing HTTP server');
-  process.exit(0);
-});
+// Graceful shutdown handler
+let serverInstance = null;
 
-process.on('SIGINT', () => {
-  console.log('\n🛑 SIGINT signal received: closing HTTP server');
-  process.exit(0);
-});
+function gracefulShutdown(signal) {
+  console.log(`\n🛑 ${signal} signal received: closing HTTP server gracefully`);
+
+  if (serverInstance) {
+    serverInstance.close((err) => {
+      if (err) {
+        console.error('❌ Error during server shutdown:', err.message);
+        process.exit(1);
+      }
+      console.log('✅ HTTP server closed successfully');
+      process.exit(0);
+    });
+
+    // Force shutdown after 30 seconds if graceful shutdown fails
+    setTimeout(() => {
+      console.error('⚠️  Forced shutdown after timeout');
+      process.exit(1);
+    }, 30000);
+  } else {
+    process.exit(0);
+  }
+}
+
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));
 
 // Start the server
 startServer();
