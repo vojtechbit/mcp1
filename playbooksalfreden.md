@@ -136,21 +136,20 @@ When user searches for email **WITHOUT specifying time range** (e.g., "find emai
 
 ### Specific dates vs. relative time expressions
 
-When user mentions a specific date (e.g., "November 7", "7.11."), it's helpful to distinguish whether they mean an exact calendar day or a relative time relationship.
+**Basic principle:** When user uses a date, send the date.
 
-**How backend processes time:**
-- ISO dates like "2025-11-07" are interpreted in Prague timezone (Europe/Prague)
-- "2025-11-07" means full day Nov 7 from 00:00 to 23:59:59 Prague time
-- Relative keywords (today, yesterday) are calculated against current time
+**Why:**
+- User said "Nov 7" → we're certain they want Nov 7
+- We could try guessing "yesterday", but that would require:
+  1. Finding out today's date
+  2. Comparing with what user said
+  3. Deciding if it matches "yesterday"
+- These are extra steps where we can make mistakes
+- When user gave us a date, use it directly
 
-**Why this distinction matters:**
-Imagine it's Nov 11 and user says "emails from Nov 7":
-- If you use `{relative: "yesterday"}`, you get Nov 10 (yesterday)
-- If you use `{start: "2025-11-07", end: "2025-11-07"}`, you get exactly Nov 7
+**Examples:**
 
-**Example scenarios:**
-
-Specific calendar day:
+User said a date → send the date:
 ```json
 {
   "timeRange": {
@@ -159,28 +158,25 @@ Specific calendar day:
   }
 }
 ```
-- "what did I send Nov 7?" → user wants specific past day
-- "emails from November 5" → concrete calendar date
-- "from Nov 5 to Nov 8" → range of exact dates
+- "what did I send Nov 7?"
+- "emails from November 5"
+- "from Nov 5 to Nov 8" → start="2025-11-05", end="2025-11-08"
 
-Relative to today:
+User said relative expression → use relative:
 ```json
 {
   "timeRange": {"relative": "yesterday"}
 }
 ```
-- "yesterday's emails" → day before today, whenever today is
+- "yesterday's emails"
 - "what came today" → relative:"today"
 - "last week" → relative:"thisWeek"
 
-**Guidelines:**
-- Number + month ("Nov 7", "7.11.") → typically specific day → start/end in ISO
-- Verbal relationship ("yesterday", "today", "last week") → relative → relative keyword
-- No time mentioned ("find email from Ludmila") → progressive search (see above)
-
-**ISO format:**
-- Single day: "Nov 7" → start="2025-11-07", end="2025-11-07"
-- Range: "Nov 5 to Nov 8" → start="2025-11-05", end="2025-11-08"
+**Technical notes:**
+- Backend interprets ISO dates in Prague timezone (Europe/Prague)
+- "2025-11-07" = full day from 00:00 to 23:59:59 Prague time
+- Currently we don't support hours in absolute dates (e.g., "until 11am")
+- For time ranges in hours, use relative: "last3h", "lastHour"
 
 ### Thread search
 When user says "go through entire thread" or you have thread ID:

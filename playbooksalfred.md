@@ -86,21 +86,20 @@ Když uživatel hledá email **BEZ specifikace časového rozsahu** (např. "naj
 
 ### Konkrétní data vs. relativní časové výrazy
 
-Když uživatel řekne konkrétní datum (např. "7.11.", "7. listopadu"), je užitečné rozlišit, zda myslí přesný den v kalendáři, nebo spíš relativní časový vztah.
+**Základní princip:** Když uživatel použije datum, pošli datum.
 
-**Jak backend zpracovává čas:**
-- ISO datumy typu "2025-11-07" interpretuje v Prague timezone (Europe/Prague)
-- "2025-11-07" znamená celý den 7.11. od 00:00 do 23:59:59 Prague time
-- Relativní klíčová slova (today, yesterday) se přepočítávají vůči aktuálnímu času
+**Proč:**
+- User řekl "7.11." → máme jistotu, že chce 7.11.
+- Mohli bychom tipovat "včera", ale k tomu bychom museli:
+  1. Zjistit dnešní datum
+  2. Porovnat s tím co řekl user
+  3. Rozhodnout jestli to odpovídá "yesterday"
+- To jsou kroky navíc, kde se můžeme splést
+- Když user dal datum, použijeme ho rovnou
 
-**Proč to dává smysl rozlišovat:**
-Představ si, že je 11.11. a user řekne "emaily z 7.11.":
-- Pokud použiješ `{relative: "yesterday"}`, dostaneš 10.11. (včera)
-- Pokud použiješ `{start: "2025-11-07", end: "2025-11-07"}`, dostaneš přesně 7.11.
+**Příklady:**
 
-**Příklady situací:**
-
-Konkrétní kalendářní den:
+User řekl datum → pošli datum:
 ```json
 {
   "timeRange": {
@@ -109,28 +108,25 @@ Konkrétní kalendářní den:
   }
 }
 ```
-- "co jsem poslal 7.11.?" → user chce přesný den z minulosti
-- "emaily z 5. listopadu" → konkrétní kalendářní datum
-- "od 5.11. do 8.11." → rozsah přesných dat
+- "co jsem poslal 7.11.?"
+- "emaily z 5. listopadu"
+- "od 5.11. do 8.11." → start="2025-11-05", end="2025-11-08"
 
-Relativní vztah k dnešku:
+User řekl relativní výraz → použij relative:
 ```json
 {
   "timeRange": {"relative": "yesterday"}
 }
 ```
-- "včerejší emaily" → den před dneškem, ať je dnes kdykoliv
+- "včerejší emaily"
 - "co přišlo dnes" → relative:"today"
 - "minulý týden" → relative:"thisWeek"
 
-**Pomůcka:**
-- Číslo + měsíc ("7.11.", "5. listopadu") → obvykle konkrétní den → start/end v ISO
-- Slovní vztah ("včera", "dnes", "minulý týden") → relativní → relative klíčové slovo
-- Bez času ("najdi email od Ludmily") → progresivní hledání (viz výše)
-
-**ISO formát:**
-- Jeden den: "7.11." → start="2025-11-07", end="2025-11-07"
-- Rozsah: "5.11. až 8.11." → start="2025-11-05", end="2025-11-08"
+**Technické poznámky:**
+- Backend interpretuje ISO datumy v Prague timezone (Europe/Prague)
+- "2025-11-07" = celý den od 00:00 do 23:59:59 Prague time
+- Aktuálně nepodporujeme hodiny v absolute dates (např. "do 11:00")
+- Pro časové rozsahy v hodinách použij relative: "last3h", "lastHour"
 
 ### Hledání vláken
 Když uživatel řekne "projdi celé vlákno" nebo máš thread ID:
