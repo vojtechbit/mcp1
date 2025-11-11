@@ -196,7 +196,7 @@ When user asks for emails from a specific date ("what emails did I send on Novem
 | **Returns** | Metadata + Gmail snippet (~160 chars) | Metadata + body preview (200-300 chars) + attachments | Message IDs only |
 | **Speed** | Moderate | Slower (body processing) | Fast |
 | **API calls** | 1 call with metadata | 1 call with full preview | 1 call for IDs (+ preview/read for metadata) |
-| **Pagination** | Yes (50/page) | Yes (50/page) | Yes (10/page) |
+| **Pagination** | Yes (100/page) | Yes (100/page) | Yes (100/page) |
 | **Best for** | Viewing email lists, answering "who emailed?" | Reading email content, "what did X say?" | Getting IDs for selective processing |
 | **Date filtering** | ✓ `timeRange.relative` | ✓ `timeRange.relative` | ✓ `relative`, `after`, `before` |
 

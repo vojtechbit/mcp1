@@ -1211,7 +1211,7 @@ async function getEmailPreview(googleSub, messageId, options = {}) {
   });
 }
 
-async function searchEmails(googleSub, { query, q, maxResults = 10, pageToken, labelIds, relative, after, before } = {}) {
+async function searchEmails(googleSub, { query, q, maxResults = 100, pageToken, labelIds, relative, after, before } = {}) {
   return await handleGoogleApiCall(googleSub, async () => {
     const authClient = await getAuthenticatedClient(googleSub);
     const gmail = google.gmail({ version: 'v1', auth: authClient });

@@ -26,7 +26,7 @@
       "post": {
         "operationId": "macroInboxOverview",
         "summary": "Search emails with sender, subject, date, and snippet",
-        "description": "Returns emails with enriched metadata (sender, subject, date, read state, Gmail snippet) in single call. Efficient for answering 'who emailed me?', summaries, or displaying email lists. Paginated (default 50/page, max 200).",
+        "description": "Returns emails with enriched metadata (sender, subject, date, read state, Gmail snippet) in single call. Efficient for answering 'who emailed me?', summaries, or displaying email lists. Paginated (default 100/page, max 200).",
         "requestBody": {
           "required": false,
           "content": {
@@ -59,8 +59,8 @@
                     "type": "integer",
                     "minimum": 1,
                     "maximum": 200,
-                    "default": 50,
-                    "description": "Maximum emails to return (1-200). Default 50 matches backend default and balances performance with coverage. Lower it only when the user explicitly asks for a smaller sample (e.g. \"last 5 emails\"). When more exist the response sets subset=true."
+                    "default": 100,
+                    "description": "Maximum emails to return (1-200). Default 100 matches Gmail API default. Reduces pagination - most queries need fewer roundtrips. Lower it only when user explicitly asks for smaller sample (e.g. \"last 5 emails\"). When more exist the response sets subset=true."
                   },
                   "filters": {
                     "type": "object",
@@ -499,7 +499,7 @@
       "post": {
         "operationId": "macroInboxSnippets",
         "summary": "Get inbox with email body snippets",
-        "description": "Emails WITH body preview (200-300 chars) and attachment URLs. Perfect for 'What did John say?' Returns ALL matching emails by default (up to 50). Attachment URLs expire 1 hour. For full bodies, use /macros/email/quickRead.",
+        "description": "Emails WITH body preview (200-300 chars) and attachment URLs. Perfect for 'What did John say?' Returns ALL matching emails by default (up to 100). Attachment URLs expire 1 hour. For full bodies, use /macros/email/quickRead.",
         "requestBody": {
           "required": false,
           "content": {
@@ -530,9 +530,9 @@
                   "maxItems": {
                     "type": "integer",
                     "minimum": 1,
-                    "maximum": 50,
-                    "default": 50,
-                    "description": "Max emails with snippets. Default 50 (max allowed) ensures complete results. Lower max than overview due to snippet processing. ONLY reduce if user explicitly wants fewer (e.g., 'show last 5 emails with preview'). When user asks 'what are today's emails about?', use default to get ALL."
+                    "maximum": 100,
+                    "default": 100,
+                    "description": "Max emails with snippets. Default 100 matches Gmail API default and reduces pagination roundtrips. ONLY reduce if user explicitly wants fewer (e.g., 'show last 5 emails with preview'). When user asks 'what are today's emails about?', use default to get results efficiently."
                   },
                   "includeAttachments": {
                     "type": "boolean",
@@ -5372,7 +5372,7 @@
       },
       "MailRpcSearchResult": {
         "type": "object",
-        "description": "Search results containing message IDs and thread IDs with Gmail web links. Returns paginated results (default 10 per page). Use preview/read operations to fetch full email data for specific IDs.",
+        "description": "Search results containing message IDs and thread IDs with Gmail web links. Returns paginated results (default 100 per page). Use preview/read operations to fetch full email data for specific IDs.",
         "properties": {
           "messages": {
             "type": "array",
