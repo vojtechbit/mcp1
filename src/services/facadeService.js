@@ -167,19 +167,22 @@ async function inboxOverview(googleSub, params = {}) {
 
   // Handle sent/inbox filter based on filters
   // sentOnly: true → search only in sent folder
-  // includeSent: true → search everywhere (inbox + sent)
-  // default (both false) → search only inbox (exclude sent)
+  // includeSent: true → search everywhere (inbox + sent + archived)
+  // default (both false) → search only inbox
   if (filters.sentOnly) {
     queryParts.push('in:sent');
-  } else if (!filters.includeSent) {
-    queryParts.push('-in:sent');
+  } else if (filters.includeSent) {
+    // Search everywhere - no in:inbox restriction
+    // Still exclude drafts, trash, spam
+    queryParts.push('-in:draft');
+    queryParts.push('-in:trash');
+    queryParts.push('-in:spam');
+  } else {
+    // Default: search only inbox (excludes sent, archived, trash, spam)
+    queryParts.push('in:inbox');
+    // Exclude drafts as extra safety
+    queryParts.push('-in:draft');
   }
-  // If includeSent: true and sentOnly: false, we don't add any sent filter
-
-  // Always exclude drafts, trash, and spam from inbox overview
-  queryParts.push('-in:draft');
-  queryParts.push('-in:trash');
-  queryParts.push('-in:spam');
 
   if (typeof rawQuery === 'string' && rawQuery.trim()) {
     queryParts.push(rawQuery.trim());
