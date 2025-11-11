@@ -194,18 +194,15 @@ async function inboxOverview(googleSub, params = {}) {
   }
 
   if (filters.category) {
-    const categoryMap = {
-      'primary': 'CATEGORY_PERSONAL',
-      'work': 'CATEGORY_PERSONAL',
-      'promotions': 'CATEGORY_PROMOTIONS',
-      'social': 'CATEGORY_SOCIAL',
-      'updates': 'CATEGORY_UPDATES',
-      'forums': 'CATEGORY_FORUMS'
-    };
+    // Gmail categories (Primary, Social, Promotions, Updates, Forums) are inbox tabs,
+    // not labels - use category: search syntax for all of them
+    const categoryLower = filters.category.toLowerCase();
+    const validCategories = ['primary', 'work', 'promotions', 'social', 'updates', 'forums'];
 
-    const labelId = categoryMap[filters.category.toLowerCase()];
-    if (labelId) {
-      queryParts.push(`label:${labelId}`);
+    if (validCategories.includes(categoryLower)) {
+      // 'work' is an alias for 'primary'
+      const categoryName = categoryLower === 'work' ? 'primary' : categoryLower;
+      queryParts.push(`category:${categoryName}`);
     }
   }
 
