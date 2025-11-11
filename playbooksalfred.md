@@ -84,42 +84,53 @@ Když uživatel hledá email **BEZ specifikace časového rozsahu** (např. "naj
 }
 ```
 
-### 🔴 KRITICKÉ: Zacházení s konkrétními daty
-**PRAVIDLO:** Když uživatel řekne konkrétní datum (např. "7.11.", "7. listopadu", "November 7"), VŽDY použij absolutní datum v `timeRange`, NIKDY ne `relative`.
+### Konkrétní data vs. relativní časové výrazy
 
-**SPRÁVNĚ:**
+Když uživatel řekne konkrétní datum (např. "7.11.", "7. listopadu"), je užitečné rozlišit, zda myslí přesný den v kalendáři, nebo spíš relativní časový vztah.
+
+**Jak backend zpracovává čas:**
+- ISO datumy typu "2025-11-07" interpretuje v Prague timezone (Europe/Prague)
+- "2025-11-07" znamená celý den 7.11. od 00:00 do 23:59:59 Prague time
+- Relativní klíčová slova (today, yesterday) se přepočítávají vůči aktuálnímu času
+
+**Proč to dává smysl rozlišovat:**
+Představ si, že je 11.11. a user řekne "emaily z 7.11.":
+- Pokud použiješ `{relative: "yesterday"}`, dostaneš 10.11. (včera)
+- Pokud použiješ `{start: "2025-11-07", end: "2025-11-07"}`, dostaneš přesně 7.11.
+
+**Příklady situací:**
+
+Konkrétní kalendářní den:
 ```json
 {
   "timeRange": {
     "start": "2025-11-07",
-    "end": "2025-11-07"  // Stejné datum = celý den
-  },
-  "filters": { "sentOnly": true }
+    "end": "2025-11-07"
+  }
 }
 ```
+- "co jsem poslal 7.11.?" → user chce přesný den z minulosti
+- "emaily z 5. listopadu" → konkrétní kalendářní datum
+- "od 5.11. do 8.11." → rozsah přesných dat
 
-**ŠPATNĚ:** ❌ NIKDY netipuj relativní hodnotu
+Relativní vztah k dnešku:
 ```json
 {
-  "timeRange": {"relative": "yesterday"}  // ❌ Špatně - user řekl "7.11." ne "včera"
+  "timeRange": {"relative": "yesterday"}
 }
 ```
+- "včerejší emaily" → den před dneškem, ať je dnes kdykoliv
+- "co přišlo dnes" → relative:"today"
+- "minulý týden" → relative:"thisWeek"
 
-**Proč je to důležité:**
-- Backend zpracovává datumy v Prague timezone (Europe/Prague)
-- "2025-11-07" = celý den 7.11. od 00:00 do 23:59:59 Prague time
-- Když user řekne datum, chce PŘESNĚ ten den, ne odhad typu "včera"
-- Relativní hodnoty (today, yesterday) jsou jen pro neurčité dotazy typu "dnešní pošta"
+**Pomůcka:**
+- Číslo + měsíc ("7.11.", "5. listopadu") → obvykle konkrétní den → start/end v ISO
+- Slovní vztah ("včera", "dnes", "minulý týden") → relativní → relative klíčové slovo
+- Bez času ("najdi email od Ludmily") → progresivní hledání (viz výše)
 
-**Jak určit datum:**
-1. User řekl datum → použij to přesné datum ve formátu ISO (YYYY-MM-DD)
-2. User řekl "včera", "dnes" → použij `relative` hodnotu
-3. User neřekl čas → použij progresivní hledání (viz výše)
-
-**Formáty datumů:**
-- Číslo + měsíc: "7.11." nebo "7. listopadu" → "2025-11-07"
-- Rozsah: "od 5.11. do 8.11." → start="2025-11-05", end="2025-11-08"
+**ISO formát:**
 - Jeden den: "7.11." → start="2025-11-07", end="2025-11-07"
+- Rozsah: "5.11. až 8.11." → start="2025-11-05", end="2025-11-08"
 
 ### Hledání vláken
 Když uživatel řekne "projdi celé vlákno" nebo máš thread ID:
