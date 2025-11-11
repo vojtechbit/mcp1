@@ -25,8 +25,8 @@
     "/macros/inbox/overview": {
       "post": {
         "operationId": "macroInboxOverview",
-        "summary": "Get lightweight inbox overview",
-        "description": "Quick inbox digest with sender, subject, timestamp, and Gmail snippet preview. Perfect for 'Who emailed me today?' Returns ALL emails in timeRange (up to 200).",
+        "summary": "Get enriched inbox overview with metadata",
+        "description": "Enriched search returning emails with sender, subject, date, read state, and snippet preview. Slower than /rpc/mail search due to metadata fetching. Returns paginated results (default 50 per page, max 200). Use when displaying results to user immediately. For fast bulk ID retrieval, /rpc/mail is more efficient.",
         "requestBody": {
           "required": false,
           "content": {
@@ -264,7 +264,11 @@
                         "string",
                         "null"
                       ],
-                      "description": "Token for next page. Null if subset=false (all results included). If subset=true, inform user there are more emails and offer to fetch them."
+                      "description": "Token for next page of results. When present, additional emails matching the query exist. Use this token with the same query parameters to retrieve the next page. Null when all results have been returned."
+                    },
+                    "hint": {
+                      "type": "string",
+                      "description": "Present when nextPageToken exists. Provides context about pagination - the response is not complete when this field exists. If user asks for summary or wants to see all matching emails, they usually expect complete data, so it's recommended to continue fetching pages until nextPageToken is null."
                     },
                     "labelResolution": {
                       "type": "object",
@@ -3641,7 +3645,7 @@
       "post": {
         "operationId": "mailRpc",
         "summary": "Advanced mail operations",
-        "description": "Low-level Gmail RPC. Operations: search, preview, read, create drafts, send, reply, modify labels, preview attachments. Use macros for common tasks, RPC for advanced control. Returns ALL matching results (within op limits). Attachment URLs expire 1h.",
+        "description": "Low-level Gmail RPC. Operations: search (returns message IDs, paginated), preview (fetch metadata for IDs), read (full email content), create/update/send drafts, reply, modify labels, preview attachments, manage labels. Search returns paginated results. Use macros for enriched data with metadata, RPC for fast ID retrieval or advanced control. Attachment URLs expire 1h.",
         "requestBody": {
           "required": true,
           "content": {
@@ -5368,11 +5372,11 @@
       },
       "MailRpcSearchResult": {
         "type": "object",
-        "description": "Payload returned by /rpc/mail op=search including Gmail web links for each message. IMPORTANT: When nextPageToken is present, the results are INCOMPLETE. You MUST continue fetching with the token until it becomes null to get ALL emails the user requested.",
+        "description": "Fast search returning message IDs and thread IDs with Gmail web links. Returns paginated results (default 10 per page). Use for bulk operations where you'll selectively fetch full emails later. For immediate display with enriched metadata (sender, subject, date), consider /macros/inbox/overview instead.",
         "properties": {
           "messages": {
             "type": "array",
-            "description": "Array of Gmail search results.",
+            "description": "Array of Gmail search results containing message IDs and thread IDs.",
             "items": {
               "$ref": "#/components/schemas/MailRpcSearchMessage"
             }
@@ -5382,15 +5386,11 @@
               "string",
               "null"
             ],
-            "description": "Token for fetching the next Gmail page. If present, MORE RESULTS EXIST. You MUST call the same endpoint again with this token to get remaining emails. Continue until this is null."
+            "description": "Token for fetching the next page of results. When present, additional results are available. Use this token with the same query parameters to retrieve the next page. Null when all results have been returned."
           },
-          "warning": {
+          "hint": {
             "type": "string",
-            "description": "Present when nextPageToken exists. Warns that data is incomplete and pagination is required."
-          },
-          "assistantHint": {
-            "type": "string",
-            "description": "Present when nextPageToken exists. Explicit instruction to continue pagination automatically."
+            "description": "Present when nextPageToken exists. Provides context about pagination - the response is not complete when this field exists. If user asks for summary or wants to see all matching emails, they usually expect complete data, so it's recommended to continue fetching pages until nextPageToken is null."
           },
           "resultSizeEstimate": {
             "type": [

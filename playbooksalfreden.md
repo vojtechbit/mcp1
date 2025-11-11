@@ -186,16 +186,24 @@ When user wants "all emails about project X" (bidirectional communication):
 ```
 
 ### Searching by specific date
-When user asks for emails from a specific date ("what emails did I send on November 7?", "show me emails from yesterday"):
 
-**⚠️ CRITICAL: Always use `/rpc/mail` with `op=search` for date-based queries, NOT macros!**
+When user asks for emails from a specific date ("what emails did I send on November 7?", "show me emails from yesterday"), you have two endpoint options:
 
-**Why RPC, not macros?**
-- RPC search with date filters returns ALL matching emails in one call
-- Macros return paginated results that require multiple calls with `nextPageToken`
-- For specific date queries, you want complete data immediately
+**Endpoint Comparison:**
 
-**Two approaches available:**
+| Feature | `/rpc/mail` (op=search) | `/macros/inbox/overview` |
+|---------|-------------------------|--------------------------|
+| **Returns** | Message IDs + thread IDs | Enriched metadata (sender, subject, date, snippet) |
+| **Speed** | Fast | Slower (fetches metadata) |
+| **Pagination** | Yes (default 10/page) | Yes (default 50/page) |
+| **Best for** | Bulk operations, selective fetching | Immediate display to user |
+| **Date filtering** | ✓ `relative`, `after`, `before` | ✓ `timeRange.relative` |
+
+**Choose based on your use case:**
+- **RPC**: When you need IDs for further processing or selective fetching
+- **Macro**: When displaying results to user immediately with full context
+
+**Both endpoints support date filtering with two approaches:**
 
 #### 1. Relative time parameter (PREFERRED for common cases)
 ```json
@@ -243,10 +251,10 @@ When user asks for emails from a specific date ("what emails did I send on Novem
 - Backend ignores `after`/`before` when `relative` is present
 - Only provide one approach per query
 
-**Examples:**
+**Examples (RPC endpoint):**
 
 ```json
-// TODAY's emails (preferred) - USE RPC!
+// TODAY's emails (preferred)
 {
   "op": "search",
   "params": {
@@ -255,7 +263,7 @@ When user asks for emails from a specific date ("what emails did I send on Novem
   }
 }
 
-// YESTERDAY (preferred) - USE RPC!
+// YESTERDAY (preferred)
 {
   "op": "search",
   "params": {
@@ -264,7 +272,7 @@ When user asks for emails from a specific date ("what emails did I send on Novem
   }
 }
 
-// SPECIFIC DATE (when relative doesn't fit) - USE RPC!
+// SPECIFIC DATE (when relative doesn't fit)
 {
   "op": "search",
   "params": {
@@ -274,7 +282,7 @@ When user asks for emails from a specific date ("what emails did I send on Novem
   }
 }
 
-// CUSTOM DATE RANGE (Nov 5-10) - USE RPC!
+// CUSTOM DATE RANGE (Nov 5-10)
 {
   "op": "search",
   "params": {
@@ -284,7 +292,7 @@ When user asks for emails from a specific date ("what emails did I send on Novem
   }
 }
 
-// LAST HOUR (for very recent emails) - USE RPC!
+// LAST HOUR (for very recent emails)
 {
   "op": "search",
   "params": {
@@ -294,10 +302,11 @@ When user asks for emails from a specific date ("what emails did I send on Novem
 }
 ```
 
-**Critical:**
-- **ALWAYS use `/rpc/mail` endpoint for date-based email searches**
-- Without date filtering, search returns only first page (~10-50 results)
-- Always add date filter to ensure ALL emails are retrieved
+**Pagination:**
+- Both endpoints return paginated results
+- When `nextPageToken` exists in response, additional results are available
+- Use the token with same parameters to fetch next page
+- If user requests summary/complete data, continue pagination until `nextPageToken` is null
 
 ---
 

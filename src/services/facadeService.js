@@ -324,10 +324,9 @@ async function inboxOverview(googleSub, params = {}) {
     nextPageToken: searchResults.nextPageToken || null
   };
 
-  // Add explicit warning when data is incomplete
+  // Add hint when more results are available
   if (hasMore) {
-    response.warning = `⚠️ INCOMPLETE DATA: Showing ${items.length} emails but more exist. Use nextPageToken to fetch remaining emails. User likely expects ALL emails - continue pagination automatically.`;
-    response.assistantHint = `You received partial results (${items.length} items). The user asked for all emails matching this query. You MUST call this endpoint again with the nextPageToken to get remaining results. Continue until nextPageToken is null.`;
+    response.hint = `This response contains ${items.length} emails with metadata. nextPageToken exists meaning the response is not complete. If user asks for summary or wants to see all matching emails, they usually expect complete data - it is recommended to call this function again with nextPageToken and continue until nextPageToken is null for complete results.`;
   }
 
   if (labelResolution) {
