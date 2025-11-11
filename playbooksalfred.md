@@ -84,6 +84,43 @@ Když uživatel hledá email **BEZ specifikace časového rozsahu** (např. "naj
 }
 ```
 
+### 🔴 KRITICKÉ: Zacházení s konkrétními daty
+**PRAVIDLO:** Když uživatel řekne konkrétní datum (např. "7.11.", "7. listopadu", "November 7"), VŽDY použij absolutní datum v `timeRange`, NIKDY ne `relative`.
+
+**SPRÁVNĚ:**
+```json
+{
+  "timeRange": {
+    "start": "2025-11-07",
+    "end": "2025-11-07"  // Stejné datum = celý den
+  },
+  "filters": { "sentOnly": true }
+}
+```
+
+**ŠPATNĚ:** ❌ NIKDY netipuj relativní hodnotu
+```json
+{
+  "timeRange": {"relative": "yesterday"}  // ❌ Špatně - user řekl "7.11." ne "včera"
+}
+```
+
+**Proč je to důležité:**
+- Backend zpracovává datumy v Prague timezone (Europe/Prague)
+- "2025-11-07" = celý den 7.11. od 00:00 do 23:59:59 Prague time
+- Když user řekne datum, chce PŘESNĚ ten den, ne odhad typu "včera"
+- Relativní hodnoty (today, yesterday) jsou jen pro neurčité dotazy typu "dnešní pošta"
+
+**Jak určit datum:**
+1. User řekl datum → použij to přesné datum ve formátu ISO (YYYY-MM-DD)
+2. User řekl "včera", "dnes" → použij `relative` hodnotu
+3. User neřekl čas → použij progresivní hledání (viz výše)
+
+**Formáty datumů:**
+- Číslo + měsíc: "7.11." nebo "7. listopadu" → "2025-11-07"
+- Rozsah: "od 5.11. do 8.11." → start="2025-11-05", end="2025-11-08"
+- Jeden den: "7.11." → start="2025-11-07", end="2025-11-07"
+
 ### Hledání vláken
 Když uživatel řekne "projdi celé vlákno" nebo máš thread ID:
 

@@ -134,6 +134,43 @@ When user searches for email **WITHOUT specifying time range** (e.g., "find emai
 }
 ```
 
+### 🔴 CRITICAL: Handling specific dates
+**RULE:** When user mentions a specific date (e.g., "November 7", "7.11.", "7th"), ALWAYS use absolute date in `timeRange`, NEVER `relative`.
+
+**CORRECT:**
+```json
+{
+  "timeRange": {
+    "start": "2025-11-07",
+    "end": "2025-11-07"  // Same date = full day
+  },
+  "filters": { "sentOnly": true }
+}
+```
+
+**WRONG:** ❌ NEVER guess relative value
+```json
+{
+  "timeRange": {"relative": "yesterday"}  // ❌ Wrong - user said "Nov 7" not "yesterday"
+}
+```
+
+**Why this matters:**
+- Backend processes dates in Prague timezone (Europe/Prague)
+- "2025-11-07" = full day Nov 7 from 00:00 to 23:59:59 Prague time
+- When user says a date, they want EXACTLY that day, not a guess like "yesterday"
+- Relative values (today, yesterday) are only for vague queries like "today's mail"
+
+**How to determine date:**
+1. User said a date → use that exact date in ISO format (YYYY-MM-DD)
+2. User said "yesterday", "today" → use `relative` value
+3. User didn't mention time → use progressive search (see above)
+
+**Date formats:**
+- Number + month: "Nov 7" or "7.11." → "2025-11-07"
+- Range: "from Nov 5 to Nov 8" → start="2025-11-05", end="2025-11-08"
+- Single day: "Nov 7" → start="2025-11-07", end="2025-11-07"
+
 ### Thread search
 When user says "go through entire thread" or you have thread ID:
 
