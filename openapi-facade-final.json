@@ -84,7 +84,7 @@
                           "updates",
                           "forums"
                         ],
-                        "description": "Limit overview results to a Gmail category/label. Examples: {category:\"primary\"}, {category:\"promotions\"}, {category:\"social\"}. Maps to Gmail CATEGORY_* labels. Omit this field to inspect all categories."
+                        "description": "Filter by Gmail inbox category tab. Uses category: search syntax. Examples: {category:\"primary\"} for important mail, {category:\"promotions\"} for marketing, {category:\"social\"} for social networks. Note: 'work' is an alias for 'primary'. Omit to search all categories."
                       },
                       "labelIds": {
                         "type": "array",
@@ -205,7 +205,7 @@
                           },
                           "inboxCategory": {
                             "type": "string",
-                            "description": "Auto-category: 'primary'(important), 'work', 'alerts', 'newsletters', 'social', 'updates', 'forums', 'other'"
+                            "description": "Email category: 'primary' (important mail), 'work', 'promotions', 'social', 'updates', 'forums', 'sent', 'draft', 'archived', 'trash', 'spam', 'other'"
                           },
                           "snippet": {
                             "type": "string",

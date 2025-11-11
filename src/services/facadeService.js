@@ -3030,14 +3030,14 @@ function buildFallbackSnippet(snippet = '') {
 
 function categorizeEmail(message) {
   const labels = message.labelIds || [];
-  
+
   if (labels.includes('CATEGORY_SOCIAL')) return 'social';
-  if (labels.includes('CATEGORY_PROMOTIONS')) return 'newsletters';
+  if (labels.includes('CATEGORY_PROMOTIONS')) return 'promotions';
   if (labels.includes('CATEGORY_UPDATES')) return 'updates';
   if (labels.includes('CATEGORY_FORUMS')) return 'forums';
-  if (labels.includes('IMPORTANT')) return 'alerts';
+  if (labels.includes('IMPORTANT')) return 'primary';
   if (labels.includes('INBOX')) return 'primary';
-  
+
   return 'other';
 }
 
@@ -3070,7 +3070,7 @@ function enrichEmailWithAttachments(message, messageId) {
     senderAddress: extractEmail(message.from),
     subject: message.subject || '(no subject)',
     receivedAt: message.internalDate ? new Date(parseInt(message.internalDate)).toISOString() : null,
-    inboxCategory: categorizeEmail(message),
+    inboxCategory: classifyEmailCategory(message),
     label: message.labelIds?.[0] || null,
     readState: buildReadStateFromLabels(message.labelIds),
     headers: {},
