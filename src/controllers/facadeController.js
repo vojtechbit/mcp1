@@ -14,7 +14,7 @@ async function macroInboxOverview(req, res) {
     res.json(result);
   } catch (error) {
     console.error('❌ Macro inbox overview failed:', error.message);
-    
+
     if (error.statusCode === 401) {
       return res.status(401).json({
         error: 'Authentication required',
@@ -22,7 +22,15 @@ async function macroInboxOverview(req, res) {
         code: 'REAUTH_REQUIRED'
       });
     }
-    
+
+    if (error.statusCode === 400) {
+      return res.status(400).json({
+        error: 'Invalid request parameters',
+        message: error.message,
+        code: 'INVALID_PARAM'
+      });
+    }
+
     res.status(500).json({
       error: 'Inbox overview failed',
       message: error.message,
@@ -37,7 +45,7 @@ async function macroInboxSnippets(req, res) {
     res.json(result);
   } catch (error) {
     console.error('❌ Macro inbox snippets failed:', error.message);
-    
+
     if (error.statusCode === 401) {
       return res.status(401).json({
         error: 'Authentication required',
@@ -45,7 +53,15 @@ async function macroInboxSnippets(req, res) {
         code: 'REAUTH_REQUIRED'
       });
     }
-    
+
+    if (error.statusCode === 400) {
+      return res.status(400).json({
+        error: 'Invalid request parameters',
+        message: error.message,
+        code: 'INVALID_PARAM'
+      });
+    }
+
     res.status(500).json({
       error: 'Inbox snippets failed',
       message: error.message,

@@ -84,6 +84,53 @@ Když uživatel hledá email **BEZ specifikace časového rozsahu** (např. "naj
 }
 ```
 
+### Konkrétní data vs. relativní časové výrazy
+
+**Základní princip:** Když uživatel použije datum, pošli datum.
+
+**Proč:**
+- User řekl "7.11." → máme jistotu, že chce 7.11.
+- Mohli bychom tipovat "včera", ale k tomu bychom museli:
+  1. Zjistit dnešní datum
+  2. Porovnat s tím co řekl user
+  3. Rozhodnout jestli to odpovídá "yesterday"
+- To jsou kroky navíc, kde se můžeme splést
+- Když user dal datum, použijeme ho rovnou
+
+**Příklady:**
+
+User řekl datum → pošli datum:
+```json
+{
+  "timeRange": {
+    "start": "2025-11-07",
+    "end": "2025-11-07"
+  }
+}
+```
+- "co jsem poslal 7.11.?"
+- "emaily z 5. listopadu"
+- "od 5.11. do 8.11." → start="2025-11-05", end="2025-11-08"
+
+User řekl relativní výraz → použij relative:
+```json
+{
+  "timeRange": {"relative": "yesterday"}
+}
+```
+- "včerejší emaily"
+- "co přišlo dnes" → relative:"today"
+- "minulý týden" → relative:"thisWeek"
+
+**Technické poznámky:**
+- Backend interpretuje ISO datumy v Prague timezone (Europe/Prague)
+- "2025-11-07" = celý den od 00:00 do 23:59:59 Prague time
+- Pro časové omezení v průběhu dne (např. "6.11. do 11:00"):
+  - Pošli celý den: `{start: "2025-11-06", end: "2025-11-06"}`
+  - Dostaneš všechny items z toho dne
+  - Userovi vrať pouze ty, které se vejdou do časového okna (do 11:00)
+- Pro časové rozsahy v hodinách můžeš použít i relative: "last3h", "lastHour"
+
 ### Hledání vláken
 Když uživatel řekne "projdi celé vlákno" nebo máš thread ID:
 

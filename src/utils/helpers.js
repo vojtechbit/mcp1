@@ -272,9 +272,45 @@ export function addPragueDays(input, days) {
 }
 
 /**
+ * Parse ISO date string to Prague timezone day range
+ * Converts "2025-11-07" to full day range in Prague timezone (00:00 to 23:59:59)
+ *
+ * @param {string} isoDateString - ISO date string like "2025-11-07"
+ * @returns {object} { after, before } as Unix timestamps in seconds, or null if invalid
+ */
+export function parseIsoDateToPragueRange(isoDateString) {
+  // Parse "2025-11-07" or "2025-11-07T..." → extract date parts
+  const match = String(isoDateString).match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (!match) {
+    return null;
+  }
+
+  const parts = {
+    year: parseInt(match[1], 10),
+    month: parseInt(match[2], 10),
+    day: parseInt(match[3], 10)
+  };
+
+  // Validate date parts
+  if (parts.year < 1900 || parts.year > 2100 ||
+      parts.month < 1 || parts.month > 12 ||
+      parts.day < 1 || parts.day > 31) {
+    return null;
+  }
+
+  const start = getPragueMidnightUtc(parts);
+  const end = getPragueEndOfDayUtc(parts);
+
+  return {
+    after: Math.floor(start.getTime() / 1000),
+    before: Math.floor(end.getTime() / 1000)
+  };
+}
+
+/**
  * Parse relative time keywords to concrete Unix timestamps (in seconds)
  * Reference timezone: Europe/Prague
- * 
+ *
  * @param {string} relative - One of: lastHour, last3h, last24h, today, yesterday, thisWeek, last7d
  * @returns {object} { after, before } as Unix timestamps in seconds
  */

@@ -17,6 +17,7 @@ import { classifyEmailCategory } from './googleApiService.js';
 import { startTimer, logDuration } from '../utils/performanceLogger.js';
 import {
   parseRelativeTime,
+  parseIsoDateToPragueRange,
   getPragueOffsetHours,
   getPragueMidnightUtc,
   addPragueDays,
@@ -250,20 +251,54 @@ async function inboxOverview(googleSub, params = {}) {
       if (times?.after && times?.before) {
         queryParts.push(`after:${times.after}`);
         queryParts.push(`before:${times.before}`);
+      } else {
+        throw new ServiceError(
+          `Invalid timeRange.relative value: "${timeRange.relative}". Supported values: today, yesterday, thisWeek, last7d, last24h, last3h, lastHour`,
+          400
+        );
       }
     } else {
       // Support both start/end and after/before formats
       const startDate = timeRange.start || timeRange.after;
       const endDate = timeRange.end || timeRange.before;
 
-      if (startDate && endDate) {
-        const startSec = Math.floor(new Date(startDate).getTime() / 1000);
-        const endSec = Math.floor(new Date(endDate).getTime() / 1000);
-        if (!Number.isNaN(startSec) && !Number.isNaN(endSec)) {
-          queryParts.push(`after:${startSec}`);
-          queryParts.push(`before:${endSec}`);
-        }
+      if (!startDate || !endDate) {
+        throw new ServiceError(
+          'Invalid timeRange: must provide either "relative" or both "start"/"end" (or "after"/"before")',
+          400
+        );
       }
+
+      // Parse dates in Prague timezone (handles "2025-11-07" as Prague day, not UTC)
+      const startRange = parseIsoDateToPragueRange(startDate);
+      const endRange = parseIsoDateToPragueRange(endDate);
+
+      if (!startRange || !endRange) {
+        throw new ServiceError(
+          `Invalid date format in timeRange: start="${startDate}", end="${endDate}". Use ISO 8601 format (e.g., "2025-11-07")`,
+          400
+        );
+      }
+
+      // Determine actual end timestamp
+      // If same date: use end of that day (e.g., "2025-11-07" to "2025-11-07" = full day)
+      // If different dates: end date is exclusive (e.g., "2025-11-07" to "2025-11-08" = only 7th)
+      let actualEnd;
+      if (startDate === endDate) {
+        actualEnd = startRange.before; // End of the same day
+      } else {
+        actualEnd = endRange.after - 1; // Midnight of end date minus 1 second
+      }
+
+      if (startRange.after >= actualEnd) {
+        throw new ServiceError(
+          'Invalid timeRange: start date must be before end date',
+          400
+        );
+      }
+
+      queryParts.push(`after:${startRange.after}`);
+      queryParts.push(`before:${actualEnd}`);
     }
   }
 

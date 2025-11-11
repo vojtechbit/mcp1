@@ -134,6 +134,53 @@ When user searches for email **WITHOUT specifying time range** (e.g., "find emai
 }
 ```
 
+### Specific dates vs. relative time expressions
+
+**Basic principle:** When user uses a date, send the date.
+
+**Why:**
+- User said "Nov 7" → we're certain they want Nov 7
+- We could try guessing "yesterday", but that would require:
+  1. Finding out today's date
+  2. Comparing with what user said
+  3. Deciding if it matches "yesterday"
+- These are extra steps where we can make mistakes
+- When user gave us a date, use it directly
+
+**Examples:**
+
+User said a date → send the date:
+```json
+{
+  "timeRange": {
+    "start": "2025-11-07",
+    "end": "2025-11-07"
+  }
+}
+```
+- "what did I send Nov 7?"
+- "emails from November 5"
+- "from Nov 5 to Nov 8" → start="2025-11-05", end="2025-11-08"
+
+User said relative expression → use relative:
+```json
+{
+  "timeRange": {"relative": "yesterday"}
+}
+```
+- "yesterday's emails"
+- "what came today" → relative:"today"
+- "last week" → relative:"thisWeek"
+
+**Technical notes:**
+- Backend interprets ISO dates in Prague timezone (Europe/Prague)
+- "2025-11-07" = full day from 00:00 to 23:59:59 Prague time
+- For time constraints within a day (e.g., "Nov 6 until 11am"):
+  - Send full day: `{start: "2025-11-06", end: "2025-11-06"}`
+  - You'll get all items from that day
+  - Return to user only those that fit within the time window (until 11am)
+- For time ranges in hours you can also use relative: "last3h", "lastHour"
+
 ### Thread search
 When user says "go through entire thread" or you have thread ID:
 
