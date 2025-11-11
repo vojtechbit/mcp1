@@ -5368,7 +5368,7 @@
       },
       "MailRpcSearchResult": {
         "type": "object",
-        "description": "Payload returned by /rpc/mail op=search including Gmail web links for each message.",
+        "description": "Payload returned by /rpc/mail op=search including Gmail web links for each message. IMPORTANT: When nextPageToken is present, the results are INCOMPLETE. You MUST continue fetching with the token until it becomes null to get ALL emails the user requested.",
         "properties": {
           "messages": {
             "type": "array",
@@ -5382,7 +5382,15 @@
               "string",
               "null"
             ],
-            "description": "Token for fetching the next Gmail page."
+            "description": "Token for fetching the next Gmail page. If present, MORE RESULTS EXIST. You MUST call the same endpoint again with this token to get remaining emails. Continue until this is null."
+          },
+          "warning": {
+            "type": "string",
+            "description": "Present when nextPageToken exists. Warns that data is incomplete and pagination is required."
+          },
+          "assistantHint": {
+            "type": "string",
+            "description": "Present when nextPageToken exists. Explicit instruction to continue pagination automatically."
           },
           "resultSizeEstimate": {
             "type": [

@@ -188,6 +188,13 @@ When user wants "all emails about project X" (bidirectional communication):
 ### Searching by specific date
 When user asks for emails from a specific date ("what emails did I send on November 7?", "show me emails from yesterday"):
 
+**⚠️ CRITICAL: Always use `/rpc/mail` with `op=search` for date-based queries, NOT macros!**
+
+**Why RPC, not macros?**
+- RPC search with date filters returns ALL matching emails in one call
+- Macros return paginated results that require multiple calls with `nextPageToken`
+- For specific date queries, you want complete data immediately
+
 **Two approaches available:**
 
 #### 1. Relative time parameter (PREFERRED for common cases)
@@ -239,7 +246,7 @@ When user asks for emails from a specific date ("what emails did I send on Novem
 **Examples:**
 
 ```json
-// TODAY's emails (preferred)
+// TODAY's emails (preferred) - USE RPC!
 {
   "op": "search",
   "params": {
@@ -248,7 +255,7 @@ When user asks for emails from a specific date ("what emails did I send on Novem
   }
 }
 
-// YESTERDAY (preferred)
+// YESTERDAY (preferred) - USE RPC!
 {
   "op": "search",
   "params": {
@@ -257,7 +264,7 @@ When user asks for emails from a specific date ("what emails did I send on Novem
   }
 }
 
-// SPECIFIC DATE (when relative doesn't fit)
+// SPECIFIC DATE (when relative doesn't fit) - USE RPC!
 {
   "op": "search",
   "params": {
@@ -267,7 +274,7 @@ When user asks for emails from a specific date ("what emails did I send on Novem
   }
 }
 
-// CUSTOM DATE RANGE (Nov 5-10)
+// CUSTOM DATE RANGE (Nov 5-10) - USE RPC!
 {
   "op": "search",
   "params": {
@@ -277,7 +284,7 @@ When user asks for emails from a specific date ("what emails did I send on Novem
   }
 }
 
-// LAST HOUR (for very recent emails)
+// LAST HOUR (for very recent emails) - USE RPC!
 {
   "op": "search",
   "params": {
@@ -287,7 +294,10 @@ When user asks for emails from a specific date ("what emails did I send on Novem
 }
 ```
 
-**Critical:** Without date filtering, search returns only first page (~10-50 results). Always add date filter to ensure ALL emails are retrieved
+**Critical:**
+- **ALWAYS use `/rpc/mail` endpoint for date-based email searches**
+- Without date filtering, search returns only first page (~10-50 results)
+- Always add date filter to ensure ALL emails are retrieved
 
 ---
 

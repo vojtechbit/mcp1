@@ -324,6 +324,12 @@ async function inboxOverview(googleSub, params = {}) {
     nextPageToken: searchResults.nextPageToken || null
   };
 
+  // Add explicit warning when data is incomplete
+  if (hasMore) {
+    response.warning = `⚠️ INCOMPLETE DATA: Showing ${items.length} emails but more exist. Use nextPageToken to fetch remaining emails. User likely expects ALL emails - continue pagination automatically.`;
+    response.assistantHint = `You received partial results (${items.length} items). The user asked for all emails matching this query. You MUST call this endpoint again with the nextPageToken to get remaining results. Continue until nextPageToken is null.`;
+  }
+
   if (labelResolution) {
     response.labelResolution = {
       ...labelResolution,
@@ -418,6 +424,14 @@ async function inboxSnippets(googleSub, params = {}) {
     subset: overview.subset,
     nextPageToken: overview.nextPageToken
   };
+
+  // Pass through pagination warnings from overview
+  if (overview.warning) {
+    response.warning = overview.warning;
+  }
+  if (overview.assistantHint) {
+    response.assistantHint = overview.assistantHint;
+  }
 
   if (overview.labelResolution) {
     response.labelResolution = overview.labelResolution;

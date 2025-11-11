@@ -75,6 +75,13 @@ function normalizeSearchResult(result) {
     payload.threads = cloneThreadsWithLinks(result.threads);
   }
 
+  // Add explicit warning when data is incomplete
+  if (payload.nextPageToken) {
+    const messageCount = payload.messages?.length || 0;
+    payload.warning = `⚠️ INCOMPLETE DATA: Showing ${messageCount} emails but more exist. Use nextPageToken with same query to fetch remaining emails. User likely expects ALL emails - continue pagination automatically.`;
+    payload.assistantHint = `You received partial results (${messageCount} messages). The user asked for all emails matching this query. You MUST call /rpc/mail with op=search again, using the same params plus the nextPageToken, to get remaining results. Continue until nextPageToken is null.`;
+  }
+
   return payload;
 }
 
