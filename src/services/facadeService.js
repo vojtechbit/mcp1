@@ -194,15 +194,23 @@ async function inboxOverview(googleSub, params = {}) {
   }
 
   if (filters.category) {
-    // Gmail categories (Primary, Social, Promotions, Updates, Forums) are inbox tabs,
-    // not labels - use category: search syntax for all of them
+    // Gmail categories: use category: search syntax
+    // IMPORTANT: category:primary returns ALL inbox (not just primary!)
+    // Must use negative filters to exclude other categories
     const categoryLower = filters.category.toLowerCase();
     const validCategories = ['primary', 'work', 'promotions', 'social', 'updates', 'forums'];
 
     if (validCategories.includes(categoryLower)) {
-      // 'work' is an alias for 'primary'
-      const categoryName = categoryLower === 'work' ? 'primary' : categoryLower;
-      queryParts.push(`category:${categoryName}`);
+      if (categoryLower === 'primary' || categoryLower === 'work') {
+        // Primary = inbox minus other categories
+        queryParts.push('-category:promotions');
+        queryParts.push('-category:social');
+        queryParts.push('-category:updates');
+        queryParts.push('-category:forums');
+      } else {
+        // Other categories work normally
+        queryParts.push(`category:${categoryLower}`);
+      }
     }
   }
 
@@ -364,9 +372,7 @@ async function inboxOverview(googleSub, params = {}) {
       inboxCategory: classifyEmailCategory(msg),
       snippet: msg.snippet || '',
       readState,
-      links,
-      // DEBUG: Include labelIds to diagnose category filtering issues
-      labelIds: msg.labelIds || []
+      links
     };
   });
   
@@ -987,7 +993,11 @@ async function inboxUserUnansweredRequests(googleSub, params = {}) {
 
   const baseQueryParts = ['in:inbox', '-from:me'];
   if (primaryOnlyFinal) {
-    baseQueryParts.push('category:primary');
+    // Primary = inbox minus other categories (category:primary returns ALL inbox!)
+    baseQueryParts.push('-category:promotions');
+    baseQueryParts.push('-category:social');
+    baseQueryParts.push('-category:updates');
+    baseQueryParts.push('-category:forums');
   }
   if (timeFilters.after) {
     baseQueryParts.push(`after:${timeFilters.after}`);

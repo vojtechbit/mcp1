@@ -80,8 +80,9 @@ describe('inboxUserUnansweredRequests', () => {
 
     assert.equal(result.summary.timeRangeSource, 'default_today');
     assert.ok(
-      collectStub.mock.calls[0].arguments[0].baseQuery.includes('category:primary'),
-      'baseQuery should constrain to Primary category by default'
+      collectStub.mock.calls[0].arguments[0].baseQuery.includes('-category:promotions') &&
+      collectStub.mock.calls[0].arguments[0].baseQuery.includes('-category:updates'),
+      'baseQuery should exclude non-primary categories by default'
     );
     assert.equal(gmailMocks.createLabel.mock.calls.length, 1);
     assert.equal(gmailMocks.modifyMessageLabels.mock.calls.length, 2);

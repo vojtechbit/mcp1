@@ -18,16 +18,21 @@ export async function inboxOverview(googleSub, params) {
     query += 'has:attachment ';
   }
   
-  // Handle Gmail category filters (Primary, Social, Promotions, Updates, Forums)
-  // These are inbox tabs, not labels - use category: search syntax
+  // Handle Gmail category filters
+  // IMPORTANT: category:primary returns ALL inbox (not just primary!)
+  // Must use negative filters to exclude other categories
   if (filters.category) {
     const categoryLower = filters.category.toLowerCase();
     const validCategories = ['primary', 'work', 'promotions', 'social', 'updates', 'forums'];
 
     if (validCategories.includes(categoryLower)) {
-      // 'work' is an alias for 'primary'
-      const categoryName = categoryLower === 'work' ? 'primary' : categoryLower;
-      query += `category:${categoryName} `;
+      if (categoryLower === 'primary' || categoryLower === 'work') {
+        // Primary = inbox minus other categories
+        query += '-category:promotions -category:social -category:updates -category:forums ';
+      } else {
+        // Other categories work normally
+        query += `category:${categoryLower} `;
+      }
     }
   }
   
