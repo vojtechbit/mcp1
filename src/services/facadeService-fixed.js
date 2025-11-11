@@ -7,13 +7,14 @@
 export async function inboxOverview(googleSub, params) {
   const { timeRange, maxItems = 50, filters = {} } = params;
   
-  // Build Gmail search query
-  let query = '';
-  
+  // Build Gmail search query - search in inbox only
+  // in:inbox excludes: sent, archived, trash, spam automatically
+  let query = 'in:inbox -in:draft ';
+
   if (filters.from) {
     query += `from:${filters.from} `;
   }
-  
+
   if (filters.hasAttachment) {
     query += 'has:attachment ';
   }
