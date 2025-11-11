@@ -1,6 +1,6 @@
 /**
  * Facade Service - Business Façade Layer (BFF)
- * 
+ *
  * Orchestrates existing backend services into high-level macros
  * optimized for GPT consumption.
  */
@@ -14,6 +14,7 @@ import * as tasksService from './tasksService.js';
 import { createServiceError, throwServiceError } from './serviceErrors.js';
 import { getUserByGoogleSub } from './databaseService.js';
 import { classifyEmailCategory } from './googleApiService.js';
+import { startTimer, logDuration } from '../utils/performanceLogger.js';
 import {
   parseRelativeTime,
   getPragueOffsetHours,
@@ -276,24 +277,37 @@ async function inboxOverview(googleSub, params = {}) {
     };
   }
   
-  // Step 2: Batch fetch metadata for ALL message IDs
+  // Step 2: Batch fetch metadata for ALL message IDs (parallel batches for speed)
   const messageIds = searchResults.messages.map(m => m.id);
   const batchSize = 10; // Fetch 10 at a time to avoid rate limiting
-  const enrichedMessages = [];
-  
+  const batchCount = Math.ceil(messageIds.length / batchSize);
+  const overviewTimer = startTimer();
+
+  // Create all batch promises upfront (parallel execution)
+  const batchPromises = [];
   for (let i = 0; i < messageIds.length; i += batchSize) {
     const batch = messageIds.slice(i, i + batchSize);
-    const metadataPromises = batch.map(id =>
-      gmail.readEmail(googleSub, id, { format: 'metadata' })
-        .catch(err => {
-          console.error(`Failed to fetch metadata for ${id}:`, err.message);
-          return null;
-        })
+    const batchPromise = Promise.all(
+      batch.map(id =>
+        gmail.readEmail(googleSub, id, { format: 'metadata' })
+          .catch(err => {
+            console.error(`Failed to fetch metadata for ${id}:`, err.message);
+            return null;
+          })
+      )
     );
-    
-    const batchResults = await Promise.all(metadataPromises);
-    enrichedMessages.push(...batchResults.filter(m => m !== null));
+    batchPromises.push(batchPromise);
   }
+
+  // Execute all batches in parallel and flatten results
+  const batchResults = await Promise.all(batchPromises);
+  const enrichedMessages = batchResults.flat().filter(m => m !== null);
+
+  logDuration('inbox.overview.metadata', overviewTimer, {
+    totalEmails: messageIds.length,
+    batches: batchCount,
+    successful: enrichedMessages.length
+  });
   
   // Step 3: Map to standardized items
   const items = enrichedMessages.map(msg => {
@@ -364,59 +378,72 @@ async function inboxSnippets(googleSub, params = {}) {
   }
 
   const batchSize = 10;
-  const enrichedItems = [];
+  const batchCount = Math.ceil(overview.items.length / batchSize);
+  const snippetsTimer = startTimer();
 
+  // Create all batch promises upfront (parallel execution)
+  const batchPromises = [];
   for (let i = 0; i < overview.items.length; i += batchSize) {
     const batch = overview.items.slice(i, i + batchSize);
 
-    const detailPromises = batch.map(async (item) => {
-      try {
-        const preview = await gmail.getEmailPreview(googleSub, item.messageId, {
-          maxBytes: 4096
-        });
+    const batchPromise = Promise.all(
+      batch.map(async (item) => {
+        try {
+          const preview = await gmail.getEmailPreview(googleSub, item.messageId, {
+            maxBytes: 4096
+          });
 
-        const bodySnippet = buildBodySnippetFromPayload(preview.payload, item.snippet || preview.snippet);
+          const bodySnippet = buildBodySnippetFromPayload(preview.payload, item.snippet || preview.snippet);
 
-        const enriched = {
-          ...item,
-          snippet: bodySnippet,
-          readState: buildReadStateFromLabels(preview.labelIds),
-          attachmentUrls: []
-        };
+          const enriched = {
+            ...item,
+            snippet: bodySnippet,
+            readState: buildReadStateFromLabels(preview.labelIds),
+            attachmentUrls: []
+          };
 
-        if (includeAttachments) {
-          const attachments = extractAttachmentMetadata(preview.payload || {});
-          const processed = processAttachments(attachments, (att) =>
-            generateSignedAttachmentUrl(item.messageId, att.body?.attachmentId)
-          );
+          if (includeAttachments) {
+            const attachments = extractAttachmentMetadata(preview.payload || {});
+            const processed = processAttachments(attachments, (att) =>
+              generateSignedAttachmentUrl(item.messageId, att.body?.attachmentId)
+            );
 
-          enriched.attachmentUrls = processed.attachments
-            .filter(a => !a.blocked && a.url)
-            .map(a => a.url);
+            enriched.attachmentUrls = processed.attachments
+              .filter(a => !a.blocked && a.url)
+              .map(a => a.url);
 
-          if (processed.securityWarnings.length > 0) {
-            enriched.attachmentSecurityWarnings = processed.securityWarnings;
+            if (processed.securityWarnings.length > 0) {
+              enriched.attachmentSecurityWarnings = processed.securityWarnings;
+            }
           }
+
+          return enriched;
+        } catch (error) {
+          if (error?.statusCode === 451) {
+            throw error;
+          }
+
+          console.error(`Failed to build snippet for ${item.messageId}:`, error.message);
+          return {
+            ...item,
+            snippet: buildFallbackSnippet(item.snippet),
+            attachmentUrls: []
+          };
         }
-
-        return enriched;
-      } catch (error) {
-        if (error?.statusCode === 451) {
-          throw error;
-        }
-
-        console.error(`Failed to build snippet for ${item.messageId}:`, error.message);
-        return {
-          ...item,
-          snippet: buildFallbackSnippet(item.snippet),
-          attachmentUrls: []
-        };
-      }
-    });
-
-    const batchResults = await Promise.all(detailPromises);
-    enrichedItems.push(...batchResults);
+      })
+    );
+    batchPromises.push(batchPromise);
   }
+
+  // Execute all batches in parallel and flatten results
+  const batchResults = await Promise.all(batchPromises);
+  const enrichedItems = batchResults.flat();
+
+  logDuration('inbox.snippets.enrichment', snippetsTimer, {
+    totalEmails: overview.items.length,
+    batches: batchCount,
+    successful: enrichedItems.length
+  });
 
   const response = {
     items: enrichedItems,
