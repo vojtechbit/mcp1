@@ -250,20 +250,43 @@ async function inboxOverview(googleSub, params = {}) {
       if (times?.after && times?.before) {
         queryParts.push(`after:${times.after}`);
         queryParts.push(`before:${times.before}`);
+      } else {
+        throw new ServiceError(
+          `Invalid timeRange.relative value: "${timeRange.relative}". Supported values: today, yesterday, thisWeek, last7d, last24h, last3h, lastHour`,
+          400
+        );
       }
     } else {
       // Support both start/end and after/before formats
       const startDate = timeRange.start || timeRange.after;
       const endDate = timeRange.end || timeRange.before;
 
-      if (startDate && endDate) {
-        const startSec = Math.floor(new Date(startDate).getTime() / 1000);
-        const endSec = Math.floor(new Date(endDate).getTime() / 1000);
-        if (!Number.isNaN(startSec) && !Number.isNaN(endSec)) {
-          queryParts.push(`after:${startSec}`);
-          queryParts.push(`before:${endSec}`);
-        }
+      if (!startDate || !endDate) {
+        throw new ServiceError(
+          'Invalid timeRange: must provide either "relative" or both "start"/"end" (or "after"/"before")',
+          400
+        );
       }
+
+      const startSec = Math.floor(new Date(startDate).getTime() / 1000);
+      const endSec = Math.floor(new Date(endDate).getTime() / 1000);
+
+      if (Number.isNaN(startSec) || Number.isNaN(endSec)) {
+        throw new ServiceError(
+          `Invalid date format in timeRange: start="${startDate}", end="${endDate}". Use ISO 8601 format (e.g., "2025-11-07")`,
+          400
+        );
+      }
+
+      if (startSec >= endSec) {
+        throw new ServiceError(
+          'Invalid timeRange: start date must be before end date',
+          400
+        );
+      }
+
+      queryParts.push(`after:${startSec}`);
+      queryParts.push(`before:${endSec}`);
     }
   }
 
