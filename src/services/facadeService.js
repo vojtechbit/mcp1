@@ -251,12 +251,18 @@ async function inboxOverview(googleSub, params = {}) {
         queryParts.push(`after:${times.after}`);
         queryParts.push(`before:${times.before}`);
       }
-    } else if (timeRange.start && timeRange.end) {
-      const startSec = Math.floor(new Date(timeRange.start).getTime() / 1000);
-      const endSec = Math.floor(new Date(timeRange.end).getTime() / 1000);
-      if (!Number.isNaN(startSec) && !Number.isNaN(endSec)) {
-        queryParts.push(`after:${startSec}`);
-        queryParts.push(`before:${endSec}`);
+    } else {
+      // Support both start/end and after/before formats
+      const startDate = timeRange.start || timeRange.after;
+      const endDate = timeRange.end || timeRange.before;
+
+      if (startDate && endDate) {
+        const startSec = Math.floor(new Date(startDate).getTime() / 1000);
+        const endSec = Math.floor(new Date(endDate).getTime() / 1000);
+        if (!Number.isNaN(startSec) && !Number.isNaN(endSec)) {
+          queryParts.push(`after:${startSec}`);
+          queryParts.push(`before:${endSec}`);
+        }
       }
     }
   }
