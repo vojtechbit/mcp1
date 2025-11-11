@@ -8,12 +8,13 @@ export async function inboxOverview(googleSub, params) {
   const { timeRange, maxItems = 50, filters = {} } = params;
   
   // Build Gmail search query
-  let query = '';
-  
+  // Always exclude drafts, trash, spam, and sent emails from inbox overview
+  let query = '-in:draft -in:trash -in:spam -in:sent ';
+
   if (filters.from) {
     query += `from:${filters.from} `;
   }
-  
+
   if (filters.hasAttachment) {
     query += 'has:attachment ';
   }

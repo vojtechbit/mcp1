@@ -176,6 +176,11 @@ async function inboxOverview(googleSub, params = {}) {
   }
   // If includeSent: true and sentOnly: false, we don't add any sent filter
 
+  // Always exclude drafts, trash, and spam from inbox overview
+  queryParts.push('-in:draft');
+  queryParts.push('-in:trash');
+  queryParts.push('-in:spam');
+
   if (typeof rawQuery === 'string' && rawQuery.trim()) {
     queryParts.push(rawQuery.trim());
   }
@@ -991,7 +996,7 @@ async function inboxUserUnansweredRequests(googleSub, params = {}) {
   const timeWindowResolved = describeTimeFilters(timeFilters);
   const primaryOnlyFinal = primaryOnly !== false;
 
-  const baseQueryParts = ['in:inbox', '-from:me'];
+  const baseQueryParts = ['in:inbox', '-from:me', '-in:draft', '-in:trash', '-in:spam'];
   if (primaryOnlyFinal) {
     // Primary = inbox minus other categories (category:primary returns ALL inbox!)
     baseQueryParts.push('-category:promotions');
