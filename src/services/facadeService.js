@@ -17,6 +17,7 @@ import { classifyEmailCategory } from './googleApiService.js';
 import { startTimer, logDuration } from '../utils/performanceLogger.js';
 import {
   parseRelativeTime,
+  parseIsoDateToPragueRange,
   getPragueOffsetHours,
   getPragueMidnightUtc,
   addPragueDays,
@@ -268,25 +269,36 @@ async function inboxOverview(googleSub, params = {}) {
         );
       }
 
-      const startSec = Math.floor(new Date(startDate).getTime() / 1000);
-      const endSec = Math.floor(new Date(endDate).getTime() / 1000);
+      // Parse dates in Prague timezone (handles "2025-11-07" as Prague day, not UTC)
+      const startRange = parseIsoDateToPragueRange(startDate);
+      const endRange = parseIsoDateToPragueRange(endDate);
 
-      if (Number.isNaN(startSec) || Number.isNaN(endSec)) {
+      if (!startRange || !endRange) {
         throw new ServiceError(
           `Invalid date format in timeRange: start="${startDate}", end="${endDate}". Use ISO 8601 format (e.g., "2025-11-07")`,
           400
         );
       }
 
-      if (startSec >= endSec) {
+      // Determine actual end timestamp
+      // If same date: use end of that day (e.g., "2025-11-07" to "2025-11-07" = full day)
+      // If different dates: end date is exclusive (e.g., "2025-11-07" to "2025-11-08" = only 7th)
+      let actualEnd;
+      if (startDate === endDate) {
+        actualEnd = startRange.before; // End of the same day
+      } else {
+        actualEnd = endRange.after - 1; // Midnight of end date minus 1 second
+      }
+
+      if (startRange.after >= actualEnd) {
         throw new ServiceError(
           'Invalid timeRange: start date must be before end date',
           400
         );
       }
 
-      queryParts.push(`after:${startSec}`);
-      queryParts.push(`before:${endSec}`);
+      queryParts.push(`after:${startRange.after}`);
+      queryParts.push(`before:${actualEnd}`);
     }
   }
 
