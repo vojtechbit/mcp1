@@ -5018,8 +5018,13 @@
             "application/json": {
               "schema": {
                 "type": "object",
-                "description": "Generate reminder data/drafts for events. Scope: 'today'=all day's events, 'nextHours'=next N hours. DEFAULT prepareOnly:true returns data for GPT to personalize. Set prepareOnly:false for direct draft creation (imperfect grammar).",
+                "description": "Generate reminder data/drafts for events. Use either 'date' (YYYY-MM-DD) for specific day OR 'window' (today/nextHours). DEFAULT prepareOnly:true returns data for GPT to personalize. Set prepareOnly:false for direct draft creation (imperfect grammar).",
                 "properties": {
+                  "date": {
+                    "type": "string",
+                    "format": "date",
+                    "description": "Specific date in YYYY-MM-DD format (e.g., '2025-11-29'). When provided, this takes precedence over 'window' parameter. Fetches ALL events for this entire day (00:00-23:59 Prague time)."
+                  },
                   "window": {
                     "type": "string",
                     "enum": [
@@ -5027,13 +5032,13 @@
                       "nextHours"
                     ],
                     "default": "today",
-                    "description": "Time window: 'today'=ALL events today, 'nextHours'=next N hours (requires hours param)"
+                    "description": "Time window: 'today'=ALL events today, 'nextHours'=next N hours (requires hours param). Ignored if 'date' parameter is provided."
                   },
                   "hours": {
                     "type": "integer",
                     "minimum": 1,
                     "maximum": 24,
-                    "description": "Lookahead window in hours (required when window='nextHours')"
+                    "description": "Lookahead window in hours (required when window='nextHours'). Ignored if 'date' parameter is provided."
                   },
                   "prepareOnly": {
                     "type": "boolean",
@@ -5059,9 +5064,16 @@
               },
               "examples": {
                 "prepareForGPT": {
-                  "summary": "RECOMMENDED: Get data for GPT to create personalized drafts",
+                  "summary": "RECOMMENDED: Get data for GPT to create personalized drafts (today)",
                   "value": {
                     "window": "today",
+                    "prepareOnly": true
+                  }
+                },
+                "prepareForSpecificDate": {
+                  "summary": "RECOMMENDED: Get data for specific date (tomorrow, future day)",
+                  "value": {
+                    "date": "2025-11-29",
                     "prepareOnly": true
                   }
                 },
