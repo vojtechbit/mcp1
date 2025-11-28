@@ -517,10 +517,47 @@ When user asks for emails from a specific date ("what emails did I send on Novem
    - Emphasize that name `Follow-up` is connected to backend; if user renames it, automatic tracking stops working. Offer option to add other custom labels, but inform about this limitation.
    - After executing request check in `labelRecommendation`/`labelUpdates` whether `verified` confirmed addition. If not, directly announce error and don't suggest it's done.
 
-## 17. Reminder drafts for today's meetings
+## 17. Reminder drafts for meetings
+
+Use `/macros/calendar/reminderDrafts` to create reminder email drafts for meeting attendees.
+The endpoint supports two approaches for selecting events:
+
+**Using 'date' parameter (YYYY-MM-DD):**
+For specific days (tomorrow, future dates, past dates). Returns structured data with timeRangeFormatted and htmlLink.
+
+**Using 'window' parameter:**
+For today or next N hours (max 24h). Also returns structured data.
+
+Note: If both are provided, 'date' takes precedence.
+
 1. Call `/macros/calendar/reminderDrafts` with `prepareOnly:true` (default):
-   - Parameters: `window:"today"` (or `window:"nextHours"` with `hours`)
-   - Backend returns structured data for each event with participants:
+
+   **For specific date (tomorrow, any future/past day):**
+   ```json
+   {
+     "date": "2025-11-29",
+     "prepareOnly": true
+   }
+   ```
+
+   **For today:**
+   ```json
+   {
+     "window": "today",
+     "prepareOnly": true
+   }
+   ```
+
+   **For next N hours:**
+   ```json
+   {
+     "window": "nextHours",
+     "hours": 12,
+     "prepareOnly": true
+   }
+   ```
+
+   Backend returns structured data for each event with participants:
      - `timeRangeFormatted`: Czech time format (e.g., "14:00-15:00, 03.11.2025")
      - `htmlLink`: Link to Google Calendar event
      - `attendees`: List with `email` and `displayName`
@@ -540,11 +577,14 @@ When user asks for emails from a specific date ("what emails did I send on Novem
    - State number of created drafts and for which meetings
    - Remind that drafts are saved in Gmail and can be edited before sending
    - Offer sending option or other actions
-5. IMPORTANT:
-   - ALWAYS use `prepareOnly:true` for correct Czech with vocative
+5. Notes:
+   - Always use `prepareOnly:true` for correct Czech with vocative
    - Each attendee must get own, personalized draft
    - Use `timeRangeFormatted` from backend (don't format manually)
    - Include `htmlLink` as link to event
+   - For tomorrow: use `date:"2025-11-29"` (calculate tomorrow's date in YYYY-MM-DD)
+   - For today: use `window:"today"` or `date` with today's date
+   - For next N hours (max 24): use `window:"nextHours"` with `hours`
    - Use fallback `prepareOnly:false` only when GPT personalization fails (has bad grammar)
 
 ## 18. Fallback – When no section fits
