@@ -2713,6 +2713,7 @@ function formatTimeRangeForEmail(startIso, endIso) {
 async function calendarReminderDrafts(googleSub, params) {
   const {
     window = 'today',
+    date,
     hours,
     template,
     includeLocation = true,
@@ -2720,35 +2721,67 @@ async function calendarReminderDrafts(googleSub, params) {
     calendarId = 'primary'
   } = params;
 
-  // Validate window parameter
-  const validWindows = ['today', 'nextHours'];
-  if (!validWindows.includes(window)) {
-    throwFacadeValidationError(`Invalid window: ${window}. Must be one of: ${validWindows.join(', ')}`, {
-      details: { field: 'window', allowed: validWindows, received: window }
-    });
-  }
-
-  // Validate hours parameter when window='nextHours'
-  if (window === 'nextHours') {
-    if (!hours || typeof hours !== 'number' || hours < 1 || hours > 24) {
-      throwFacadeValidationError('hours parameter must be between 1-24 when window=nextHours', {
-        details: { field: 'hours', value: hours }
-      });
-    }
-  }
-
   // Calculate time window
   const now = new Date();
   let start, end;
+  let usedMode; // Track which mode was used for response
 
-  if (window === 'today') {
-    start = new Date(now);
-    start.setHours(0, 0, 0, 0);
+  // Priority: date parameter takes precedence over window
+  if (date) {
+    // Validate date format (YYYY-MM-DD)
+    const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+    if (!dateRegex.test(date)) {
+      throwFacadeValidationError('date parameter must be in YYYY-MM-DD format', {
+        details: { field: 'date', value: date, expected: 'YYYY-MM-DD' }
+      });
+    }
+
+    // Parse date in YYYY-MM-DD format and create start/end of day in Prague timezone
+    // e.g., "2025-11-29" → 2025-11-29 00:00:00 Prague → 2025-11-29 23:59:59 Prague
+    const [year, month, day] = date.split('-').map(Number);
+
+    // Create start of day (00:00:00) in UTC based on Prague time
+    // Use the date at noon Prague time to determine correct offset (avoids DST edge cases)
+    const midday = new Date(year, month - 1, day, 12, 0, 0);
+    const offsetHours = getPragueOffsetHours(midday);
+
+    // Start at 00:00 Prague time = subtract offset from UTC midnight
+    start = new Date(Date.UTC(year, month - 1, day, 0 - offsetHours, 0, 0));
+
+    // End at next day 00:00 Prague time (= end of requested day)
     end = new Date(start);
     end.setDate(end.getDate() + 1);
-  } else if (window === 'nextHours') {
-    start = now;
-    end = new Date(now.getTime() + (hours || 4) * 60 * 60 * 1000);
+
+    usedMode = 'date';
+  } else {
+    // Fallback to window-based logic
+    const validWindows = ['today', 'nextHours'];
+    if (!validWindows.includes(window)) {
+      throwFacadeValidationError(`Invalid window: ${window}. Must be one of: ${validWindows.join(', ')}`, {
+        details: { field: 'window', allowed: validWindows, received: window }
+      });
+    }
+
+    // Validate hours parameter when window='nextHours'
+    if (window === 'nextHours') {
+      if (!hours || typeof hours !== 'number' || hours < 1 || hours > 24) {
+        throwFacadeValidationError('hours parameter must be between 1-24 when window=nextHours', {
+          details: { field: 'hours', value: hours }
+        });
+      }
+    }
+
+    if (window === 'today') {
+      start = new Date(now);
+      start.setHours(0, 0, 0, 0);
+      end = new Date(start);
+      end.setDate(end.getDate() + 1);
+      usedMode = 'window:today';
+    } else if (window === 'nextHours') {
+      start = now;
+      end = new Date(now.getTime() + (hours || 4) * 60 * 60 * 1000);
+      usedMode = `window:nextHours(${hours})`;
+    }
   }
 
   // Fetch upcoming events with attendees
@@ -2793,7 +2826,7 @@ async function calendarReminderDrafts(googleSub, params) {
       mode: 'prepareOnly',
       events: preparedEvents,
       count: preparedEvents.length,
-      window,
+      window: usedMode,
       note: 'Use these prepared events to create personalized reminder drafts via /rpc/mail with op:createDraft'
     };
   }
